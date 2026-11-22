@@ -63,6 +63,10 @@ export const EMAP_STORM = freeze({
   fibreMmS: 160, fibreHeadMm: 12,
   cordShare: 0.3, cordDelayS: 0.25, cordRate: 0.3,
   strength: freeze([0.55, 0.85]), pickOf: 3, pointsOf: 6, medialMm: 25, area: 0.5,
+  // (22 November 2026, after a third checker: at rest one or two soft clouds at a time read as calm weather; between the
+  // storms, small short flares of their own start every minor.everyS on the side the player sees: weaker, no cascade,
+  // no volley, each rising once and falling once)
+  minor: freeze({ everyS: freeze([0.45, 1.1]), strength: freeze([0.3, 0.5]), fadeS: freeze([0.6, 1.0]) }),
   base: freeze({ n: 12, driftMm: 16, driftS: freeze([7, 15]), periodS: freeze([5, 11]), gain: 0.45, radiusMm: 36 }),
   floor: 0.1,
   // (22 November 2026: the heat above the floor fades to nothing toward the midline, from midFadeMm[1] to midFadeMm[0]
@@ -141,7 +145,7 @@ export function createStorms({ regions = [], links = [], basePts = null, seed = 
   const S = {
     kind: 'ns-emap-storms', o, regions, links, rng: seed >>> 0,
     near: regions.map(() => []),
-    slots: [], nextAt: 0.6, started: 0, hopsStarted: 0, cordVolleys: 0, now: 0, reduced: false, eye: null,
+    slots: [], nextAt: 0.6, nextMinorAt: 0.3, started: 0, minorStarted: 0, hopsStarted: 0, cordVolleys: 0, now: 0, reduced: false, eye: null,
     base: new Float32Array(4 * nB), baseSrc: [],
     storm0: new Float32Array(4 * K), storm1: new Float32Array(4 * K), storm2: new Float32Array(4 * K),
     act: new Float32Array(4 * nA), nAct: 0, nOn: 0, tmp4: [0, 0, 0, 0]
@@ -160,6 +164,14 @@ export function createStorms({ regions = [], links = [], basePts = null, seed = 
   return S;
 }
 
+/** The storms' own clocks set back to the start (the map's clock starts at 0 again when the map is switched on): no storm
+ * alive, the next storm at 0.6 s and the next small flare at 0.3 s. Pure. */
+export function restartStorms(S) {
+  for (const q of S.slots) q.on = false;
+  S.nextAt = 0.6; S.nextMinorAt = 0.3; S.now = 0;
+  return S;
+}
+
 /** A free storm slot (or the weakest one that has nearly calmed), or null. */
 function takeSlot(S, now, s) {
   let best = null, low = Infinity;
@@ -174,13 +186,13 @@ function takeSlot(S, now, s) {
 /** Start a storm on region `region` (index; -1 for none: then it only flares at c) at time t0 with strength s; hop: 0
  * for a storm of its own, 1 or 2 for one a front has carried there. send: its links fire; cord: a volley down the cord.
  * Its hops are scheduled at once, each with the time its front arrives. Returns the slot or null. Pure. */
-export function stormAt(S, t0, region, c, s, { hop = 0, send = true, cord = false, fadeS = null } = {}) {
+export function stormAt(S, t0, region, c, s, { hop = 0, send = true, cord = false, fadeS = null, minor = false } = {}) {
   const o = S.o;
   const q = takeSlot(S, t0, s);
   if (!q) return null;
   q.on = true; q.region = region; q.c[0] = c[0]; q.c[1] = c[1]; q.c[2] = c[2]; q.t0 = t0; q.s = s; q.hop = hop;
   q.fadeS = Number.isFinite(fadeS) ? fadeS : between(S, o.fadeS); q.send = send && region >= 0 && hop < o.hops; q.cord = cord;
-  if (hop === 0) S.started++; else S.hopsStarted++;
+  if (minor) S.minorStarted++; else if (hop === 0) S.started++; else S.hopsStarted++;
   if (cord) S.cordVolleys++;
   if (q.send) {
     const near = S.near[region] || [], n = Math.min(o.hopFan, near.length);
@@ -251,11 +263,16 @@ export function stepStorms(S, now, { lookRegion = -1, reduced = false, eye = nul
   const t = S.reduced ? 0 : now;
   const tmp = S.tmp4;
   for (let i = 0; i < S.baseSrc.length; i++) { baseSourceAt(S.baseSrc[i], t, o, tmp); S.base[4 * i] = tmp[0]; S.base[4 * i + 1] = tmp[1]; S.base[4 * i + 2] = tmp[2]; S.base[4 * i + 3] = S.reduced ? o.base.gain * 0.5 : tmp[3]; }
-  if (S.reduced) { for (const q of S.slots) q.on = false; S.nextAt = now + o.everyS[0]; }
+  if (S.reduced) { for (const q of S.slots) q.on = false; S.nextAt = now + o.everyS[0]; S.nextMinorAt = now + (o.minor ? o.minor.everyS[0] : 0); }
   else if (now >= S.nextAt && S.regions.length) {
     S.nextAt = now + between(S, o.everyS);
     const region = lookRegion >= 0 && lookRegion < S.regions.length && rnd(S) < o.lookShare ? lookRegion : pickRegion(S);
     stormAt(S, now, region, pointOf(S, region), between(S, o.strength), { cord: rnd(S) < o.cordShare });
+  }
+  if (!S.reduced && o.minor && now >= S.nextMinorAt && S.regions.length) {
+    S.nextMinorAt = now + between(S, o.minor.everyS);
+    const region = pickRegion(S);
+    stormAt(S, now, region, pointOf(S, region), between(S, o.minor.strength), { send: false, cord: false, fadeS: between(S, o.minor.fadeS), minor: true });
   }
   // the live storms are written first and counted (nOn): the shaders stop at that count (22 November 2026: a frame
   // with the map on took 77 ms; the scan's sum over every slot for every pixel was part of it)

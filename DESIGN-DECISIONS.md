@@ -4165,6 +4165,130 @@ seen palm up from above, so a finger tipped 30 degrees back went out of sight be
 view the finger vanished instead of straightening. A finger's "Straighten" ends as in the open hand, 10 past straight,
 as before.)
 
+**Your own left hand turns its face toward the eye for its movements (22 November).** An independent check found that
+"Straighten" and "Open" of your own left hand read as the fingers disappearing: the hand is seen from above along the
+forearm, palm up, so a straightened finger lies flat, pointing away from the eye. `LEFT_HAND_TILT` (`ns-app.mjs`): while
+the look rests on an area of the left hand or of one of its fingers, or while one of the hand's own movements is driven
+(its contraction and its hold at the end, 0.7 s; not its way back), the wrist is drawn tilted 15 degrees so the hand's
+face turns toward the eye; with the palm up that is a bend toward the palm (wrist flexion), with the palm down toward the
+back of the hand, in between by the forearm's turn. Eased in (time constant 0.12 s) and out (0.3 s), inside the wrist's
+range and the hand-fit envelope's levels; drawn only, nothing lit, latched or held. The side was chosen on pictures of
+the start view, 0.3 s into "Open left hand": without the tilt the opened fingers vanish, with it they spread as a fan,
+and the other way (extension) hides them further. Update 65 (a check of update 64): at 25 degrees, and wanted until the
+movement's note was dropped (about 1.9 s), the tilt read as an unlit "Bend left wrist" added to every hand movement, and
+the whole hand turned back by itself about 0.6 s after the finger had settled. Now 15 degrees, only while the movement
+is driven, out over 0.3 s: in the game's own activity at 60 frames a second the finger is at 22 % of its drive at 1.02 s
+with the tilt at 4.9 degrees, and at 5 % at 1.22 s with the tilt at 2.5; the hand turns back with the finger. In pictures
+of the start view at 0.3 s "Open left hand" still spreads as a fan, "Straighten left index finger" stands tall where
+"Bend" folds it short, and with "Straighten left thumb" the four other fingers stand up less than at 25. The tip beside
+the crosshair keeps off your own left hand's box on the screen when a placement is clear of it (`tipSides` in
+`ns-quiet.mjs`, with the box the region labels already keep off, `armAvoidShapes`, now worked out once a frame for both);
+before, it covered the palm and thumb at the hand's areas.
+
+**"Bend head forward" bows the upper body with the neck, seen from outside (22 November; Message 200).** `NECK_BOW`
+(`ns-app.mjs`): while the neck is bent forward beyond its start angle by its movement (nothing else holds it there), the
+upper body bows with it, 15 degrees at the neck's end, in proportion to how far the neck has come (its 10 degrees of
+room), and returns with it. It is drawn as the trunk's bend under the head (`headPoseForLook`'s `bowDeg`, in `bendDeg`,
+ns-body `lookBendDeg`), inside the trunk's range, and the left arm's shoulder follows it, so the arm stays on its
+shoulder. The eye never takes it: the camera stands where the activity's own angles put it (`eyeHeadPose`, which
+`headAttachment` uses). Update 65 (a check of update 64): the bow was drawn in the eye view too, where it did not do what
+was written here. "The mirror body moves 47.5 px in the start view" was measured with the camera at rest (both places
+put on screen through the camera before the view's dip); during the hold the eye view dips 15 degrees (section 171),
+the mirror body's head and trunk are then above the top edge, and the bow only lifted the cut-open top of your own rib
+cage (collarbones, upper ribs, lungs, great vessels) into the bottom of the picture for 0.7 s, shaking with the neck's
+spring (11, 15, 12.7, 11, 10 degrees and back within 0.2 s). Now the bow is drawn only from outside (`outsideOnly`, in
+proportion to the camera's way out of the eye, so it fades with the change of view) and eased (`easeS` 0.08 s, so the
+neck's spring does not shake the trunk; in the activity its largest step is under 3 degrees a frame and its dip at the
+top under 3 degrees), handed to the head pose by the frame (`neckBowStep`, the offset `neck_bow`); no other head pose
+(the eye, the hold, the camera trials) gets one. From outside at 0.4 s your skull comes up 89.9 px and the mirror body
+moves 24.9 px; in the eye view during the hold the pectorals show again where the open chest rose. The eye camera's place
+changes by 148 mm during the movement with the bow and without it: that is the eye view's own dip, a turn about the eye
+with the camera standing behind it. (Asked in the round: keep the bow out of the left shoulder's frame. Tried in a
+picture from outside at 0.4 s: the left arm's shoulder then stays behind while the bowed trunk's shoulder goes on, and a
+bone shows between them; the shoulder follows the bow as before. The hand's kept place no longer moves for it: the bow
+is not drawn in the eye view, where the look carries the hand, and the rule below counts the bow as part of the
+trunk.)
+
+**The chosen limb keeps its place through your own neck and trunk movements and through E (update 65; Message 206).**
+A check of update 64 found the left hand left moved after "Bend head forward" with the bow (16.5 mm, twice 31 mm, with
+Space during the hold 8.9 mm), and, on every build since the free hand, after "Bend trunk forward" alone (38 mm; neck then
+trunk 112 mm; the wrist ended at −12 against −9.6, its clamp at the hand's new distance). The cause is the view's hold of
+the chosen limb (LIMB_KEYS): it keeps the end where it is in the room while your trunk moves, and the pointer's look
+carries the end from its place in the picture. That place was taken with the camera as it stood before the movement;
+the first look during the movement (any look; the check set the same look again) used it with the moved camera and round
+the moved shoulder, so the end jumped (with a look turning, 105 to 236 mm in one frame) and stayed there when the trunk
+came back. `HOLD_BODY` (`ns-app.mjs`): the place keeps the trunk it was taken with (its reference: the trunk's held bend,
+turn and side bend and the neck's drawn bow, the shoulder's place and the bend of the limb then). While the trunk is not
+as in the reference (`holdBodySame`), a look carries the end in the reference: the line is drawn with the new look from
+the camera with the trunk as it was (a camera trial), round the shoulder as it was (`holdCarryPoint`, pure). The end so
+moves by the look's own turn only and otherwise stays where it is in the room, and when the trunk is back it stands
+where the same look would have put it with no movement: its place in the picture is kept. The reference is taken anew
+only while the trunk is at rest and the look still. The neck's own movements are not counted: they move neither the
+hold's camera (it stands on the look's own neck) nor the shoulders.
+
+A second check of this round found two faults of the place's camera. The first version also took the place again on
+every frame the neck or trunk moved, with no regard to the view, so after a neck or trunk movement seen from outside (E)
+the first look back in the eye view threw your left hand 330 mm in one frame, and it stayed there; and since update 63 a
+look turned outside did the same (316 mm). The place is now taken only from the eye view's camera: outside it is left as
+it was, and it is taken once on the first frame back in the eye view, before the look carries anything
+(`holdPlaceRule`, pure, which `stepLimbHold` follows; `holdReframe` takes nothing outside the eye view). That first
+version also stopped the look from carrying the limb for 1.65 to 1.93 s on every neck and trunk movement, which left a
+limb whose look turned in that time off its place for good (about 10 px a degree); that stop is gone.
+
+Measured in the browser, every bone of both bodies, start look: the check's eight sequences (then 5 s; the same with the
+bow switched off), before and after: neck then trunk 111.6 → 0 mm, neck then Space 8.9 → 0, trunk alone 38.3 → 0, Space
+alone 0 → 0, neck alone 16.5 → 0, trunk then neck 24.0 → 0, trunk then Space 20.4 → 0, neck twice 31.3 → 0 (the wrist
+ends at −9.6 every time; update 64 left 112.2, 38.3, 38.3 and 20.4). The second check's 47 sequences: a trunk movement
+with E at 0.2 s and back at 3 s, then a look: 0 mm (330 before); "Bend head forward" from outside, E back, a look: 0 mm
+(330); E, a look turned 4 degrees outside, E back, a look: 0 mm (316 here and in update 64; the end stays where it is in
+the room, since outside the look moves no limb). All twelve neck and trunk movements with the look turned 6 degrees
+during the movement: the end moves 86.9 mm with its place in the picture kept within 0.001 of the screen, as with no
+movement at all (86.9, 0.001), for the left arm; the legs and the right arm likewise (139.2, 146.2 and 82.3 mm, against
+139.2, 146.2 and 81.3 with no movement, places within 0.001); the largest one-frame step 23.3 mm, which the trunk's turn
+makes with no look too. Each movement alone: 0 mm for the left arm and the legs; the right arm 1.4 mm after "Bend trunk
+forward", as in update 64. W during "Bend trunk forward" moves the hand 11.8 mm (W alone 9.3; update 64 137).
+
+**Space and a change of limb during a trunk movement (update 66; Message 206).** A check of update 65 pinned down two
+older faults (both in update 64 as well). While Space holds the brain or the mirror body, your left hand is not held by
+the view and rides with your body; letting go during "Bend trunk forward" handed its place in the room back in one
+frame, a throw of 107.6 mm. Now it goes back to that place at most `HOLD_BODY.rejoinMps` (0.6 m a second, 10 mm a frame
+at 60 frames a second; `holdRejoinStep`, pure), and the place stays the goal of the hold meanwhile. And a limb chosen or
+let go while the trunk was bent kept the place the bent trunk gave it: "Bend trunk forward", the left leg chosen at
+0.3 s and the left arm again at 2.5 s, left your left hand raised 273 mm for good. Now the left hand let go while the
+trunk is not at rest stays held where it is in the room until the trunk is (and chosen again before that, it takes that
+hold back, its place to be taken anew); and an arm (its shoulder rides on the trunk) newly chosen while the trunk is
+not at rest is taken up by the view only when the trunk is at rest (`holdTakeUpWaits`, pure): until then it rides with
+your body, as an arm not chosen does. The legs are taken up at once, as before (their hips do not ride on the trunk).
+Measured (every frame at 60 frames a second, each sequence against the same inputs with no movement): Space let go during
+"Bend trunk forward": largest step 15.7 mm, the trunk carrying the hand while Space holds (107.6 before), back at its
+place 0.0 mm off; the left leg chosen during the movement and the left arm at 2.5 s: 0.0 mm (273.1); the right arm
+chosen at 0.3 s with the look turned 6 degrees during the return: it ends at its own place, 0.0 mm from where it
+started, with no step after it was chosen (before: 179.5 mm off with one step of 72.7), but 82.2 mm from the same
+sequence with no movement, since the look turned before the arm was taken up does not move it; the left leg chosen
+at 0.3 s with that look: 3.3 mm, as before. The round-3 check's 47 sequences and the eight left-hand sequences are as
+above; only these two changed.
+
+**The face's two edge codes in the hidden-part pass (update 65).** Codes 15 and 31 (the face's moving edges) were no
+thing in the see-through pass (`ns-see.mjs`): its JavaScript rule and its graphics card rule disagreed for a part of the
+mirror body's head behind its lips or eyelids. They are the head's now in `seeThingOfGroup`, `nsLimbOf`, `nsThingOf` and
+`SEE_JOIN_MASKS` (joined to what the head joins).
+
+**The face's moving edges get the ink line (22 November).** The mirror body's face was in the outline pass as one group,
+so only its silhouette was inked, and its muscles are closed volumes with no open borders an outline could follow. The
+eyelids' part of the ring muscle round each eye (the eyelid margins) and the lips' ring muscle now have an outline code
+of their own (`OUTLINE_FACE_EDGE_GROUP` 15, 31 on the mirror body, in
+`ns-outline.mjs`; `FACE_EDGE_INK` in `ns-scene-three.mjs`), adjacent to no other group, so the raw look's one ink line
+(one near-black, one width) is drawn where they border the rest of the face, on the mirror body and on your head seen
+from outside. The outline follows the face's shapes: the processor's buffers of the upper face, and the jaw's skinned
+lips through their lift offsets (section 179's remark that the lips' outline would stay at rest is out of date). In
+pictures of the start view a smile tilts the dark lip line, a purse shrinks it to a small ring, closing the eyes changes
+the eye rings and opening the jaw stretches the lips' outline down; without the ink these read only by the lit muscle.
+No light, colour or shading of the face is changed, and nothing is added in the eye view (no lid or brow cue: the
+owner's no-blink rule). Update 65: the forehead muscle (the brow line) is out again. It is thin and the head's own parts
+poke through it in small spots; in a code of its own each spot became a strong line (the two codes do not join), so a
+check found the mirror body's forehead dotted dark in every frame, at rest too. In pictures of the start view the
+forehead is clean again and "Raise both eyebrows" reads by its light and the forehead's bulge.
+
 **Measured.** In the browser, at 1600 by 900, through the game's own checks interface with its fixed 60 frames a second
 clock (switched on, for the checks only, by rewriting the page's launcher on the way in; the served files are not
 changed). Each of the 142 movements is switched on at the start look by the game's own press event (what a tap on one of
@@ -4214,7 +4338,7 @@ moved part, for "Straighten left index finger", "Open left hand", "Lift left big
 both eyebrows", "Smile", "Purse the lips" and "Bend head forward"; the outside view for the knee, the index finger, the
 head and the eyebrows; and two full pictures of the look resting on a left-hand area.
 
-**Checked.** `tests/seemove.test.mjs`, ten tests: no movement of the map is thrown back past where its part started (and
+**Checked.** `tests/seemove.test.mjs`, sixteen tests: no movement of the map is thrown back past where its part started (and
 the knee, the right elbow and the right arm end exactly their own 6, 8 and 5 degrees away; without the rule the knee bends
 more than 10); moving a joint lights its own area and spot (116 directions); the look's closing or opening never cancels a
 hand movement (every one of the sixteen moves its joints at least 12 degrees at six looks, 5 for the fingers coming
@@ -4228,10 +4352,25 @@ its swing until the return, never past the pointer the other way, ends at 0; wit
 movement taken out it fails at 0.6 s: 9.08 degrees past the pointer); no flash (for every movement of the map at 60
 frames a second: at most half its room in the first frame, no turning back before its end, no frame that jumps half its
 room, also after a further press; without the kick's cap the five movements with little room fail on both halves); the
-face shapes whole at their movements' ends; the toe rule.
-`tests/arm-jerk.test.mjs` (two tests restated for the hold), `tests/small-fixes.test.mjs` (the knee) and
-`tests/face-move.test.mjs` follow. The whole unit suite: 526 pass (517 on the lead, nine new), on 21 November; after the
-changes of 22 November only the package's own and the touched test files were run (the round's processor). The start check prints `"ok":true`. Browser tests `startup`,
+face shapes whole at their movements' ends; the toe rule; the left hand's tilt (wanted for the six hand and finger
+areas and the hand's movements while driven, not on their way back and not for the wrist's; eased, never a fifth of the
+way in one frame; for four hand movements from the activity, nearly gone when the finger is back, which fails with the
+update-64 rule; the side by the forearm's turn); the tip's placement off a box; the neck's bow (only what the frame hands
+in, none in the eye view, eased with no step of 3 degrees and no dip of 3 at the top, back to 0; the head the eye stands
+on is the same with and without it, which fails with the bow left in); the face's edge code (its own, adjacent to itself
+only, the forehead out); codes 15 and 31 in the hidden-part pass; the hold through a trunk movement and E (the old place
+with the moved camera moves the hand 30 mm and more with no turn of the look; the carry in the reference leaves it where
+it is, and a real turn carries it with its place in the picture kept; a place taken from the outside camera would throw
+it more than 100 mm; the rule at the end of each frame: nothing taken outside the eye view, taken once on the way back,
+kept while the trunk moves and the look is still, taken anew at rest; and the wiring of the rule into the hold read from
+the source). `tests/arm-jerk.test.mjs` (two tests restated for the hold), `tests/small-fixes.test.mjs` (the knee),
+`tests/face-move.test.mjs` and `tests/see.test.mjs` (code 15 is a group now) follow. Update 65: the package's file with
+the see, see-pass, outline-idle, face-move, head-hold, neck, limb-hold, limb-follow, limb-keys, look-taken, arm-jerk,
+small-fixes, hold-move, quiet, limb-pair-push and fix63 files, 136 tests, pass; the start check prints `"ok":true`;
+browser tests `startup`, `keyboard-aim` and `limb-controls` pass; both checks' hold sequences as above. The whole unit suite: 526 pass (517 on the lead, nine new), on 21 November; after the
+changes of 22 November only the package's own and the touched test files were run (the round's processor): the
+package's file with the outline, see, limb-hold, face-move, shader-safe, neck, head-hold, look-range, look-fixes,
+hud-layout and quiet files, all pass. The start check prints `"ok":true`. Browser tests `startup`,
 `keyboard-aim`, `punch-in` and `limb-controls` pass. Frame table (frames a second: still / look / up and down / limb turn),
 this branch and update 63 timed in turns inside one run, each alone on the shared processor: update 63 37.7, 41.3, 40.0
 for the look, 49.4, 37.5, 38.7 up and down, 54.6, 49.6, 45.7 in the limb turn; this branch 38.0, 40.2, 39.2, then 41.8,
@@ -4243,28 +4382,42 @@ look rule for the left hand runs every frame while the look is off level; timed 
 second with a still look and 45 with a moving one, where the rule it replaced took about 75.
 
 **Not done, or not right.**
-- *The face, the jaw and the throat stay too small to read at the start view.* All 36 of their movements travel 0.8 to
-  5.5 px on the mirror body's face there (0 to 4.3 before), because that face is about 40 px tall and no zoom is
-  allowed; your own face is not drawn in the eye view. In the pictures a raised eyebrow cannot be told from the resting
-  face by its shape, only by the forehead muscle's light. They are plain only with the mirror body brought near
-  (section 179). "Purse the lips" measures 0.8 px where it measured 2.5: the lips now push further toward you, and the
-  measure follows one point, now at the lips' middle; whether the purse reads worse was not settled (too small to tell).
+- *The face, the jaw and the throat stay small at the start view.* All 36 of their movements travel 0.8 to 5.5 px on the
+  mirror body's face there (0 to 4.3 before), because that face is about 40 px tall and no zoom is allowed; your own
+  face is not drawn in the eye view. The ink on the brow line, the eyelids and the lips (22 November) makes the brows,
+  eyelids, mouth corners, lips and the jaw's opening readable by contrast; the nose's two movements, "Move jaw to the
+  side" (1.6 px) and the throat's two (the throat bone under the jaw, 0 to 4.2 px) still read only by the lit muscle,
+  and nothing honest makes them larger without zoom. The ink also gives the mirror body's eyes dark rims and its lips a
+  dark outline at rest. "Purse the lips" measures 0.8 px where it measured 2.5 (one point at the lips' middle); with the
+  ink it reads as the lips' outline shrinking.
 - *Fourteen more movements stay under 12 px in the start view on both bodies*: "Turn left / right sole outward" 3.3 and
   3.4, "Turn left / right sole inward" 8.6 and 8.4, "Straighten left / right knee" 6.3 (6 degrees of room), "Straighten
   left elbow" 8.8, "Straighten right elbow" 10.6 (8 degrees), "Bring left fingers together" 3.5 (5 degrees), "Bring right
   fingers together" 7.6 (a stop strike), "Straighten right thumb" 7.1, "Curl left big toe" 11.8, "Lift left / right small
   toes" 11.5 and 11.3. They are small parts far from the eye or movements with little room in the start posture; none
   was made larger, since a larger end would not be a plausible one.
-- *"Bend head forward"* still has 10 degrees of room in the bowed start posture: 6 px on the mirror body and 18 px on
-  your own head from outside, as before (the eye view dips 15 degrees, which is clear). The owner asked for neck
-  movements exaggerated in every view; this one is not, outside the eye view: the chin is already low over the chest.
-- *From your own eyes a straightened finger of the left hand goes out of sight*: the hand is seen palm up along the
-  forearm, the relaxed fingers stand up, and a straightened one lies flat pointing away. So "Straighten" and "Bend" of
-  one finger both show as that finger's upright end going down; the mirror body shows the difference (28 to 36 px), and
-  the lit muscles differ (back or front of the forearm).
-- *At the look on a left-hand area* your left arm, the limb the look carries, is raised across the right half of the
-  picture and its hand is at the top right corner, the fingers partly beyond the frame; the mirror body stands behind
-  your forearm. That placement is the limb-follows-look rule's and was not changed.
+- *"Bend head forward"*: the bow of the upper body makes it plain from outside only. In the eye view it is the view's
+  own dip (section 171) and the mirror body's legs, as in update 63, since the mirror body's head is above the top edge
+  during the hold; the view's dip shows the open top of your rib cage at the bottom of the picture. The other neck
+  movements were not given a bow: they already travel 41 to 51 px on the mirror body.
+- *During a trunk movement the chosen limb stays where it is in the room* (as before), so its place in the picture moves
+  with the camera for the moment of the movement and is back when the trunk is; the arm stretches and bends with the
+  trunk. A look in that time moves it by the look's own turn, worked out with a camera trial of the trunk as it was
+  (0.45 ms a call, measured by a check over 940 calls; about one a frame, only while the trunk is not where it was and
+  the look moves; none on other frames). A key during a trunk movement takes the place anew in the trunk as it was; when
+  the view then follows the keys, the place is taken with the trunk as it is, and the look carries the limb round that
+  until the trunk is back at rest (with a look turned meanwhile, the hand ended 17 to 72 mm from the same inputs with no
+  movement in a check, 12.7 mm for the right arm with D). An arm chosen during a trunk movement is not moved by the look
+  until the trunk is at rest, so a look turned in that time leaves it where it was.
+- *A look turned outside the eye view moves no limb* (as before): back in the eye view the limb is where you left it,
+  so its place in the picture is the one the turned look gives it.
+- *Your own left hand's tilt* (22 November) was judged on the start view. At the look on a hand area the arm, the limb
+  the look carries, stands wherever the look has brought it: in runs where the look settled for 0.8 s it was raised
+  across the right half of the picture with the hand at the top right corner, partly beyond the frame or out of view,
+  and there the tilt cannot help; in runs where it settled for 0.25 s it was on the left near the area. The tip's
+  keeping off the hand is tested on its own (tipSides) and was not seen in a picture, since in my runs the hand was not
+  under the tip. The tilt still bends the wrist visibly during every hand movement (15 degrees, while the movement is
+  driven), which a player might read as a wrist movement; the wrist's area is not lit.
 - *The hold is unlit.* For 0.3 s the part stands at its end with no light on its area or muscles. Lengthening the
   light was not this package's to do.
 - *Under reduced motion* the seven stop-strike movements do not move at all (as before for six; "Turn left palm up" is
@@ -5022,6 +5175,60 @@ lazy load safe) and found more; the third pass, also 22 November:
   volley's own start), so every lit wire at one place beats together and the cord's two strands in one pixel beat as
   one; and on a lit route the resting pulses give way to its own beads.
 
+A third checker passed the map for update 65 and left four follow-ups; the fourth pass (22 November, for update 66):
+- **The brain under the map kept 80 to 100 % of its light and read as a lilac brain**, not a live scan: the scan's
+  depth pass, drawn at 200.4, came after the brain's glass. It has its own draw order now, 4.8
+  (`EMAP_LOOK.orderScanDepth`): after the strip's own depth pass (1.5, so the rim stays out of the race) and before
+  the glass (5 and 6), so the glass is not drawn under the scan and the deep-blue resting scan is back; still
+  transparent and still kept off the blocks by the stencil. What lies behind the pushed-out copy is hidden again
+  under the scan: with the map on the ordinary beams of light from an area (orders 12 and 12.5) are hidden near the
+  brain, where they run along its surface (a fourth checker saw none of the left hand's beam); the map's own route and
+  muscle marks stand in for them, and in update 65 the beams were already lost under the dark ground and the scan. At rest the picture had one or two soft clouds at a time: between the
+  storms, small short flares of their own now start every 0.45 to 1.1 s on the side the player sees (`EMAP_STORM.minor`:
+  0.3 to 0.5 strong, fading over 0.6 to 1 s, no cascade, no volley; each rises once and falls once).
+- **A few wire pixels shimmered at frame rate at low quality**: the front pass of the lines (depth test "less or
+  equal") and the hidden pass ("greater") are exact complements, and a line lying on a surface flipped between them.
+  The front pass is drawn a little nearer (polygon offset -1, -4: `EMAP_LOOK.frontOffset`).
+- **Fine network lines crossed the full-colour blocks**: the front pass is drawn in two parts, the routes and the
+  bodies' wiring over everything, and the network's lines (the bundles, the short fibres and the areas' links) kept off
+  a block by the strip's stencil; the hidden pass is kept off the blocks too (what lies behind a block is not drawn over
+  it). One draw more.
+- **The mirror body read as a back view with a bright cord down its middle**: its own wiring rests at 0.45 instead of
+  0.6 (`idleMirror`) and its cord at 0.7 of that (`cordMirror`).
+
+A fourth checker passed that pass at no measurable frame cost and found more; the fifth pass (22 November, for update
+66):
+- **A blink at every M off** (the brain faded from blue to black, then the whole pink brain came back in one frame) and
+  a sudden drop at M on: the scan's depth pass at 4.8 kept the glass away for the whole ease while only the scan's
+  colour faded. The depth pass is at 4.8 only while the map is wholly on; while it eases in or out it is drawn after
+  the glass, and the scan's colour pass covers the glass by the map's own amount (its alpha, `uCover`), so the brain
+  fades from its own colours to the scan and back, and at the moment the map is wholly on both ways give the same
+  picture. Measured in two boxes of the brain in every frame through M on and M off: see the checks.
+- **The small flares stopped after M off and on** for as long as the map had been on: the map's clock starts at 0
+  again, the storms' clocks did not. They are set back with it (`restartStorms`: the next storm at 0.6 s, the next
+  flare at 0.3 s).
+- **The mirror body's cord was hardly dimmer** (4 %): its traffic did not take `cordMirror`. It does now, and
+  `cordMirror` is 0.5. That alone left the strip down its middle as bright as before (the roots of the cord and the
+  bridges from the big brain, which meet at its neck, lie along the same line): the roots carry a flag of their own
+  now and take `cordMirror` with the cord, and so do the bridges. The strip the checker measured (8 by 90 pixels, High)
+  went from 110 to 91, beside it 67; the line still shows, about as bright as the nerves over the shoulders and flanks.
+- **The polygon offset moved the shimmer to other wire pixels**: a wider band, -2 and -16 (`frontOffset`). Paired runs
+  at low quality, 4 s each, counts per second at the 16- and 32-level steps: the two new spots behind the mirror's
+  raised left hand are steady again (873,277 at 2/1, 877,268 at 1/1; they were 12/7 and 13/7), the three old ones stay
+  steady, but 782,338 (15/5 and 14/7) and 817,340 (16/10 and 11/0) are still fast. Pixels fast only with the map on, at
+  the 32-level step with a pixel of shift: 19 and 18, against 32 between two map-off runs.
+
+Checks of the fifth pass:
+- The brain's light read in every frame in two boxes (the left half's side, the top of the right half) through M on and
+  M off: the largest step from one frame to the next was 3 and 6 levels at High on M on, 1 and 6 on M off; 1 and 4,
+  2 and 4 at low. Bursts of pictures through both presses at High and low show the brain fading from pink through
+  lilac to the deep blue scan and back, with no black frame.
+- The unit tests, the browser tests `emap`, `startup` and `keyboard-aim`, and the start check pass.
+- Frame table at High, look part (frames a second): the lead build 39.0 and 38.0; this build with the map off 39.0 and
+  33.4 (a third run, 17.9, was spoilt: 3 frames a second at the still part, the outline alone 180 ms), with the map on
+  37.8, 34.6 and 29.8. Paired, the map on is 3 to 11 % below off on the look part; the up-and-down and limb parts swing
+  both ways by more than that. The cost stays open.
+
 **Checked.**
 - Unit tests in Node (`tests/emap.test.mjs`, 26 tests; with the stand-in and with the nerve data): the model builds
   with no warning; each of the 142 movements has a complete route to each of its muscles, in order (1137 routes with
@@ -5050,6 +5257,18 @@ lazy load safe) and found more; the third pass, also 22 November:
   with 12 routes lit, about 5 frames a second fewer than with the map off).
 - The map's own processor time in a frame (`inspect().emap.meanMs`): the step 0.03 to 0.06 ms, the palette 0.02 to
   0.35 ms. The first M press: the map was built 0.69 s after it and fully shown after 1.06 s.
+- The fourth pass, on the final code: the map's test files with `chunking` and `wiring-data`, 60 of 60 (new: the view
+  test checks the three line passes, which keep off a block and which are drawn nearer, and the depth pass's order;
+  the storm test counts the small flares); the start check `"ok":true`; the browser tests `emap`, `startup` and
+  `keyboard-aim` passed. The third checker's paired measure at low quality (its frame-by-frame measure and its
+  pixel-by-pixel comparison, read only), the map off, on, off, on for 4 s each at the start view: pixels that rose and
+  fell four or more times in a second at a 32-level step only with the map on (one pixel of shift allowed) 42 and 10
+  (16-level step: 84 and 39), against 97 (142) between the two map-off runs; they lie scattered on the strip's rim and
+  the mirror body, as the map-off-only ones do. The frame table at High, twice each in turns: 18930 60.0 / 40.6 / 41.2 /
+  46.0 and 59.7 / 42.6 / 46.5 / 51.8; map off 59.4 / 39.1 / 44.2 / 52.3 and 59.5 / 41.1 / 44.9 / 50.5; map on 59.8 /
+  39.5 / 49.6 / 54.0 and 60.0 / 35.3 / 49.0 / 53.5 (the look 14 % below in the second pair, level in the first).
+  Pictures at real speed, High and low: rest (the deep-blue scan, the blocks clean, no network line across them), a
+  storm with flares, a lit block.
 - The third pass, on the final code: the map's test files with `chunking` and `wiring-data`, 60 of 60; the start check
   `"ok":true`; the browser tests `emap`, `startup` and `keyboard-aim` passed. The rim measured frame by frame at low
   quality, at rest, the look still, 3.5 s (`s-shimmer`; a crop of the brain's middle): pixels that rose and fell four
@@ -5110,8 +5329,11 @@ lazy load safe) and found more; the third pass, also 22 November:
   at 1600 x 900 and at 1366 x 768 and the hidden level; M off (the ordinary picture as it was).
 
 **Not done, or not right.**
-- The network's lines in front of the blocks still cross them (the lines are drawn after the stencil's test, at full
-  strength). The blocks' edges are a little jagged at low quality (the stencil follows the canvas's own pixels).
+- The blocks' edges are a little jagged at low quality (the stencil follows the canvas's own pixels).
+- The cost on the look part of the frame table with the map on is not settled: in the fourth pass's two pairs it was
+  level once and 14 % below once; the storm slots and the hidden network were not cut to find out.
+- Wire pixels that shimmer at low quality only with the map on remain, about as many as the noise between two map-off
+  runs; each change of the front pass's offset moved the flip to other spots (the fifth pass's numbers are below).
 - With one half hot and the other calm, the midline fade makes a straight edge between the halves along the gap.
 - The network in the middle of the picture, behind the mirror body, is still the busiest part; the mirror body's
   outline reads, its own nerves on it, but less cleanly than with the map off.
@@ -5822,7 +6044,7 @@ keys' solve of the right arm one more point of the posed arm.
 - The switched-off floating-face code is still in the renderer (11). It draws nothing and was left to keep this change small.
 - An area that moves nothing (the black blocks, the tongue) shows no light of its own on a click, only the key's press and a soft glow round it: this package's rule (the brief's and the lead's), not asked of the owner (191).
 - The glow of the strip was looked at frame by frame mostly with the page's clock slowed, on a machine drawing a few frames a second; at real speed in two runs; never on the owner's display (191).
-- At the start view the face, jaw and throat movements travel under 6 pixels on the mirror body's face, and fourteen other small movements under 12; "Bend head forward" has 10 degrees of room in the bowed start posture; from your own eyes a straightened finger of the left hand drops out of sight (189).
+- At the start view the face, jaw and throat movements travel under 6 pixels on the mirror body's face (the ink on the eyelids and lips makes most of them readable; the brows, the nose, the jaw's sideways move and the throat read by their light), and fourteen other small movements under 12 pixels; at the look on a hand area your own left arm stands wherever the look has brought it, sometimes with the hand beyond the frame (189).
 - The nerve data for the electrical map is typical and simplified: 74 of its 152 main roots are choices where the sources read mark none, a plexus is one bundle, the cranial nerves' openings in the skull are placed by offsets, and 1.4 % of the drawn length still lies in bone (most of it in the skull's own passages); nothing of it has been seen drawn in the game on its own branch (193).
 
 **Asked for in the user's notes and not done yet.** These stay with the author of these changes.

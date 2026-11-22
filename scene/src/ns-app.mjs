@@ -104,7 +104,7 @@ import * as ReferenceGraph from './ns-reference-graph.mjs';
 import { cancelControlsEpoch, cancelCarryLatches, inspectPendingInput, retainDeferredInput } from './ns-input-epoch.mjs';
 import { arrowPickPoint, arrowPressPoint, initialArrowInput, stepArrowInput, resolveArrowHit, ARROW_COVERED_HINT } from './ns-controls.mjs';
 import { startPacketStream, packetFrameBox, packetAppInputs, mergeAppInputs, streamShoulderGirdleAssets, shoulderGirdleAppInputs, FACE_PACKET as FACE_PACKET_ID, HEAD_PACKET as HEAD_PACKET_ID, MISSING_MUSCLES_PACKET as MISSING_MUSCLES_PACKET_ID } from './ns-assets.mjs';
-import { bodyFollowFromCoupling, PRONATION_EASE_S, PRONATION_EASE_S_REDUCED } from './ns-arm.mjs';
+import { bodyFollowFromCoupling, PRONATION_EASE_S, PRONATION_EASE_S_REDUCED, WRIST_RANGE_DEG as WRIST_LIMITS_DEG } from './ns-arm.mjs';
 import * as BodyArmBridge from './ns-body-arm-bridge.mjs';
 import * as NsCollide from './ns-collide.mjs';
 import * as NsGrasp from './ns-grasp.mjs';
@@ -581,6 +581,103 @@ export function viewFramePoint(pose, place, fovYDeg, aspect) {
   const dx = -sy * cp + cy * a + sy * sp * b, dy = sp + cp * b, dz = -cy * cp - sy * a + cy * sp * b, n = Math.hypot(dx, dy, dz) || 1, k = place.dist / n;
   return [pose.position[0] + dx * k, pose.position[1] + dy * k, pose.position[2] + dz * k];
 }
+/**
+ * 22 November 2026 (SEEMOVE, update 65; the owner, Message 206: "no permanent movements"; a check of update 64: "Bend
+ * trunk forward" left your left hand 38 mm from where it was, neck then trunk 112 mm). HOLD_BODY: the view holds the
+ * chosen limb's end in its place in the room while your own trunk moves (the eye camera and the shoulders ride on it),
+ * and the pointer's look carries the end from its place in the picture (holdCarryPoint). That place was taken with the
+ * camera as it stood before the movement, and the first look during the movement used it with the MOVED camera and
+ * round the moved shoulder: the hand jumped (105 to 236 mm in one frame with a look turning) and stayed there after the
+ * trunk came back.
+ * Now the place keeps the trunk it was taken with (h.headNow, its root h.root0 and its bend h.rho: the reference). While
+ * the trunk (`joints`: its held bend, turn and side bend, and the neck's drawn bow, which moves the shoulders) is not
+ * as in the reference (holdBodySame), a look carries the end in the reference: the line is drawn with the new look from
+ * the camera with the trunk as it was (a camera trial), round the shoulder as it was. The end so moves by the look's
+ * own turn only, stays where it is in the room otherwise, and when the trunk is back it stands where the same look
+ * would have put it with no movement at all: its place in the picture is kept. The reference is taken anew only while
+ * the trunk is at rest (its start posture) and the look still. (The neck's own movements do not move the hold's camera,
+ * which stands on the look's own neck, eyeHeadPose, nor the shoulders.)
+ * And (a second check of update 65; the same fault was in update 64 for a look turned outside): the place is taken only
+ * from the eye view's camera. Outside the eye view (E) it is left as it was, and it is taken once on the first frame
+ * back in the eye view, before the look carries anything (holdPlaceRule). Before, a place taken from the outside camera
+ * threw the hand about a third of a metre at the first look back in the eye view.
+ * And (a check of round 4; both faults were in update 64): while Space holds something your left hand is not held by
+ * the view and rides with your body; letting go during a trunk movement handed back its place in the room at once, a
+ * throw of 107.6 mm in one frame. Now it goes back to that place at most rejoinMps (left hand only). A limb let go while
+ * the trunk is not at rest kept the place beside the shoulder that the bent trunk gave it (the left hand ended 273 mm
+ * raised for good): the left hand let go then stays held in the room until the trunk is at rest (and chosen again, it
+ * takes that hold back), and an arm chosen then is taken up only when the trunk is at rest (its shoulder rides on the
+ * trunk; it rides with your body until then, as an arm not chosen does). A rule of this game's controls.
+ */
+export const HOLD_BODY = Object.freeze({ on: true, epsDeg: 1e-3, rejoinMps: 0.6,
+  joints: Object.freeze(['trunk_flex', 'trunk_rot', 'trunk_side', 'neck_bow']) });
+/** HOLD_BODY rejoinMps: one frame of the left hand's way back to its place after Space: the place asked this frame, at
+ * most rejoinMps x dt (dt capped at MAX_FRAME_DT) from the hand's end toward the goal; done when the goal is reached
+ * this frame. Pure. */
+export function holdRejoinStep(end, goal, dt, o = HOLD_BODY) {
+  const v = [goal[0] - end[0], goal[1] - end[1], goal[2] - end[2]], n = Math.hypot(v[0], v[1], v[2]);
+  const most = o.rejoinMps * (dt > 0 ? Math.min(dt, MAX_FRAME_DT) : 0);
+  if (!(n > most + 1e-6)) return { at: goal, done: true };
+  return { at: [end[0] + v[0] * most / n, end[1] + v[1] * most / n, end[2] + v[2] * most / n], done: false };
+}
+/** HOLD_BODY: whether the view waits to take up the chosen limb: an arm (its shoulder rides on the trunk) newly chosen
+ * (fresh) while the trunk is not at rest, unless it is being dragged. Pure. */
+export function holdTakeUpWaits({ limb, fresh = true, dragged = false, trunkAtRest = true } = {}) {
+  return Boolean(fresh && !dragged && !trunkAtRest && (limb === 'leftArm' || limb === 'rightArm'));
+}
+/** The trunk at rest for HOLD_BODY (headOffsetsOf's offsets of the start posture: none). */
+export const HOLD_REST = Object.freeze({});
+/**
+ * HOLD_BODY: what the view's hold does with the chosen limb's place in the picture at the end of a frame. eye: the eye
+ * view is settled (only its camera gives the place); stale: the place was left outside the eye view; carried: the look
+ * carried the end this frame; lookSame: the look did not change; keyed / held: a key moved the end, a contact holds it;
+ * bodyMoved: the trunk is not as in the place's reference (holdBodySame); bodyAtRest: the trunk is in its start posture.
+ * Returns 'wait' (outside the eye view: the place is left as it was, and marked to be taken on the way back), 'carry'
+ * (the place kept as the look's), 'keep' (the look still: kept, also while the trunk moves), 'rebase' (the trunk back at
+ * rest and the look still: the place and its reference taken anew from the camera as it now stands) or 'take' (taken
+ * again from where the end is held, in the place's reference). Pure.
+ */
+export function holdPlaceRule({ eye = true, stale = false, carried = false, lookSame = false, keyed = false, held = false, bodyMoved = false, bodyAtRest = true } = {}) {
+  if (!eye) return 'wait';
+  if (stale) return 'take';
+  if (carried && !keyed && !held) return 'carry';
+  if (lookSame && !keyed && !held) return bodyMoved && bodyAtRest ? 'rebase' : 'keep';
+  return 'take';
+}
+/** The side of a held end along the line of sight from camera position o: beyond the line's nearest point to the root
+ * (true) or before it (false); within 0.03 m of that point the side it had (prev). dist: the end's distance from o. Pure. */
+export function holdSideOf(o, root, w, dist, prev) {
+  if (!(dist > 1e-6)) return prev;
+  const near = ((root[0] - o[0]) * (w[0] - o[0]) + (root[1] - o[1]) * (w[1] - o[1]) + (root[2] - o[2]) * (w[2] - o[2])) / dist;
+  return Math.abs(dist - near) > 0.03 ? dist > near : prev;
+}
+/** Whether two sets of neck and trunk offsets (degrees by joint; headOffsetsOf's `now`, or null) are the same within
+ * HOLD_BODY.epsDeg (a missing joint counts as 0; null only matches null). Pure. */
+export function holdBodySame(a, b, o = HOLD_BODY) {
+  if (!a || !b) return !a && !b;
+  for (const k of o.joints) {
+    const x = Number.isFinite(a[k]) ? a[k] : 0, y = Number.isFinite(b[k]) ? b[k] : 0;
+    if (Math.abs(x - y) > o.epsDeg) return false;
+  }
+  return true;
+}
+/** Where the look carries a held end (world m): the line of sight through picture place `place` ({ x, y }) of camera
+ * `pose` meets the ball of radius rho round the end's root (its bend unchanged), on the far side of the line's nearest
+ * point to the root unless far === false; where the line passes the ball by, the ball's nearest point to the line. Pure. */
+export function holdCarryPoint(pose, place, root, rho, far, fovYDeg, aspect) {
+  const p1 = viewFramePoint(pose, { x: place.x, y: place.y, dist: 1 }, fovYDeg, aspect);
+  const o = pose.position, d = [p1[0] - o[0], p1[1] - o[1], p1[2] - o[2]], r = root;
+  const oc = [o[0] - r[0], o[1] - r[1], o[2] - r[2]], b = oc[0] * d[0] + oc[1] * d[1] + oc[2] * d[2], cc = oc[0] * oc[0] + oc[1] * oc[1] + oc[2] * oc[2] - rho * rho, disc = b * b - cc;
+  if (disc >= 0) {
+    // (the line crosses the ball twice: the hold keeps the side it is on, the far one or the near one, so a limb that
+    // waited at the edge of its range is picked up again on the side it left)
+    const q = Math.sqrt(disc), t1 = -b - q, t2 = -b + q, t = far === false && t1 > 0.05 ? t1 : Math.max(0.05, t2);
+    return [o[0] + d[0] * t, o[1] + d[1] * t, o[2] + d[2] * t];
+  }
+  // (the line passes the ball by: the limb points at the line's nearest point, its bend unchanged)
+  const t = Math.max(0.05, -b), v = [o[0] + d[0] * t - r[0], o[1] + d[1] * t - r[1], o[2] + d[2] * t - r[2]], n = Math.hypot(v[0], v[1], v[2]) || 1;
+  return [r[0] + v[0] * rho / n, r[1] + v[1] * rho / n, r[2] + v[2] * rho / n];
+}
 /** The look (yaw, pitch in radians; the camera's own convention: yaw = atan2(-x, -z), pitch up positive) that puts the
  * world point `at` in the middle of the picture left to right and `frameUp` of the way up it, seen from `eye` with a
  * vertical field of view of fovYDeg. Pure. */
@@ -733,6 +830,53 @@ export const HAND_Y_NDC = -0.12;
  * crosshair is on the strip. At and below the start look nothing changes (HAND_Y_NDC, the keys' own x). A and D still
  * move it from there. Pure: handRestNdc. Display choices, judged on pictures. */
 export const HAND_REST = Object.freeze({ lowNdc: -0.9, xUpNdc: -0.72, slideFromDeg: 6, slideFullDeg: 20 });
+/**
+ * 22 November 2026 (SEEMOVE, section 189; the owner: every movement clear and identifiable from the start view, Message
+ * 204). Your own left hand is seen from above along the forearm: its palm faces up, so a straightened finger lies flat,
+ * pointing away from the eye, and "Straighten" and "Bend" of one finger both read as that finger's upright end going
+ * down (an independent check: "a straightened index finger shrinks to a stub"). LEFT_HAND_TILT: while the look rests on
+ * an area of the left hand or of one of its fingers (`areas`), or while one of the hand's own movements is driven
+ * (`moves`: contracting or held at its end, the note's drive time; not on its way back), the wrist is drawn tilted by
+ * `deg` so the hand's face turns toward the eye: a finger's straighten then shows its length up the picture and its bend
+ * folds it into the palm. The tilt's side follows the forearm's turn: palm up, the fingers rise toward the palm's side
+ * (wrist flexion, +); palm down, toward the back of the hand (extension, -); in between, the share of each. Eased in
+ * (time constant inS) and out (outS), inside the wrist's own range (ns-actions JOINT_LIMITS, which the hand-fit
+ * envelope covers). Drawn only: no drive, no muscle light, nothing latched.
+ * Update 65 (a check of update 64: the tilt was 25 degrees and stayed until the movement's note was dropped, about 1.9 s,
+ * so the whole hand turned back by itself, unlit, about 0.6 s after the finger had settled, and it read as "Bend left
+ * wrist"): `deg` 15, wanted only while the movement is driven (0.7 s), and outS 0.3, so the hand turns back together
+ * with the finger's return. Pure: leftHandTiltWanted, leftHandTiltStep, leftHandTiltDeg. A display rule of this game,
+ * nothing measured.
+ */
+export const LEFT_HAND_TILT = Object.freeze({ on: true, deg: 15, inS: 0.12, outS: 0.3, snap: 0.002,
+  areas: Object.freeze(['rh_hand', 'rh_little', 'rh_ring', 'rh_middle', 'rh_index', 'rh_thumb']),
+  moves: Object.freeze(['grasp_close', 'open_hand', 'spread_fingers', 'fingers_together', 'index_flexion', 'index_extension', 'middle_flexion',
+    'middle_extension', 'ring_flexion', 'ring_extension', 'little_flexion', 'little_extension', 'thumb_mcp_flexion', 'thumb_mcp_extension',
+    'thumb_opposition', 'thumb_reposition']) });
+/** Whether the left hand's tilt is wanted now: the look's gaze is on one of LEFT_HAND_TILT.areas, or the activity state's
+ * armJerk notes drive one of its moves (the note's first number, its drive time left, above 0). Pure. */
+export function leftHandTiltWanted(gaze, activity, o = LEFT_HAND_TILT) {
+  if (!o || !o.on) return false;
+  if (gaze && gaze.target === 'region' && typeof gaze.regionId === 'string' && o.areas.includes(gaze.regionId)) return true;
+  const n = activity && activity.armJerk && typeof activity.armJerk === 'object' ? activity.armJerk : null;
+  if (n) for (const id of o.moves) { const jn = n[id]; if (Array.isArray(jn) && jn[0] > 0) return true; }
+  return false;
+}
+/** One step of the tilt's share (0 none .. 1 whole) toward 1 (wanted) or 0 over h seconds. Pure. */
+export function leftHandTiltStep(prev, wanted, h, o = LEFT_HAND_TILT) {
+  const s = Number.isFinite(prev) ? clamp(prev, 0, 1) : 0, goal = wanted && o && o.on ? 1 : 0;
+  if (!(h > 0) || s === goal) return s;
+  const tau = goal > s ? o.inS : o.outS;
+  const v = goal + (s - goal) * Math.exp(-h / Math.max(1e-3, tau));
+  return Math.abs(v - goal) < o.snap ? goal : v;
+}
+/** The wrist degrees (+ flexion) the tilt adds for its share and the forearm's turn (supShare: 0 palm down .. 1 palm
+ * up). Pure. */
+export function leftHandTiltDeg(share, supShare, o = LEFT_HAND_TILT) {
+  if (!o || !o.on || !(share > 0)) return 0;
+  const sup = Number.isFinite(supShare) ? clamp(supShare, 0, 1) : 1;
+  return o.deg * share * (2 * sup - 1) + 0;
+}
 /** Where the hand's centre is asked to be in the eye view's picture for a look: { yNdc, xAddNdc }. pitchRad /
  * startPitchRad: the look and the start look (radians, up positive); tanHalf: tan of half the view's angle; yNdc0: the
  * hand's height at and below the start look (HAND_Y_NDC); xNdc0: the keys' own x at the start (GAME_ARM_OPTIONS). Pure. */
@@ -950,6 +1094,41 @@ export function headBendLimit(dirDeg, sign, L = HEAD_LOOK) {
  * tests on every frame of a look, and it moved the belly and pelvis under a look down the body. A trunk bend held by
  * its own motor area is drawn as before. */
 export const LOOK_BENDS_TRUNK = false;
+/**
+ * 22 November 2026 (SEEMOVE, section 189; the owner, Message 200: "neck movement is exaggerated, so you can see it's
+ * moving up and down ... in first person view and all other views"). "Bend head forward" has only 10 degrees of room in
+ * the bowed start posture: the mirror body's head moved 6 px in the start view and your own head 18 px from outside.
+ * NECK_BOW: while the neck is bent forward beyond its start angle by a neck movement (the activity's offset; nothing
+ * else holds the neck there, Message 206), the upper body bows with it, `deg` at the neck's end, in proportion to how
+ * far the neck has come (roomDeg: the neck's forward room from the start posture), and returns with it. It is drawn as a
+ * bend of the trunk under the head (headPoseForLook's bendDeg, ns-body lookBendDeg), which the left arm's shoulder
+ * follows (so the arm stays on its shoulder), inside the trunk's own range; the eye camera stands where the activity's
+ * own angles put it (headAttachment leaves the bow out of the eye): no camera move, no zoom. A display rule of this
+ * game, not a measured coupling.
+ * Update 65 (a check of update 64): in the eye view the view dips 15 degrees during the neck's hold, so the mirror body's
+ * head and trunk were above the top edge and the bow showed nothing of it; it only lifted the cut-open top of your own
+ * rib cage into the picture for 0.7 s, and it jolted with the neck's spring (11 to 15 degrees and back within 0.2 s).
+ * Now it is drawn from outside only (outsideOnly: in proportion to the camera's way out of the eye, ns-camera progress,
+ * so it fades in and out with the change of view) and eased (time constant easeS, so the neck's jerk does not shake the
+ * trunk). The frame hands it to headPoseForLook as the offset `neck_bow` (neckBowStep); with no such offset there is
+ * no bow (the eye, the hold and every other camera trial leave it out).
+ */
+export const NECK_BOW = Object.freeze({ on: true, deg: 15, roomDeg: 10, outsideOnly: true, easeS: 0.08, snapDeg: 0.01 });
+/** The bow (degrees, >= 0) for a neck offset from the start posture (degrees, + = forward). Pure. */
+export function neckBowDeg(neckOffsetDeg, o = NECK_BOW) {
+  if (!o || !o.on || !(neckOffsetDeg > 0) || !(o.roomDeg > 0)) return 0;
+  return o.deg * clamp(neckOffsetDeg / o.roomDeg, 0, 1) + 0;
+}
+/** One frame of the drawn bow (degrees): eased toward neckBowDeg of the neck offset, times outShare (0 in the eye view,
+ * 1 from outside; NECK_BOW.outsideOnly), over dt seconds (time constant easeS; snapped within snapDeg). Pure. */
+export function neckBowStep(prevDeg, neckOffsetDeg, outShare, dt, o = NECK_BOW) {
+  const share = o && o.outsideOnly ? clamp(Number.isFinite(outShare) ? outShare : 0, 0, 1) : 1;
+  const goal = neckBowDeg(neckOffsetDeg, o) * share;
+  const prev = Number.isFinite(prevDeg) ? prevDeg : 0;
+  if (!(dt > 0)) return prev + 0;
+  const next = goal + (prev - goal) * Math.exp(-dt / Math.max(1e-6, o.easeS));
+  return (Math.abs(next - goal) <= o.snapDeg ? goal : next) + 0;
+}
 export function headPoseForLook(look, offsets = null, L = HEAD_LOOK) {
   if (!look || !Number.isFinite(look.yaw) || !Number.isFinite(look.pitch)) fail('app_input', 'head look needs finite { yaw, pitch } radians');
   // (18 November 2026: lp is the HEAD's pitch for this look; the eyes take the rest, HEAD_LOOK eyeDownDeg)
@@ -969,6 +1148,11 @@ export function headPoseForLook(look, offsets = null, L = HEAD_LOOK) {
   // way from its held bend, exactly as an ordinary steep look bends it.
   let neckFlex = clamp(f - held, -L.neckExtDeg, L.neckFlexDeg);
   let bend = LOOK_BENDS_TRUNK ? clamp(f - neckFlex, -up, down) : held; // the trunk stays at its held bend; the eyes take the rest
+  // 22 November 2026 (NECK_BOW): a neck bent forward by its movement bows the upper body with it (drawn; not the eye).
+  // (update 65: the bow is what the frame hands in, offsets.neck_bow, from outside only and eased: neckBowStep)
+  const bowIn = headOffset(offsets, 'neck_bow');
+  const bowDeg = LOOK_BENDS_TRUNK || !(bowIn > 0) ? 0 : clamp(held + bowIn, -up, down) - held;
+  bend += bowDeg;
   // While a held offset springs the sum may pass the camera's limits for a moment: the neck gives way first.
   // 20 November 2026 (NECK_VIEW; the owner: neck movement "exaggerated"): only while the camera rides the head
   // (LOOK_BENDS_TRUNK). The view is the look alone now, so these camera limits only cut the drawn head short: "Tilt head
@@ -1014,7 +1198,7 @@ export function headPoseForLook(look, offsets = null, L = HEAD_LOOK) {
     // lookNeckFlexDeg: the neck's bend of the look ALONE, with no held angle at all (neither the neck's nor the trunk's;
     // lookShareOf). eyeJoints.neck_flex takes up a held trunk bend, so once its clamp is reached it follows the trunk.
     lookNeckFlexDeg: clamp(-lp, -L.neckExtDeg, L.neckFlexDeg) + 0,
-    trunkDeg: bend + 0, heldTrunkDeg: held + 0, look: lookOut, headLook: { yaw, pitch }, eyeYawDeg: eyeYawOut + 0, eyeDownDeg: eyeDown + 0, eyePitchDeg: eyePitch + 0, rollDeg,
+    trunkDeg: bend + 0, heldTrunkDeg: held + 0, bowDeg: bowDeg + 0, look: lookOut, headLook: { yaw, pitch }, eyeYawDeg: eyeYawOut + 0, eyeDownDeg: eyeDown + 0, eyePitchDeg: eyePitch + 0, rollDeg,
     // 18 November 2026 (a check: any trunk turn or side bend tore the chest open in the eye view): the held trunk turn,
     // trunk side bend and neck side bend are handed on as they are, so whoever places the eye (the camera) and the left
     // shoulder root on the posed head and chest places them on the body AS DRAWN. Before, the eye stayed where a head
@@ -1314,6 +1498,21 @@ export function carryArrivalStep(prev, { carrySilent = false, otherSilent = fals
   return lookMoved ? { keep: { from: typeof gazeArea === 'string' ? gazeArea : null }, arrivedFrom: undefined } : none;
 }
 /** ns-body poseBody / bodyHeadFrame options for a headPoseForLook result (the chest turn and the look's trunk bend). */
+/**
+ * The head the eye camera stands on (19 and 22 November 2026; update 65 as a pure function, so a test guards it): the
+ * drawn head (headPoseForLook) with the look's own neck (eyeJoints, no neck angle held by a motor area) and without the
+ * drawn bow of the upper body (NECK_BOW: bendDeg less bowDeg), so neither a neck movement nor its bow moves the
+ * camera. null when the eye stands on the drawn head itself. Pure.
+ */
+export function eyeHeadPose(head) {
+  if (!head || !head.joints) return null;
+  const j = head.joints, cy = head.carry, je = !LOOK_BENDS_TRUNK && head.eyeJoints ? head.eyeJoints : null;
+  const sideHeld = Boolean(cy && Number.isFinite(cy.neck_side) && cy.neck_side !== 0);
+  const bow = Number.isFinite(head.bowDeg) ? head.bowDeg : 0;
+  const useJe = Boolean(je && (je.neck_rot !== j.neck_rot || je.neck_flex !== j.neck_flex || sideHeld));
+  if (!useJe && bow === 0) return null;
+  return { ...head, joints: useJe ? je : j, bendDeg: (Number.isFinite(head.bendDeg) ? head.bendDeg : 0) - bow, bowDeg: 0, carry: useJe && cy ? { ...cy, neck_side: 0 } : cy };
+}
 export function headPoseOptions(head) {
   return { lookTwistDeg: head && Number.isFinite(head.twistDeg) ? head.twistDeg : 0, lookBendDeg: head && Number.isFinite(head.bendDeg) ? head.bendDeg : 0,
     lookBendDirDeg: head && Number.isFinite(head.bendDirDeg) ? head.bendDirDeg : 0 };
@@ -3188,9 +3387,14 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
       let frEye = fr;
       const je = !LOOK_BENDS_TRUNK && head.eyeJoints ? head.eyeJoints : null;
       const sideHeld = cy && Number.isFinite(cy.neck_side) && cy.neck_side !== 0;
-      if (je && (je.neck_rot !== j.neck_rot || je.neck_flex !== j.neck_flex || sideHeld)) {
-        const keyE = `${je.neck_rot}|${je.neck_flex}|${key}`;
-        if (eyeCache.key !== keyE) { eyeCache.frame = headFrame({ ...head, joints: je, carry: cy ? { ...cy, neck_side: 0 } : cy }) || null; eyeCache.key = eyeCache.frame ? keyE : ''; }
+      // (22 November 2026, NECK_BOW: the bow of the upper body under a neck bent forward is drawn and carries the left
+      // shoulder, but not the eye: the camera stays where the activity's own angles put it)
+      const bow = Number.isFinite(head.bowDeg) ? head.bowDeg : 0;
+      const useJe = Boolean(je && (je.neck_rot !== j.neck_rot || je.neck_flex !== j.neck_flex || sideHeld));
+      if (useJe || bow !== 0) {
+        const jj = useJe ? je : j;
+        const keyE = `${jj.neck_rot}|${jj.neck_flex}|${bow}|${key}`;
+        if (eyeCache.key !== keyE) { const eh = eyeHeadPose(head); eyeCache.frame = eh ? headFrame(eh) || null : null; eyeCache.key = eyeCache.frame ? keyE : ''; }
         if (eyeCache.frame) frEye = eyeCache.frame;
       }
       const pt = (m, p) => [m[0] * p[0] + m[4] * p[1] + m[8] * p[2] + m[12], m[1] * p[0] + m[5] * p[1] + m[9] * p[2] + m[13], m[2] * p[0] + m[6] * p[1] + m[10] * p[2] + m[14]];
@@ -3419,6 +3623,7 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
       reachTouched: false, // R4-fix (RP3): no W/A/S/D yet, so the hand keeps the start x of the current aspect
       reachBlockedS: 0,    // R4-fix (RP3): how long a held W/A/S/D has moved nothing (s)
       reachHold: null,     // R4-fix (RP3): { sig, x0, d0 } of the current W/A/S/D hold (net-movement reference)
+      handTilt: 0,         // 22 November 2026 (LEFT_HAND_TILT): the left hand's tilt share (0 none .. 1 whole)
       activity: copyJson(initialActivity),
       elbowRad: null,
       elbowRate: 0,   // last displayed elbow rate (deg per wall second); HUD/diagnostic (legacy linkage input only)
@@ -3770,6 +3975,13 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
       const hl = inputs && inputs.handLook;
       if (hl && pose.joints) { const J = lookHandPose(pose.joints, drives, hl); if (J !== pose.joints) pose = { ...pose, joints: J }; }
     }
+    // 22 November 2026 (SEEMOVE, LEFT_HAND_TILT): the hand's face turned toward the eye while the look is on a hand or
+    // finger area or a hand movement runs (drawn only)
+    const handTilt = leftHandTiltStep(state.handTilt, leftHandTiltWanted(rawGaze, a), h);
+    if (handTilt > 0 && pose.joints && Number.isFinite(pose.joints.wrist_flex)) {
+      const wl = WRIST_LIMITS_DEG, deg = leftHandTiltDeg(handTilt, a.rotation && Number.isFinite(a.rotation.value) ? a.rotation.value : rotationState === 'pronated' ? 0 : 1);
+      if (deg !== 0) pose = { ...pose, joints: { ...pose.joints, wrist_flex: clamp(pose.joints.wrist_flex + deg, wl[0], wl[1]) + 0 } };
+    }
     // 19 November 2026 (HAND_REST): for looks above the start look the hand rests low instead of rising over the strip
     const handAt = referenceGraph && !wholeArmOption ? handRestNdc(pitch, referenceGraph.initialLook.pitch, Math.tan(fov * DEG / 2), handYNdc) : null;
     const handY = handAt ? handAt.yNdc : handYNdc, handXAdd = handAt ? handAt.xAddNdc : 0;
@@ -3908,6 +4120,7 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
       reachTouched: state.reachTouched === true || (keyed && !freeIn),
       reachBlockedS,
       reachHold: hold,
+      handTilt,            // 22 November 2026 (LEFT_HAND_TILT): the left hand's tilt share, eased
       activity: a,
       elbowRad,
       elbowRate,
@@ -6202,6 +6415,7 @@ export function start(params = {}) {
   // come from the body module once it is loaded; lastHeadPose / headShown: the head of the last drawn frame.
   let headLookOn = false, headLimits = HEAD_LOOK, headRest = null, lastHeadPose = null, headShown = null, headPrevNow = null;
   let neckView = null; // NECK_VIEW: the eye view's swing with a neck movement from the strip (neckViewStep's last result)
+  let neckBowNow = 0; // NECK_BOW: the drawn bow of the upper body under a neck bent forward (degrees; neckBowStep's last result)
   let carriedHold = null, carriedLookMsBefore = null; // CARRIED_LOOK: carriedLookStep's last result; the look's time one frame before
   let carryArrival = null; // CARRY_ARRIVAL: carryArrivalStep's kept state ({ from } while the player has moved the look during a carry)
   // 21 November 2026 (hunt H2 / H3): a count of the look turns the game makes by itself (the view turning to a newly chosen
@@ -6533,6 +6747,10 @@ export function start(params = {}) {
   /** TURN_SIDES: the side light's level now (0: none). */
   const turnSideNow = now => (!TURN_SIDES.on || !turnSide.seen ? 0 : turnSide.active ? TURN_SIDES.level : turnSideLevel((now - turnSide.endedMs) / 1000, prefersReducedMotion()));
   let limbHold = null, holdMoved = null, holdInfo = null, holdLegUntilMs = 0; // (holdLegUntilMs: a leg was moved by the hold until about now)
+  let holdHeadNow = null; // (HOLD_BODY: this frame's neck and trunk offsets, headOffsetsOf's `now` with the drawn bow)
+  // (HOLD_BODY: the left hand's hold kept while another limb is chosen and the trunk is not at rest; whether the left hand
+  // goes back to its place at rejoinMps after Space; this frame's goal for it while it does)
+  let leftKept = null, leftRejoin = false, holdLeftGoal = null;
   let lastClickMs = -1e9, pressAtMs = NaN, pressSecond = false, pressStepped = false, pressNextMs = NaN, prevButtonDown = false, limbHud = null;
   let clickChoiceBefore = 0; // (the limb chosen before the last single click: a double click steps from it)
   /** The limb the look carries: one Space holds, or (LIMB_CLICK.followsLook only) the one a click controls. */
@@ -7282,8 +7500,9 @@ export function start(params = {}) {
     simState = sim.resetBody(simState);
     if (emapView) { try { emapView.reset(); } catch { /* the map goes on from dark */ } } // 21 November 2026 (EMAP): no route stays lit across a reset (the map itself stays as the player set it)
     limbGrasp = null; limbLatch = null; latchKeys = null; latchLook = null; leftDial = 0; contact.bodyBlocked = null; // R558: the limbs go back too (19 November: a limb taken by a click is let go as well)
-    limbHold = null; // (the hold takes the chosen limb up again at its start place)
+    limbHold = null; leftKept = null; leftRejoin = false; // (the hold takes the chosen limb up again at its start place)
     neckView = null; carriedHold = null; carryArrival = null; // NECK_VIEW: the neck goes back at once; that is no movement for the view to swing with
+    neckBowNow = 0;
     limbPush.pen.clear(); limbPush.handMove = null; limbPush.endPrev = null; limbPush.rodsPrev = null;
     // Reset returns W/A/S/D to the left arm, so the choice display and double-click order start there too.
     limbChoice = 1; limbChoiceDir = 1;
@@ -8569,7 +8788,12 @@ export function start(params = {}) {
         limbFlash = limb; limbFlashPending = true; limbFlashFromMs = NaN; // (the frame stamps its start; until then nothing is drawn)
         // (turn false: chosen by a press-and-drag on it; the limb is under the crosshair already and the view stays)
         limbView = turn && LIMB_KEYS.view.on && (limb !== 'leftArm' || HOLD.hold) ? { limb, fromMs: NaN, last: null } : null;
-        limbHold = null; // (the hold takes the new limb up where it is)
+        // (update 66, HOLD_BODY: the left hand let go while your trunk is not at rest stays held where it is in the room
+        // until the trunk is back; chosen again before that, it takes that hold back, its place to be taken anew)
+        if (HOLD_BODY.on && limbHold && limbHold.limb === 'leftArm' && limb !== 'leftArm' && !holdTrunkAtRest()) leftKept = limbHold;
+        const back = HOLD_BODY.on && limb === 'leftArm' && leftKept ? leftKept : null;
+        if (back) { back.stale = true; leftKept = null; }
+        limbHold = back; // (the hold takes the new limb up where it is)
         guideAsyncEvents.push({ type: 'limbChoice', n }); // (the tutorial's step for the limb keys)
         drawLimbHud();
       }
@@ -8791,9 +9015,10 @@ export function start(params = {}) {
         return q === p ? 0 : Math.hypot(q[0] - p[0], q[1] - p[1], q[2] - p[2]);
       }
       /** The camera a controls look would give this frame (as the frame's own attempt builds it): { position, yaw, pitch }. */
-      function poseForCtl(c) {
+      // (update 65, HOLD_BODY: offsNow, the neck and trunk offsets to stand the camera on instead of this frame's)
+      function poseForCtl(c, offsNow = undefined) {
         try {
-          const offs = headLookOn ? headOffsetsOf(simState) : null;
+          const offs = !headLookOn ? null : offsNow !== undefined ? { now: offsNow } : headOffsetsOf(simState);
           const head = headLookOn ? headPoseForLook(c, offs ? offs.now : null, headLimits) : null;
           const pose = NC.cameraPose(cam, { firstPersonFrame: head ? fp => sim.referenceFrameForLook(fp, head) : sim.referenceFrameForLook,
             look: head ? head.look : c, bodyToWorld: camBodyToWorld && anatomy ? camBodyToWorld : null, eyeBp: camBodyToWorld && anatomy ? anatomy.eyeBp : null, avoid: null });
@@ -8801,22 +9026,33 @@ export function start(params = {}) {
         } catch { return null; }
       }
       /** The hold's place in the picture taken again from its world place, for camera pose `pose`. */
-      function holdReframe(pose, root = null) {
+      // (update 65, HOLD_BODY: only from the eye view's camera; outside it the place is left and marked stale, and taken
+      // on the first frame back in the eye view: holdPlaceRule)
+      // (keepRef: the pose is the camera of the place's reference trunk, which is kept; else the place's reference becomes
+      // the trunk as it now stands and the root given, or the limb's root now)
+      function holdReframe(pose, root = null, keepRef = false) {
         const h = limbHold;
         if (!h || !pose) return;
+        if (!firstPersonNow()) { h.stale = true; return; }
+        h.stale = false;
         const f = viewFrameOf(pose, h.world, holdFov(), holdAspect());
         h.ok = f.depth > 0.03 && Number.isFinite(f.x) && Number.isFinite(f.y) && Math.abs(f.x) < 4 && Math.abs(f.y) < 4;
         h.x = f.x; h.y = f.y; h.dist = f.dist; h.lookMs = cs.lookMs === undefined ? null : cs.lookMs; h.lookYaw = cs.yaw; h.lookPitch = cs.pitch;
+        if (!keepRef) {
+          h.headNow = holdHeadNow; // (HOLD_BODY: the reference, the trunk as it was when the place was taken, and its root)
+          const rt = root || (limbEnds(h.limb) || {}).root || null;
+          if (rt) h.root0 = rt.slice();
+        }
         // which side of the limb's ball the place is on along the line of sight: beyond the line's nearest point to the
         // shoulder or hip (far) or before it (kept as it was when the place is right at that point)
-        if (root && f.dist > 1e-6) {
-          const o = pose.position, w = h.world, near = ((root[0] - o[0]) * (w[0] - o[0]) + (root[1] - o[1]) * (w[1] - o[1]) + (root[2] - o[2]) * (w[2] - o[2])) / f.dist;
-          if (Math.abs(f.dist - near) > 0.03) h.far = f.dist > near;
-        }
+        if (root) h.far = holdSideOf(pose.position, root, h.world, f.dist, h.far);
       }
       /** Whether the pointer has turned the look since the hold's place in the picture was taken, and may carry the limb. */
+      // (update 65, HOLD_BODY: not while the place was left outside the eye view, until it is taken again there)
+      /** HOLD_BODY: whether the trunk is at rest (its start posture; true while the head look is off). */
+      const holdTrunkAtRest = () => !holdHeadNow || holdBodySame(holdHeadNow, HOLD_REST);
       const holdCarries = () => Boolean(limbHold && limbHold.ok && HOLD.lookCarries && firstPersonNow() && !limbView && !holdBusy()
-        && (cs.lookMs === undefined ? null : cs.lookMs) !== limbHold.lookMs);
+        && (cs.lookMs === undefined ? null : cs.lookMs) !== limbHold.lookMs && !(HOLD_BODY.on && limbHold.stale));
       /** The place asked of the chosen limb's end this frame (world m), from the hold: carried by the look when the
        * pointer turned it, then moved level by the keys (axes; W away along the view's heading, A / D across it).
        * Changes nothing (the frame's attempt may ask more than once). null: no hold yet. */
@@ -8830,21 +9066,15 @@ export function start(params = {}) {
           // through that place meets the ball the end can move on with its bend unchanged (the ball round the shoulder or
           // hip, as far out as the end is now), so a look up or down turns the limb at the shoulder or hip and leaves
           // the elbow or knee as it is. Where that line passes the ball by, the limb reaches for its nearest point.
-          const pts = limbEnds(h.limb), far = viewFramePoint(pose, { x: h.x, y: h.y, dist: 1 }, holdFov(), holdAspect());
-          const o = pose.position, d = [far[0] - o[0], far[1] - o[1], far[2] - o[2]];
+          // (update 65: the line and the ball are holdCarryPoint's)
+          const pts = limbEnds(h.limb);
           if (pts) {
-            const r = pts.root, e = pts.end, rho = Number.isFinite(h.rho) && h.rho > 0.02 ? h.rho : Math.hypot(e[0] - r[0], e[1] - r[1], e[2] - r[2]);
-            const oc = [o[0] - r[0], o[1] - r[1], o[2] - r[2]], b = oc[0] * d[0] + oc[1] * d[1] + oc[2] * d[2], cc = oc[0] * oc[0] + oc[1] * oc[1] + oc[2] * oc[2] - rho * rho, disc = b * b - cc;
-            if (disc >= 0) {
-              // (the line crosses the ball twice: the hold keeps the side it is on, the far one or the near one, so a
-              // limb that waited at the edge of its range is picked up again on the side it left)
-              const q = Math.sqrt(disc), t1 = -b - q, t2 = -b + q, t = h.far === false && t1 > 0.05 ? t1 : Math.max(0.05, t2);
-              T = [o[0] + d[0] * t, o[1] + d[1] * t, o[2] + d[2] * t];
-            } else {
-              // (the line passes the ball by: the limb points at the line's nearest point, its bend unchanged)
-              const t = Math.max(0.05, -b), v = [o[0] + d[0] * t - r[0], o[1] + d[1] * t - r[1], o[2] + d[2] * t - r[2]], n = Math.hypot(v[0], v[1], v[2]) || 1;
-              T = [r[0] + v[0] * rho / n, r[1] + v[1] * rho / n, r[2] + v[2] * rho / n];
-            }
+            // (update 65, HOLD_BODY: while the trunk is not as in the place's reference, the carry is worked out in the
+            // reference: the new look from the camera with the trunk as it was, round the shoulder as it was)
+            const ref = HOLD_BODY.on && Array.isArray(h.root0) && !holdBodySame(h.headNow, holdHeadNow);
+            const P = ref ? poseForCtl({ yaw: cs.yaw, pitch: cs.pitch }, h.headNow) || pose : pose;
+            const r = ref ? h.root0 : pts.root, e = pts.end, rho = Number.isFinite(h.rho) && h.rho > 0.02 ? h.rho : Math.hypot(e[0] - r[0], e[1] - r[1], e[2] - r[2]);
+            T = holdCarryPoint(P, h, r, rho, h.far, holdFov(), holdAspect());
           } else T = viewFramePoint(pose, h, holdFov(), holdAspect());
         }
         if (arm) T = handKeepOut(T); // (carried by the look into the trunk: it slides over the surface)
@@ -8980,6 +9210,9 @@ export function start(params = {}) {
         // on from the brain, the limb turn, Reset body): the hold then starts from where the limb's end is now.
         const dragged = Boolean(cs.drag && cs.drag.target === 'limb' && cs.drag.binding && cs.drag.binding.limb === limb);
         const others = Boolean(c && limbHold && limbHold.joints && J && c.joints.some(id => Math.abs((Number.isFinite(J[id]) ? J[id] : 0) - limbHold.joints[id]) > 0.02));
+        // (update 66, HOLD_BODY: an arm newly chosen while your trunk is not at rest is taken up when the trunk is at rest:
+        // its shoulder rides on the trunk, and until then it rides with your body, as an arm not chosen does)
+        if (HOLD_BODY.on && holdTakeUpWaits({ limb, fresh: !limbHold || limbHold.limb !== limb, dragged, trunkAtRest: holdTrunkAtRest() })) { limbHold = null; return; }
         if (!limbHold || limbHold.limb !== limb || dragged || others) {
           limbHold = { limb, world: pts.end.slice(), x: 0, y: 0, dist: 0, ok: false, lookMs: null, joints: null, far: true,
             rho: Math.hypot(pts.end[0] - pts.root[0], pts.end[1] - pts.root[1], pts.end[2] - pts.root[2]) };
@@ -8992,7 +9225,8 @@ export function start(params = {}) {
         if (limb === 'leftArm') {
           // the step was asked for usedTarget and the hand is where it could go (a key that pushed inside the folded
           // arm's reach moved nothing: ns-arm fitHandAt clamped.inner)
-          T = Array.isArray(usedTarget) ? usedTarget.slice() : h.world.slice();
+          // (update 66, HOLD_BODY: while the hand goes back to its place after Space, the place is the goal, not the step's)
+          T = Array.isArray(holdLeftGoal) ? holdLeftGoal.slice() : Array.isArray(usedTarget) ? usedTarget.slice() : h.world.slice();
           const innerL = Boolean(out.fit && out.fit.clamped && out.fit.clamped.inner);
           if (keyed && innerL) T = pts.end.slice();
           // (for checks, qa().limbs.lastSolve: on frames of the keys, what the left hand's step did)
@@ -9202,13 +9436,29 @@ export function start(params = {}) {
         if (!keyed) { h.keyU = null; h.keyLen = 0; } // (the keys' line ends with the keys)
         h.world = T;
         // (the keys set how far out the end is, and so the bend the look then leaves alone)
-        if (keyed) h.rho = Math.hypot(pts.end[0] - pts.root[0], pts.end[1] - pts.root[1], pts.end[2] - pts.root[2]);
+        // (update 65, HOLD_BODY: round the root of the place's reference while the trunk is not as there)
+        const refNow = HOLD_BODY.on && Array.isArray(h.root0) && !holdBodySame(h.headNow, holdHeadNow), rootRef = refNow ? h.root0 : pts.root;
+        if (keyed) h.rho = Math.hypot(pts.end[0] - rootRef[0], pts.end[1] - rootRef[1], pts.end[2] - rootRef[2]);
         // While the look alone carries the end, its place in the picture is the one it had (also where the limb cannot
         // follow: it waits at the end of its range and is picked up again when the view comes back). Anything else
         // (a key, the hold taken up afresh, a turn of the view that was not the pointer's) takes the place again.
         // (a frame on which the look did not change at all keeps it too)
-        if ((carried || (cs.yaw === h.lookYaw && cs.pitch === h.lookPitch)) && !keyed && !held) { h.lookMs = cs.lookMs === undefined ? null : cs.lookMs; h.lookYaw = cs.yaw; h.lookPitch = cs.pitch; }
-        else holdReframe(holdCamPose(), pts.root);
+        // (update 65, HOLD_BODY, holdPlaceRule: the place is taken only from the eye view's camera, and while the trunk is
+        // not as in the place's reference it is taken in the reference: the camera with the trunk as it was, the root as
+        // it was; once the trunk is back at rest with the look still, the reference is taken anew)
+        const rule = HOLD_BODY.on ? holdPlaceRule({ eye: firstPersonNow(), stale: h.stale === true, carried, lookSame: cs.yaw === h.lookYaw && cs.pitch === h.lookPitch,
+          keyed, held, bodyMoved: refNow, bodyAtRest: holdTrunkAtRest() })
+          : (carried || (cs.yaw === h.lookYaw && cs.pitch === h.lookPitch)) && !keyed && !held ? 'keep' : 'take';
+        if (rule === 'wait') h.stale = true;
+        else if (rule === 'carry' || rule === 'keep') { h.lookMs = cs.lookMs === undefined ? null : cs.lookMs; h.lookYaw = cs.yaw; h.lookPitch = cs.pitch; }
+        else if (rule === 'rebase') {
+          const r = pts.root, w = h.world, n = Math.hypot(w[0] - r[0], w[1] - r[1], w[2] - r[2]);
+          if (n > 0.02) h.rho = n; // (the bend round the root as it now stands)
+          holdReframe(holdCamPose(), pts.root);
+        } else {
+          const Pref = refNow ? poseForCtl({ yaw: cs.yaw, pitch: cs.pitch }, h.headNow) : null;
+          if (Pref) holdReframe(Pref, h.root0, true); else holdReframe(holdCamPose(), pts.root);
+        }
         if (keyed && firstPersonNow() && !limbView) followLimbView(pts.frame, dt);
       }
       /** LIMB_PUSH: a limb's two rods in the world: { root, bend, end, tip (the lower rod's far end: a hand's length past
@@ -10790,6 +11040,10 @@ export function start(params = {}) {
             }
           }
         }
+        // 22 November 2026 (SEEMOVE, NECK_BOW, update 65): the bow, drawn from outside only and eased (neckBowStep), handed
+        // to this frame's head pose as the offset neck_bow; the eye never takes it (headAttachment)
+        if (live) neckBowNow = neckBowStep(neckBowNow, headOffs ? headOffs.now.neck_flex : 0, clamp(Number.isFinite(cam.progress) ? cam.progress : 0, 0, 1), timing.dt);
+        if (headOffs && neckBowNow !== 0) headOffs = { ...headOffs, now: { ...headOffs.now, neck_bow: neckBowNow } };
         const baseTiming = timing;
         // R558: ONE attempt at this frame, from the camera choice to the simulation step. It commits nothing: the caller
         // commits its result or restores the snapshot below. `override` (null = exactly as asked) holds the fallbacks:
@@ -11020,7 +11274,17 @@ export function start(params = {}) {
         const holdAxes = live ? frameAxes : { x: 0, z: 0 };
         // (not while Space holds something or a drag is under way: the hand then keeps its own place, which a drag on the
         // left arm moves directly)
-        const holdHand = live && LIMB_KEYS.on && HOLD.hold && chosenLimb() === 'leftArm' && limbHold && limbHold.limb === 'leftArm' && !holdBusy() ? holdTarget(holdCamPose(), timing.dt, holdAxes) : null;
+        holdHeadNow = headOffs ? headOffs.now : null; holdLeftGoal = null; // (HOLD_BODY)
+        // (update 66, HOLD_BODY: the left hand kept held in the room while another limb is chosen, until the trunk is at rest;
+        // after Space it goes back to its place at most rejoinMps)
+        if (leftKept && (holdTrunkAtRest() || chosenLimb() === 'leftArm')) leftKept = null;
+        const leftHeld = chosenLimb() === 'leftArm' && limbHold && limbHold.limb === 'leftArm';
+        if (live && HOLD_BODY.on && LIMB_KEYS.on && HOLD.hold && holdBusy() && (leftHeld || leftKept)) leftRejoin = true;
+        let holdHand = !(live && LIMB_KEYS.on && HOLD.hold) || holdBusy() ? null : leftHeld ? holdTarget(holdCamPose(), timing.dt, holdAxes) : leftKept ? leftKept.world.slice() : null;
+        if (holdHand && leftRejoin) {
+          const le = limbEnds('leftArm'), rj = le ? holdRejoinStep(le.end, holdHand, timing.dt) : null;
+          if (rj && !rj.done) { if (leftHeld) holdLeftGoal = holdHand; holdHand = rj.at; } else leftRejoin = false;
+        }
         // 21 November 2026, late (CARRY_ARRIVAL): the gaze is silent while a neck or trunk joint moves or the eye view swings
         // (the two carry terms of silentGaze below); a look the PLAYER moved in that time is met as an arrival once it ends.
         const carryNow = carryArrivalStep(carryArrival, {
@@ -12024,6 +12288,10 @@ export function start(params = {}) {
         // 17 November 2026: the quiet layer. The tip names what is under the crosshair right now (the motor area and
         // its numbered movements, or the muscle or bone there); the prompt is the guide's goal in a few words. Shown
         // while the information cards are off (the start; R brings the cards back) and the game is being played.
+        // (your own arm's boxes on the screen, armAvoidShapes: worked out once a frame for the tip and the labels; update 65)
+        const armAvoid = out.fit ? armAvoidShapes(out.fit, {
+          aspect, fovYDeg: out.fovYDeg, ...(out.fit.solution && Array.isArray(out.fit.solution.shoulderCam) ? { shoulderCam: out.fit.solution.shoulderCam } : {})
+        }) : null;
         if (quietUi) {
           if (!quietRoot) quietRoot = infoRoot();
           // 19 November 2026 (EASE; the owner: "reader should be on by default"): the game starts at the SHORT reading
@@ -12082,7 +12350,11 @@ export function start(params = {}) {
           if (sceneFn('setKeyboardAreaTip')) callScene('setKeyboardAreaTip', tipModel?.kind === 'area' && Boolean(tipModel.hint));
           const free = cs && cs.pointer && !lockedNow() ? cs.pointer : null;
           const tipArea = tipModel && tipModel.kind === 'area' && onArea && typeof out.gaze.regionId === 'string' ? regionById(bodyMap, out.gaze.regionId) : null;
-          quietUi.update({ show: quietOn, tip: tipModel, side: tipArea && tipArea.hemisphere === (BRAIN_FRONT_DOWN ? 'right' : 'left') ? 'left' : null, prompt: quietOn ? quietPromptText(guideNow, NT.GUIDE.short) : '',
+          // 22 November 2026 (SEEMOVE, section 189): the tip keeps off your own left hand's box on the screen (the same box
+          // the region labels keep off, armAvoidShapes), so it no longer covers the palm and thumb at the hand's areas
+          const handR = armAvoid ? armAvoid.rects[0] : null;
+          const handBox = handR ? { x0: handR.x0 * size.width, y0: handR.y0 * size.height, x1: handR.x1 * size.width, y1: handR.y1 * size.height } : null;
+          quietUi.update({ avoid: handBox, show: quietOn, tip: tipModel, side: tipArea && tipArea.hemisphere === (BRAIN_FRONT_DOWN ? 'right' : 'left') ? 'left' : null, prompt: quietOn ? quietPromptText(guideNow, NT.GUIDE.short) : '',
             count: quietOn ? quietPromptCount(guideNow) : '', skip: quietOn && guideNow && guideNow.visible && !guideNow.finished && guide.tutorial === true ? NT.GUIDE.short.skip : '',
             x: free && Number.isFinite(free.x) ? free.x : size.width / 2, y: free && Number.isFinite(free.y) ? free.y : size.height / 2,
             width: size.width, height: size.height });
@@ -12106,7 +12378,7 @@ export function start(params = {}) {
           }
           if (out.objectCarry) { out.objectCarry.currentPosePlacement = checked; out.objectCarry.mirrorWorldCentre = simState.objectCarry.mirror.centreWorldM.slice(); }
         }
-        const avoid = armAvoidShapes(out.fit, {
+        const avoid = armAvoid || armAvoidShapes(out.fit, {
           aspect, fovYDeg: out.fovYDeg, ...(out.fit.solution && Array.isArray(out.fit.solution.shoulderCam) ? { shoulderCam: out.fit.solution.shoulderCam } : {})
         });
         // Round-2 fixes V2 / V5 / V6: region labels keep clear of the player's arm; orientation labels keep clear of the

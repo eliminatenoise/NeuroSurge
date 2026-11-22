@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-22-body-update-65",
+  "version": "experimental-2026-11-22-body-update-66",
   "experimental": true,
-  "source": "Body update 65: the electrical map on M, a made-up live brain-scan picture with wires everywhere, electrical storms and the route of each movement from brain to muscle and back, drawn from typical nerve anatomy",
+  "source": "Body update 66: the electrical map rests as a deep-blue live scan with small flares and fades without a blink; your left hand turns toward you while its fingers move; ink lines show the mirror face's movements; your left hand comes back to its place after a trunk movement, the view from outside or Space",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -32,8 +32,8 @@
     },
     {
       "path": "DESIGN-DECISIONS.md",
-      "bytes": 739861,
-      "sha256": "e8428f0d3b97f5c48f5b8e13da92a1c27e1ca5fccf673b9d6e75d3e41eb79329"
+      "bytes": 763676,
+      "sha256": "9df9cd8ed91dc88b6a1b59f6559dd4e217226d340c98fb2ae4a76225832942ed"
     },
     {
       "path": "LAUNCHERS.md",
@@ -47,8 +47,8 @@
     },
     {
       "path": "PLAYER-GUIDE.md",
-      "bytes": 16572,
-      "sha256": "44a40808f81b48060798bf7099c2d3717fd8e7c33ac208d1c7f660aa04888879"
+      "bytes": 17120,
+      "sha256": "4e03b3624ef6acbc89c6eb160826d12f76509491a48ada959d9ab432fbba06ca"
     },
     {
       "path": "PREVIEW-NOTES.html",
@@ -57,23 +57,23 @@
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 57990,
-      "sha256": "e91aeefedc81efda03387f3a9e09f5465c793f85a88c1c39b6acf84ba7ffeaa9"
+      "bytes": 59074,
+      "sha256": "d45309f0280e16331aab6da491296dcd1b2b82ef285d224c351813eb4c9dbc5b"
     },
     {
       "path": "README.md",
-      "bytes": 25012,
-      "sha256": "894b3cecf570c7a79ef1115742366278b48d0325f309becb002a501efb145aa7"
+      "bytes": 25359,
+      "sha256": "07b0a24601a2ba98bce7c8f38636e11dc3eb36ef852ac7fb883447d57c6df8f9"
     },
     {
       "path": "START.html",
       "bytes": 4029,
-      "sha256": "3a238b181c191340aa1ca43ce361135a699d369f14942e2c2712fe78404bcab9"
+      "sha256": "8505c7423ed5ff9cce8df1d599059c15aab72b4e6e6f79997e80228924e38ec4"
     },
     {
       "path": "index.html",
       "bytes": 1000,
-      "sha256": "09cd2d9e9964d87e36c04e47dcfbb891cb2a688f221e88493e5ee484e69182e6"
+      "sha256": "f5344526402ef316ed9169413b91b86664e3b88a703b1b4868029980be3322c8"
     },
     {
       "path": "inputs/FULLBODY-MESH-MANIFEST.json",
@@ -3862,8 +3862,8 @@
     },
     {
       "path": "scene/src/ns-app.mjs",
-      "bytes": 1023252,
-      "sha256": "391ba79740745bdb85b8fed15d9b77d389020a149d97849f6d813cc0deae94a0"
+      "bytes": 1046761,
+      "sha256": "4b5ff6b33052db04306d45ffd25bd7e40eed1cdb2b138bb4878a6a53f12e9e19"
     },
     {
       "path": "scene/src/ns-area-halo.mjs",
@@ -4017,18 +4017,18 @@
     },
     {
       "path": "scene/src/ns-emap-storm.mjs",
-      "bytes": 23434,
-      "sha256": "17a490bc5796571fe23aa22f8af08d8a83b6cd32db09edccc6d79e5154ceb188"
+      "bytes": 24639,
+      "sha256": "80570943ad9cad707bb9b262c0d7fa627e0a36299b8791a4dfa1c509c7994dde"
     },
     {
       "path": "scene/src/ns-emap-three.mjs",
-      "bytes": 54345,
-      "sha256": "48d2e9c76bf4142382d3c1f3c46b0e388ad31e97e98f10adf5fe9be9cb09b2fb"
+      "bytes": 58173,
+      "sha256": "0db8d5c73968227c3d9558b88994b83ff25ce1b7778e85a56a400d5ee6db02ec"
     },
     {
       "path": "scene/src/ns-emap.mjs",
-      "bytes": 98373,
-      "sha256": "f50ecd32be1abb9bd1e0e1b7247c336ae60d23b1c099a9ea6ac188677e27eea5"
+      "bytes": 98529,
+      "sha256": "073245abcd59375916bee60dd1234d3ca5532c0f0f9c2dccb20137b28b20fb72"
     },
     {
       "path": "scene/src/ns-face-move.mjs",
@@ -4102,8 +4102,8 @@
     },
     {
       "path": "scene/src/ns-outline.mjs",
-      "bytes": 101190,
-      "sha256": "dc6cdb51ac6f360255b93ecc8f0bbea7e920c4ab79c198417fa7cb0890b068e2"
+      "bytes": 102161,
+      "sha256": "c336da118dc15549b541998c4899d59af1348649203e34d45ebdfd183a014369"
     },
     {
       "path": "scene/src/ns-pack-loader.mjs",
@@ -4132,8 +4132,8 @@
     },
     {
       "path": "scene/src/ns-quiet.mjs",
-      "bytes": 13903,
-      "sha256": "58dc5d71a67f74547c7af34dde64a9a16df0ff31b7542ae710981e3277c34282"
+      "bytes": 15712,
+      "sha256": "d38d41eacaf53c99bc6932c7b0a741c4dafe41cacb6f7fd41e02fd03a32ec48b"
     },
     {
       "path": "scene/src/ns-raw-look.mjs",
@@ -4167,13 +4167,13 @@
     },
     {
       "path": "scene/src/ns-scene-three.mjs",
-      "bytes": 1291025,
-      "sha256": "b575e7e1d89aecc75f857859843ea6dd2b44dcaa9715b64d44ded49682992d45"
+      "bytes": 1292715,
+      "sha256": "d12b4706ba7b92c8c5936a4347eb490bf44d183a90670912e099dc56d7b4daf6"
     },
     {
       "path": "scene/src/ns-see.mjs",
-      "bytes": 86589,
-      "sha256": "3c6ffa22a95c4119caac7f74d50dba9ba8b01d2a1f4cf8ebadf8bae37ab5f9b2"
+      "bytes": 87313,
+      "sha256": "86e1c4a8809d7bf7e17706e9fafc6b3e36bcd597ef614a7b80550894b4c63a1f"
     },
     {
       "path": "scene/src/ns-text.mjs",
@@ -4427,13 +4427,13 @@
     },
     {
       "path": "tests/emap-storm.test.mjs",
-      "bytes": 15491,
-      "sha256": "5575ff99ada06e5efe805636375ac0a2202cd3357ccba764815e758567c35490"
+      "bytes": 15749,
+      "sha256": "6569ea2ce88bb0c9f598f52113a79552b921b1ca07b296a727211993534ee1b3"
     },
     {
       "path": "tests/emap-view.test.mjs",
-      "bytes": 11391,
-      "sha256": "ffc4b9ec1c55917fef71b6fe3978bfedef8ee3af49fc868ab24f9f3761d3c404"
+      "bytes": 14423,
+      "sha256": "a9bdb6c8e9f9d24d27f75f5a9302283a4722cb759962e2f37f388f5c29520b57"
     },
     {
       "path": "tests/emap.test.mjs",
@@ -4672,13 +4672,13 @@
     },
     {
       "path": "tests/see.test.mjs",
-      "bytes": 30188,
-      "sha256": "451eb4e61b847b4d4e5b57b6e1ae7b8828439b920b02069ab776d5e870729fae"
+      "bytes": 30344,
+      "sha256": "5b8c0a284b6192a2b5adfe5f13746faf562a4b48f723f521be587fe08c06cbc2"
     },
     {
       "path": "tests/seemove.test.mjs",
-      "bytes": 27031,
-      "sha256": "22f53a7453396ef0d5c45b07b3a62750ab0dedb1dc318333e6c417bfd310584b"
+      "bytes": 49650,
+      "sha256": "2a7ab273a8601a6e3281adbcc0835fe1c914023533ff0a9b57320efaf5702882"
     },
     {
       "path": "tests/serve-local.test.mjs",

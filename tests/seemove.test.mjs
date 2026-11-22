@@ -360,3 +360,276 @@ test('a toe movement goes from the look\'s toe pose to its own end: the look\'s 
   assert.equal(digitUnderMove(0, 6.7, true, [0, 0.2, 0], 0), 6.7);
   assert.equal(digitUnderMove(-40, 6.7, true, note, null), 6.7);
 });
+
+test('your own left hand turns its face toward the eye while the look is on a hand or finger area or a hand movement is driven, and turns back with the finger (drawn only)', async () => {
+  const app = await import('../scene/src/ns-app.mjs');
+  const { LEFT_HAND_TILT: T, leftHandTiltWanted, leftHandTiltStep, leftHandTiltDeg } = app;
+  assert.equal(T.on, true);
+  assert.equal(T.deg, 15, 'update 65: 25 read as "Bend left wrist"');
+  assert.equal(T.outS, 0.3);
+  // wanted: the look on one of the six hand and finger areas, or one of the hand's own movements driven (its note's
+  // drive time left above 0: contracting, or held at its end)
+  for (const id of ['rh_hand', 'rh_little', 'rh_ring', 'rh_middle', 'rh_index', 'rh_thumb']) assert.equal(leftHandTiltWanted({ target: 'region', regionId: id }, null), true, id);
+  for (const id of ['rh_wrist', 'rh_forearm', 'rh_elbow', 'lh_hand', 'rh_toes']) assert.equal(leftHandTiltWanted({ target: 'region', regionId: id }, null), false, id);
+  assert.equal(leftHandTiltWanted(null, { armJerk: { index_extension: [0.2, 0] } }), true);
+  assert.equal(leftHandTiltWanted(null, { armJerk: { index_extension: [0, 1.5] } }), false, 'not on its way back (update 65)');
+  assert.equal(leftHandTiltWanted(null, { armJerk: { wrist_flexion: [0.2, 0] } }), false, 'a wrist movement is the wrist\'s own');
+  assert.equal(leftHandTiltWanted({ target: 'empty' }, { armJerk: {} }), false);
+  assert.equal(leftHandTiltWanted({ target: 'region', regionId: 'rh_index' }, null, { ...T, on: false }), false);
+  // eased in and out, never a jump: no frame changes the share by more than a fifth at 60 frames a second
+  let s = 0; const up = [];
+  for (let i = 0; i < 60; i++) { const n = leftHandTiltStep(s, true, 1 / 60); assert.ok(n >= s && n - s < 0.2, `in: ${s} -> ${n}`); s = n; up.push(s); }
+  assert.equal(s, 1, 'whole after a second');
+  assert.ok(up[Math.round(T.inS * 60) - 1] > 0.55 && up[Math.round(T.inS * 60) - 1] < 0.7, 'two thirds in at inS');
+  for (let i = 0; i < 120; i++) { const n = leftHandTiltStep(s, false, 1 / 60); assert.ok(n <= s && s - n < 0.2, `out: ${s} -> ${n}`); s = n; }
+  assert.equal(s, 0, 'gone after two seconds: nothing stays moved');
+  assert.equal(leftHandTiltStep(NaN, false, 1 / 60), 0);
+  // a whole "Straighten left index" from the activity (the look elsewhere): the tilt goes with the finger's drive and
+  // comes back with its return; it is nearly gone when the finger is back (update 64: whole until 1.9 s)
+  for (const [r, id] of [['rh_index', 'index_extension'], ['rh_index', 'index_flexion'], ['rh_hand', 'open_hand'], ['rh_thumb', 'thumb_mcp_extension']]) {
+    const { A, s: s0 } = started();
+    const frames = run(A, A.stepGated(s0, [press(r, id)], H).state, 240);
+    let share = 0, back = -1, shareBack = NaN, maxShare = 0;
+    const d0 = frames[0].drive[id];
+    for (let i = 0; i < frames.length; i++) {
+      share = leftHandTiltStep(share, leftHandTiltWanted(null, frames[i]), H);
+      maxShare = Math.max(maxShare, share);
+      const d = frames[i].drive[id];
+      if (back < 0 && i > 45 && Math.abs(d) < 0.02 * Math.max(Math.abs(d0), 1)) { back = i; shareBack = share; }
+    }
+    assert.ok(maxShare > 0.9, `${id}: the tilt comes in while the finger is driven (${maxShare.toFixed(2)})`);
+    assert.ok(back > 0, `${id}: the finger comes back`);
+    assert.ok(shareBack < 0.2, `${id}: the tilt has nearly gone when the finger is back (${shareBack.toFixed(2)} at ${((back + 1) / 60).toFixed(2)} s)`);
+    assert.equal(share, 0, `${id}: nothing left after 4 s`);
+  }
+  // the side follows the forearm's turn: palm up = wrist flexion (+), palm down = extension (-), half way none
+  assert.equal(leftHandTiltDeg(1, 1), 15);
+  assert.equal(leftHandTiltDeg(1, 0), -15);
+  assert.equal(leftHandTiltDeg(1, 0.5), 0);
+  assert.equal(leftHandTiltDeg(0.5, 1), 7.5);
+  assert.equal(leftHandTiltDeg(0, 1), 0);
+  // inside the wrist's range and the hand-fit envelope's levels, with the reach's own wrist share on top
+  const { WRIST_RANGE_DEG, ENVELOPE_GRID } = await import('../scene/src/ns-arm.mjs');
+  assert.ok(T.deg < WRIST_RANGE_DEG[1] && -T.deg > WRIST_RANGE_DEG[0]);
+  assert.equal(ENVELOPE_GRID.wrist_flex[0], WRIST_RANGE_DEG[0]);
+  assert.equal(ENVELOPE_GRID.wrist_flex[ENVELOPE_GRID.wrist_flex.length - 1], WRIST_RANGE_DEG[1]);
+});
+
+test('the tip beside the crosshair keeps off your own left hand\'s box when it can', async () => {
+  const { tipSides } = await import('../scene/src/ns-quiet.mjs');
+  const P = { x: 800, y: 450, width: 1600, height: 900, side: 'left', tipW: 200, tipH: 70 };
+  // the usual placement: on the left half of the picture for the brain's right half, below the point
+  assert.deepEqual(tipSides(P), { right: true, low: false });
+  // a hand under the usual box: above the point instead
+  assert.deepEqual(tipSides({ ...P, avoid: { x0: 600, y0: 470, x1: 700, y1: 600 } }), { right: true, low: true });
+  // a hand left of the point, above and below: to the other side
+  assert.deepEqual(tipSides({ ...P, avoid: { x0: 500, y0: 300, x1: 790, y1: 700 } }), { right: false, low: false });
+  // a hand that leaves no clear placement inside the picture: the usual one
+  assert.deepEqual(tipSides({ ...P, avoid: { x0: 0, y0: 0, x1: 1600, y1: 900 } }), { right: true, low: false });
+  // no box, or no size known: the rule as before (the right edge, the bottom edge)
+  assert.deepEqual(tipSides({ ...P, avoid: { x0: 600, y0: 470, x1: 700, y1: 600 }, tipW: 0, tipH: 0 }), { right: true, low: false });
+  assert.deepEqual(tipSides({ x: 1400, y: 800, width: 1600, height: 900 }), { right: true, low: true });
+  assert.deepEqual(tipSides({ x: 300, y: 100, width: 1600, height: 900 }), { right: false, low: false });
+});
+
+test('"Bend head forward" bows the upper body with the neck from outside only, eased, back with it, never the eye (drawn only)', async () => {
+  const app = await import('../scene/src/ns-app.mjs');
+  const { NECK_BOW, neckBowDeg, neckBowStep, headPoseForLook, eyeHeadPose, HEAD_LOOK } = app;
+  assert.equal(NECK_BOW.on, true);
+  assert.equal(NECK_BOW.deg, 15);
+  assert.equal(NECK_BOW.roomDeg, 10, 'the neck\'s forward room from the bowed start posture');
+  assert.equal(NECK_BOW.outsideOnly, true, 'update 65: in the eye view it showed nothing of the mirror body and lifted your own opened chest');
+  assert.equal(neckBowDeg(0), 0);
+  assert.equal(neckBowDeg(5), 7.5);
+  assert.equal(neckBowDeg(10), 15);
+  assert.equal(neckBowDeg(14), 15, 'never past the whole bow');
+  assert.equal(neckBowDeg(-30), 0, 'a neck tilted back does not bow');
+  assert.equal(neckBowDeg(5, { ...NECK_BOW, on: false }), 0);
+  // the head pose bows only by what the frame hands in (offsets.neck_bow): a neck offset alone bows nothing
+  const look = { yaw: 0, pitch: -0.445 };
+  const rest = headPoseForLook(look, null, HEAD_LOOK), neck = headPoseForLook(look, { neck_flex: 10 }, HEAD_LOOK);
+  const full = headPoseForLook(look, { neck_flex: 10, neck_bow: 15 }, HEAD_LOOK), half = headPoseForLook(look, { neck_flex: 5, neck_bow: 7.5 }, HEAD_LOOK);
+  assert.equal(rest.bowDeg, 0);
+  assert.equal(neck.bowDeg, 0, 'no bow unless the frame hands one in (the eye, the hold and the camera trials never do)');
+  assert.equal(half.bowDeg, 7.5);
+  assert.equal(full.bowDeg, 15);
+  // drawn as the trunk's bend under the head (bendDeg, ns-body lookBendDeg); the held trunk bend itself is not changed
+  assert.equal(full.bendDeg, full.heldTrunkDeg + 15);
+  assert.equal(full.heldTrunkDeg, 0);
+  assert.deepEqual(full.look, rest.look, 'the camera\'s look is the look alone, as before');
+  // THE EYE: the head the camera stands on (eyeHeadPose, which headAttachment uses) is the same with and without the bow
+  const eb = eyeHeadPose(full), en = eyeHeadPose(neck);
+  assert.ok(eb && en);
+  assert.notEqual(full.bendDeg, neck.bendDeg, 'the drawn trunk bows');
+  for (const k of ['joints', 'bendDeg', 'bendDirDeg', 'twistDeg', 'carry']) assert.deepEqual(eb[k], en[k], `the eye's head: ${k}`);
+  assert.equal(eb.bendDeg, 0);
+  assert.equal(eyeHeadPose(rest), null, 'at rest the eye stands on the drawn head itself');
+  // inside the trunk's own range: a trunk already at its forward end gets no bow
+  const bent = headPoseForLook(look, { neck_flex: 10, trunk_flex: 80, neck_bow: 15 }, HEAD_LOOK);
+  assert.equal(bent.bowDeg, 0);
+  assert.ok(bent.bendDeg <= HEAD_LOOK.trunkFlexDeg + 1e-9);
+  // over a whole "Bend head forward" from the activity: from outside the bow follows the neck out and back, eased (the
+  // neck's spring no longer shakes the trunk), and ends at 0; in the eye view there is none at all
+  const { A, s } = started();
+  const frames = run(A, A.stepGated(s, [press('rh_neck', 'rh_neck_flex')], H).state, 200);
+  let bowOut = 0, bowEye = 0; const bows = [];
+  for (const t of frames) {
+    const n = t.bodyPos.neck_flex - REST.neck_flex;
+    bowOut = neckBowStep(bowOut, n, 1, H); bowEye = neckBowStep(bowEye, n, 0, H);
+    bows.push(bowOut);
+    assert.equal(bowEye, 0, 'the eye view: no bow');
+  }
+  assert.ok(Math.max(...bows) > 13, `nearly the whole bow at the neck's end (${Math.max(...bows).toFixed(1)})`);
+  for (let i = 1; i < bows.length; i++) assert.ok(Math.abs(bows[i] - bows[i - 1]) < 3, `no jolt of the bow at frame ${i} (${bows[i - 1].toFixed(1)} -> ${bows[i].toFixed(1)})`);
+  // (update 64 wobbled 15 -> 9.8 -> 15 degrees within 0.2 s with the neck's spring; eased it dips far less)
+  const peak = bows.findIndex(b => b === Math.max(...bows)), firstTop = bows.findIndex(b => b > 10);
+  const dip = Math.max(...bows.slice(firstTop, peak + 1).map((b, i, a) => Math.max(...a.slice(0, i + 1)) - b));
+  assert.ok(dip < 3, `the trunk does not wobble with the neck's spring (dip ${dip.toFixed(2)} degrees)`);
+  assert.equal(bows[bows.length - 1], 0, 'and none left after the return');
+  // the change of view fades it in proportion (the camera's way out of the eye, ns-camera progress)
+  assert.ok(Math.abs(neckBowStep(15 * 0.5, 10, 0.5, 10) - 7.5) < 1e-9);
+});
+
+test('the face\'s moving edges (eyelid margins, lips) get the ink line of their own outline code; the forehead does not', async () => {
+  const { OUTLINE_FACE_EDGE_GROUP, OUTLINE_GROUPS, OUTLINE_MIRROR_OFFSET, outlineAdjacency } = await import('../scene/src/ns-outline.mjs');
+  const { FACE_EDGE_INK } = await import('../scene/src/ns-scene-three.mjs');
+  const { faceMuscleOf, FACE_MOVING_MUSCLES } = await import('../scene/src/ns-face-move.mjs');
+  assert.equal(OUTLINE_FACE_EDGE_GROUP, 15);
+  assert.ok(!Object.values(OUTLINE_GROUPS).includes(OUTLINE_FACE_EDGE_GROUP), 'a code no limb group uses');
+  assert.ok(OUTLINE_FACE_EDGE_GROUP + OUTLINE_MIRROR_OFFSET < 32, 'inside the ID pass\'s table');
+  const t = outlineAdjacency(32), adj = (a, b) => t[a * 32 + b] === 255;
+  for (const off of [0, OUTLINE_MIRROR_OFFSET]) {
+    const f = OUTLINE_FACE_EDGE_GROUP + off;
+    assert.ok(adj(f, f), 'no line between the two halves of one muscle');
+    for (const g of Object.values(OUTLINE_GROUPS)) assert.ok(!adj(f, g + off), `a line against ${g + off}: the ink`);
+  }
+  // every other pair as before
+  for (const off of [0, OUTLINE_MIRROR_OFFSET]) assert.ok(adj(OUTLINE_GROUPS.head + off, OUTLINE_GROUPS.trunk + off));
+  assert.equal(FACE_EDGE_INK.on, true);
+  assert.deepEqual([...FACE_EDGE_INK.muscles], ['orbicularis-oculi-palpebral', 'orbicularis-oris']);
+  // (update 65: the head's parts poke through the thin forehead muscle in small spots, each a strong line in a code of
+  // its own: dark specks on the mirror body's forehead at rest)
+  assert.ok(!FACE_EDGE_INK.muscles.includes('frontalis'));
+  for (const m of FACE_EDGE_INK.muscles) assert.ok(FACE_MOVING_MUSCLES.includes(m), `${m} is a face muscle the shapes move`);
+  assert.equal(faceMuscleOf('zf-orbicularis-oris-r').name, 'orbicularis-oris');
+  assert.equal(faceMuscleOf('zf-frontalis-l').name, 'frontalis');
+});
+
+test('the face\'s moving edges (outline codes 15 and 31) are the head\'s in the hidden-part pass', async () => {
+  const { OUTLINE_FACE_EDGE_GROUP: F, OUTLINE_GROUPS: G, OUTLINE_MIRROR_OFFSET: M } = await import('../scene/src/ns-outline.mjs');
+  const { seeThingOfGroup, seeLimbOfGroup, seeShows, SEE_JOIN_MASKS, SEE_THINGS } = await import('../scene/src/ns-see.mjs');
+  assert.equal(seeThingOfGroup(F), SEE_THINGS.ownTrunk);
+  assert.equal(seeThingOfGroup(F + M), SEE_THINGS.mirrorTrunk);
+  assert.equal(seeThingOfGroup(F), seeThingOfGroup(G.head));
+  assert.equal(seeLimbOfGroup(F), 0);
+  assert.equal(seeLimbOfGroup(F + M), 0);
+  // a part of the mirror body's head behind its lips or eyelids is the same thing: never a ghost
+  assert.equal(seeShows({ group: F + M }, { group: G.head + M }), false);
+  // they join what the head joins (the head and the trunk), the head itself included, both ways
+  const joins = (a, b) => ((SEE_JOIN_MASKS[a] >> b) & 1) === 1;
+  assert.equal(SEE_JOIN_MASKS[F], SEE_JOIN_MASKS[G.head]);
+  for (const g of Object.values(G)) assert.equal(joins(g, F), joins(g, G.head), `group ${g}`);
+  assert.ok(joins(F, G.head) && joins(G.head, F) && joins(F, F) && joins(F, G.trunk));
+  assert.ok(!joins(F, G.lHand));
+  // the graphics card's copies of the rules say the same
+  const src = (await import('node:fs')).readFileSync(new URL('../scene/src/ns-see.mjs', import.meta.url), 'utf8');
+  assert.equal(src.split('if ( k == ${OUTLINE_FACE_EDGE_GROUP} ) k = ${G.head};').length, 3, 'nsLimbOf and nsThingOf');
+});
+
+test('your own trunk moving the view never leaves the held limb off its place: the look carries it by its own turn, and the place is taken only in the eye view (HOLD_BODY)', async () => {
+  const { HOLD_BODY, HOLD_REST, holdBodySame, holdCarryPoint, holdPlaceRule, holdSideOf, viewFrameOf } = await import('../scene/src/ns-app.mjs');
+  assert.equal(HOLD_BODY.on, true);
+  // the trunk as it was: the same within epsDeg; a missing joint is 0; the drawn bow counts (it moves the shoulders)
+  assert.equal(holdBodySame(null, null), true);
+  assert.equal(holdBodySame({ trunk_flex: 0 }, null), false);
+  assert.equal(holdBodySame({ trunk_flex: 0, trunk_rot: 0 }, {}), true);
+  assert.equal(holdBodySame({ trunk_flex: 12 }, { trunk_flex: 12 + HOLD_BODY.epsDeg / 2 }), true);
+  assert.equal(holdBodySame({ trunk_flex: 12 }, { trunk_flex: 11 }), false);
+  for (const k of ['trunk_flex', 'trunk_rot', 'trunk_side', 'neck_bow']) assert.equal(holdBodySame({}, { [k]: 3 }), false, k);
+  // (the neck's own movements move neither the hold's camera, which stands on the look's own neck, nor the shoulders)
+  for (const k of ['neck_rot', 'neck_flex', 'neck_side']) assert.equal(holdBodySame({}, { [k]: 30 }), true, k);
+  assert.equal(holdBodySame({ neck_flex: 4 }, HOLD_REST), true, 'at rest: the trunk in its start posture');
+  const fov = 60, aspect = 16 / 9, W = [0.27, 0.52, -0.33];
+  const d = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+  const side = (P, root) => holdSideOf(P.position, root, W, viewFrameOf(P, W, fov, aspect).dist, true);
+  // The left hand held at W; its shoulder at R0 and the eye camera at P0 with the trunk at rest (the place's reference).
+  // "Bend trunk forward" moves the camera (P1) and the shoulder (R1); the hold keeps the hand at W.
+  const P0 = { position: [0, 1.02, 0.02], yaw: 0, pitch: -0.62 }, R0 = [0.19, 0.83, 0.03];
+  const P1 = { position: [0, 0.93, -0.12], yaw: 0, pitch: -0.62 - 0.21 }, R1 = [0.19, 0.76, -0.07];
+  const place = viewFrameOf(P0, W, fov, aspect), rho = d(W, R0), far = side(P0, R0);
+  // update 64: a look during the movement drew the line from the MOVED camera round the MOVED shoulder, from the old place
+  const old = holdCarryPoint(P1, place, R1, rho, far, fov, aspect);
+  assert.ok(d(old, W) > 0.03, `update 64 moved the hand ${(d(old, W) * 1000).toFixed(0)} mm with no turn of the look, and it stayed there`);
+  // now the carry is worked out in the reference (the camera with the trunk as it was, the shoulder as it was)
+  assert.ok(d(holdCarryPoint(P0, place, R0, rho, far, fov, aspect), W) < 1e-9, 'no turn of the look: the hand stays where it is');
+  // a turn of the look during the movement moves it by that turn only: back at rest it stands where the same look would
+  // have put it with no movement, at its place in the picture
+  const T = holdCarryPoint({ ...P0, yaw: 0.1 }, place, R0, rho, far, fov, aspect), f1 = viewFrameOf({ ...P0, yaw: 0.1 }, T, fov, aspect);
+  assert.ok(Math.abs(f1.x - place.x) < 1e-9 && Math.abs(f1.y - place.y) < 1e-9 && Math.abs(d(T, R0) - rho) < 1e-9 && d(T, W) > 0.02);
+  // THE EYE VIEW ONLY (a second check): a place taken from the outside camera throws the hand at the first look back
+  const Po = { position: [0, 1.9, 0.62], yaw: 0, pitch: -0.95 };
+  const thrown = holdCarryPoint(P0, viewFrameOf(Po, W, fov, aspect), R0, rho, side(Po, R0), fov, aspect);
+  assert.ok(d(thrown, W) > 0.1, `a place taken outside throws the hand ${(d(thrown, W) * 1000).toFixed(0)} mm`);
+  // the rule the hold follows at the end of each frame (stepLimbHold)
+  const frames = [
+    [{ eye: true, lookSame: true }, 'keep'],
+    [{ eye: true, carried: true }, 'carry'],
+    [{ eye: true, lookSame: true, bodyMoved: true, bodyAtRest: false }, 'keep'],
+    [{ eye: true, carried: true, bodyMoved: true, bodyAtRest: false }, 'carry'],
+    [{ eye: true, lookSame: true, bodyMoved: true, bodyAtRest: true }, 'rebase'],
+    [{ eye: true, carried: true, bodyMoved: true, bodyAtRest: true }, 'carry'],
+    [{ eye: true, keyed: true }, 'take'],
+    [{ eye: true, carried: true, held: true }, 'take'],
+    // E: outside, the trunk moving, the look moved, a key: nothing is taken from the outside camera
+    [{ eye: false, bodyMoved: true }, 'wait'], [{ eye: false, carried: true }, 'wait'], [{ eye: false, keyed: true }, 'wait'], [{ eye: false, lookSame: true }, 'wait'],
+    // back in the eye view: taken once, before anything else
+    [{ eye: true, stale: true, carried: true }, 'take'], [{ eye: true, stale: true, bodyMoved: true }, 'take'], [{ eye: true, stale: true, lookSame: true }, 'take']
+  ];
+  for (const [f, want] of frames) assert.equal(holdPlaceRule(f), want, JSON.stringify(f));
+  // the wiring (the browser checks run it): stepLimbHold follows the rule, holdReframe takes nothing outside the eye
+  // view, the look carries nothing while the place is stale, and the carry is worked out in the reference
+  const src = (await import('node:fs')).readFileSync(new URL('../scene/src/ns-app.mjs', import.meta.url), 'utf8');
+  assert.ok(src.includes("if (!firstPersonNow()) { h.stale = true; return; }"), 'holdReframe: the eye view only');
+  assert.ok(src.includes('&& !(HOLD_BODY.on && limbHold.stale));'), 'holdCarries: not while stale');
+  assert.ok(src.includes('const rule = HOLD_BODY.on ? holdPlaceRule({ eye: firstPersonNow(), stale: h.stale === true, carried,'), 'stepLimbHold: the rule');
+  assert.ok(src.includes('const P = ref ? poseForCtl({ yaw: cs.yaw, pitch: cs.pitch }, h.headNow) || pose : pose;'), 'holdTarget: the reference camera');
+});
+
+test('letting go of Space or of the left hand during a trunk movement leaves nothing thrown or moved: the hand goes back at rejoinMps, the left hand let go stays held until the trunk is at rest, an arm chosen then waits for it (HOLD_BODY)', async () => {
+  const { HOLD_BODY, holdRejoinStep, holdTakeUpWaits, MAX_FRAME_DT } = await import('../scene/src/ns-app.mjs');
+  // D4 of the round-4 check: Space let go during "Bend trunk forward" handed the hand's old place back in one frame
+  // (107.6 mm). Now each frame goes at most rejoinMps x dt, and the hand ends exactly at its place.
+  assert.ok(HOLD_BODY.rejoinMps > 0 && HOLD_BODY.rejoinMps / 60 < 0.02, 'under 20 mm a frame at 60 frames a second');
+  const d = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+  for (const hz of [30, 60, 144]) {
+    const goal = [0.27, 0.52, -0.33];
+    let end = [goal[0] + 0.07, goal[1] - 0.06, goal[2] + 0.06], frames = 0, most = 0;
+    assert.ok(Math.abs(d(end, goal) - 0.11) < 0.001, 'about as far as the check found (107.6 mm)');
+    for (; frames < 200; frames++) {
+      const r = holdRejoinStep(end, goal, 1 / hz);
+      most = Math.max(most, d(r.at, end)); end = r.at;
+      if (r.done) break;
+    }
+    assert.ok(d(end, goal) === 0, `${hz} Hz: back exactly at its place`);
+    assert.ok(most <= HOLD_BODY.rejoinMps * Math.min(1 / hz, MAX_FRAME_DT) + 1e-12, `${hz} Hz: at most rejoinMps (${(most * 1000).toFixed(1)} mm a frame)`);
+    assert.ok(frames + 1 >= Math.ceil(0.11 / (HOLD_BODY.rejoinMps / hz)) && frames < 40, `${hz} Hz: ${frames + 1} frames, not one`);
+  }
+  assert.deepEqual(holdRejoinStep([0, 0, 0], [0.001, 0, 0], 1 / 60), { at: [0.001, 0, 0], done: true }, 'a hand at its place is done');
+  // D6 and N2 of the round-4 check: a limb chosen or let go while the trunk is bent kept the place the bent trunk gave
+  // it (the left hand 273 mm raised for good). An arm (its shoulder rides on the trunk) newly chosen then waits
+  for (const limb of ['leftArm', 'rightArm']) {
+    assert.equal(holdTakeUpWaits({ limb, trunkAtRest: false }), true, limb);
+    assert.equal(holdTakeUpWaits({ limb, trunkAtRest: true }), false, `${limb} at rest: at once`);
+    assert.equal(holdTakeUpWaits({ limb, trunkAtRest: false, dragged: true }), false, `${limb} dragged: at once`);
+    assert.equal(holdTakeUpWaits({ limb, trunkAtRest: false, fresh: false }), false, `${limb} already held: kept`);
+  }
+  for (const limb of ['leftLeg', 'rightLeg']) assert.equal(holdTakeUpWaits({ limb, trunkAtRest: false }), false, `${limb}: its hip does not ride on the trunk`);
+  // the wiring (the browser checks run it): the left hand let go while the trunk is not at rest stays held (leftKept)
+  // and takes that hold back when chosen again; Space sets the way back; the goal stays the hand's place
+  const src = (await import('node:fs')).readFileSync(new URL('../scene/src/ns-app.mjs', import.meta.url), 'utf8');
+  assert.ok(src.includes("if (HOLD_BODY.on && limbHold && limbHold.limb === 'leftArm' && limb !== 'leftArm' && !holdTrunkAtRest()) leftKept = limbHold;"), 'chooseLimb keeps the left hand');
+  assert.ok(src.includes('if (leftKept && (holdTrunkAtRest() || chosenLimb() === \'leftArm\')) leftKept = null;'), 'kept until the trunk is at rest');
+  assert.ok(src.includes('holdBusy() && (leftHeld || leftKept)) leftRejoin = true;'), 'Space: the way back');
+  assert.ok(src.includes('T = Array.isArray(holdLeftGoal) ? holdLeftGoal.slice() :'), 'the goal stays the place');
+  assert.ok(src.includes('if (HOLD_BODY.on && holdTakeUpWaits({ limb, fresh: !limbHold || limbHold.limb !== limb, dragged, trunkAtRest: holdTrunkAtRest() })) { limbHold = null; return; }'), 'an arm waits');
+});

@@ -192,7 +192,7 @@ import * as NsCollide from './ns-collide.mjs';
 import { readAppliedArmPose } from './ns-body-arm-bridge.mjs';
 import { SHOULDER_GIRDLE_INFO } from './ns-assets.mjs';
 // R558 (Message 20): outlines where limbs and bodies overlap (an ID pass of the body meshes and a screen-space line pass).
-import { createOutlinePass, outlineGroupForArmSegment, outlineGroupForBlend, outlineGroupForPart, outlineGroupForShares, OUTLINE_GROUPS } from './ns-outline.mjs';
+import { createOutlinePass, outlineGroupForArmSegment, outlineGroupForBlend, outlineGroupForPart, outlineGroupForShares, OUTLINE_GROUPS, OUTLINE_FACE_EDGE_GROUP } from './ns-outline.mjs';
 import { createGhostPass, seeAreaCode } from './ns-see.mjs'; // 18 November 2026 (SEE): hidden limbs drawn over the part in front; 19 November: everything hidden
 // R558 BB (Messages 24, 29): the comic ink look of the brain: folds from the atlas geometry, cel bands, ink and hatching
 // on the motor areas, inked contours and a crisp highlight on the glass.
@@ -706,6 +706,18 @@ export const BODY_STYLE = RAW_LOOK.on ? 'raw' : 'cel';
 const RAW_INK = RAW_LOOK.ink;
 export const RAW_OUTLINE = Object.freeze({ alpha: Object.freeze([RAW_INK.alpha, RAW_INK.alpha, RAW_INK.innerAlpha, 0]), strip: RAW_INK.alpha, stripCss: RAW_INK.css, occlusion: false,
   widthsCss: Object.freeze([RAW_INK.css, RAW_INK.innerCss, 0.6]), colour: RAW_INK.colour, taperMin: RAW_INK.farShare, brain: RAW_INK.alpha, brainCss: RAW_INK.css });
+/** 22 November 2026 (SEEMOVE, section 189): the face muscles whose outline is the face's moving edges (ns-outline
+ * OUTLINE_FACE_EDGE_GROUP): the eyelids' part of the ring muscle round each eye (the eyelid margins) and the lips' ring
+ * muscle. Their twins on the mirror body and on your head as drawn from outside get the ink line of the raw look (one
+ * near-black, one width) where they border the rest of the face, and it moves with them: the outline pass follows the
+ * face's shapes (the processor's buffers, and the jaw's skinned lips through their lift offsets). Nothing changes on
+ * the face's colour or shading. on: false = the face as one group again.
+ * Update 65 (a check of update 64): the forehead muscle is out again. It is thin, and the head's own parts poke through
+ * it in small spots; with the forehead in a code of its own each spot became a strong line (the two codes do not join),
+ * so the mirror body's forehead was dotted dark at rest too. The brow's raise still reads by its light and the
+ * forehead's bulge. */
+export const FACE_EDGE_INK = Object.freeze({ on: true, muscles: Object.freeze(['orbicularis-oculi-palpebral', 'orbicularis-oris']) });
+const faceEdgeOutline = id => { if (!FACE_EDGE_INK.on) return false; const m = faceMuscleOf(id); return Boolean(m && FACE_EDGE_INK.muscles.includes(m.name)); };
 /** 20 November 2026 (the raw look): the tendon white's weight cut (patchMuscleLookShaders tendonCut). */
 export const RAW_TENDON_CUT = Object.freeze([0.55, 0.9]);
 /** The bones' colour: the raw look's ivory (the reference pictures' RGB 232, 224, 205), else MATERIAL.bone. */
@@ -10455,9 +10467,11 @@ export function createScene({
       {
         const g = outlineGroupForPart(part, rec.side);
         rec.limbPart = limbPartOfOutlineGroup(g); // (PART_GLOW; setOutlineSegments brings the rig's finer answer)
+        // (22 November 2026, FACE_EDGE_INK: the face's moving edges in a code of their own, on both twins)
+        const gFace = face && faceEdgeOutline(id) ? OUTLINE_FACE_EDGE_GROUP : g;
         if (!face) outline.register(rec.mesh, { group: g });
-        if (rec.mirror) outline.register(rec.mirror, { group: g, mirror: true });
-        if (rec.inPlace) outline.register(rec.inPlace, { group: g });
+        if (rec.mirror) outline.register(rec.mirror, { group: gFace, mirror: true });
+        if (rec.inPlace) outline.register(rec.inPlace, { group: gFace });
       }
       // R558 (performance): one material per class of muscle (after every material above has its final state)
       if (kind === 'muscle') { shareMuscle(rec.mesh, 'o'); if (rec.mirror) shareMuscle(rec.mirror, 'm'); if (rec.inPlace) shareMuscle(rec.inPlace, 'p'); }
@@ -10717,9 +10731,10 @@ export function createScene({
       const g = outlineGroupForBlend(info.blend, info.segment);
       if (!(g > 0)) continue;
       b.limbPart = limbPartOfOutlineGroup(g); partGlow.applied = null; // (PART_GLOW: the lit set is made again)
+      const gFace = b.face && faceEdgeOutline(b.id) ? OUTLINE_FACE_EDGE_GROUP : g; // (22 November 2026, FACE_EDGE_INK)
       if (!b.face) outline.setGroup(b.mesh, g);
-      if (b.mirror) outline.setGroup(b.mirror, g);
-      if (b.inPlace) outline.setGroup(b.inPlace, g);
+      if (b.mirror) outline.setGroup(b.mirror, gFace);
+      if (b.inPlace) outline.setGroup(b.inPlace, gFace);
       n++;
     }
     return n;

@@ -128,7 +128,9 @@ export const EMAP = freeze({
  * the head (not drawn on your own body in the eye view, where your head is not drawn); and whose it is. */
 export const EMAP_FLAG = freeze({ dot: 1, sens: 2, link: 4, lanes: 8, dotMuscle: 16, dotPatch: 32, dotBlock: 64, head: 128, own: 256, mirror: 512, bridge: 1024, brain: 2048,
   // 22 November 2026 (part 3): a fibre of the brain's network (storms run along it from its regions), a strand of the cord
-  net: 4096, cord: 8192 });
+  net: 4096, cord: 8192,
+  // (22 November 2026, fifth pass: a root of the cord: with the cord it makes the bright line down the mirror body's back)
+  root: 16384 });
 
 /** A slot's mode in the slot table: off, a lit area (front, beads both ways, marks), a spark, a steady faint hint. */
 export const EMAP_MODE = freeze({ off: 0, area: 1, spark: 3, hint: 4 });
@@ -571,7 +573,7 @@ export function* buildEmapSteps({ bodyMap, rig, boxes, areas, muscles, wiring, r
       } else ctl.push({ p: [c0.p[0] + (J.p[0] - c0.p[0]) * 0.45, c0.p[1] + (J.p[1] - c0.p[1]) * 0.3, c0.p[2] + (J.p[2] - c0.p[2]) * 0.25], seg: domSeg(c0) });
       if (dist3(J.p, ctl[ctl.length - 1].p) > 1) ctl.push({ p: J.p, seg: domSeg(J), node: J });
       else ctl[ctl.length - 1] = { p: J.p, seg: domSeg(J), node: J };
-      const rw = addWire('root', `root:${t.id}:${lv}`, sampleCurve(ctl, o.stepMm.body, jointBlend), { a0: cord[s].aAt(z), flags: EMAP_FLAG.lanes, copies: 'body', parent: cord[s].wire.id });
+      const rw = addWire('root', `root:${t.id}:${lv}`, sampleCurve(ctl, o.stepMm.body, jointBlend), { a0: cord[s].aAt(z), flags: EMAP_FLAG.lanes | EMAP_FLAG.root, copies: 'body', parent: cord[s].wire.id });
       rw.parentA = cord[s].aAt(z);
       t.rootWires.set(lv, rw);
     }

@@ -66,10 +66,32 @@ test('the view built with three.js: its meshes, the scan on the glass only (the 
   assert.equal(st0.scan.stripKept, true);
   const depthPass = mapMeshes(objects.scene).find(m => /depth pass/.test(m.name));
   assert.equal(depthPass.material.transparent, true, 'the scan\'s depth pass is drawn after the strip\'s own (with the transparent things)');
+  assert.ok(depthPass.renderOrder > 200, 'while the map is not wholly on, the scan\'s depth pass comes after the glass');
+  // the lines: the hidden pass and the network's front pass keep off a block; the routes' front pass does not, and is
+  // drawn a little nearer than the hidden pass (no flip between the two complementary depth tests)
+  const lines = mapMeshes(objects.scene).filter(m => /typical routes|network in front/.test(m.name));
+  assert.equal(lines.length, 3);
+  const net = lines.find(m => /network in front/.test(m.name)), routes = lines.find(m => /^ns-electrical map \(typical routes/.test(m.name)), hid = lines.find(m => /hidden behind/.test(m.name));
+  assert.equal(net.material.stencilFunc, THREE.NotEqualStencilFunc); assert.equal(hid.material.stencilFunc, THREE.NotEqualStencilFunc);
+  assert.notEqual(routes.material.stencilWrite, true, 'a route is drawn over its block');
+  assert.equal(net.material.uniforms.uSel.value, 1); assert.equal(routes.material.uniforms.uSel.value, 2); assert.equal(hid.material.uniforms.uSel.value, 0);
+  assert.ok(routes.material.polygonOffset && routes.material.polygonOffsetFactor < 0 && !hid.material.polygonOffset);
   assert.ok(mapMeshes(objects.scene).every(m => !m.visible), 'nothing is shown while the map is off');
   view.setOn(true);
-  for (const t of [0, 100, 250, 400]) view.frame({ nowMs: t });
+  view.frame({ nowMs: 0 }); view.frame({ nowMs: 100 });
+  const colourPass = mapMeshes(objects.scene).find(m => /live scan on the brain/.test(m.name));
+  assert.ok(view.amount > 0 && view.amount < 1);
+  assert.ok(depthPass.renderOrder > 200, 'easing in: the depth pass after the glass ...');
+  assert.equal(colourPass.material.blendDst, THREE.OneMinusSrcAlphaFactor, '... and the scan covers the glass by the amount');
+  assert.ok(Math.abs(colourPass.material.uniforms.uCover.value - view.amount) < 1e-9);
+  for (const t of [250, 400]) view.frame({ nowMs: t });
   assert.equal(view.amount, 1);
+  assert.ok(depthPass.renderOrder > 1.5 && depthPass.renderOrder < 5, 'wholly on: after the strip\'s depth pass (1.5) and before the brain\'s glass (5 and 6)');
+  assert.equal(colourPass.material.blendDst, THREE.OneMinusSrcColorFactor);
+  assert.equal(colourPass.material.uniforms.uCover.value, 0);
+  view.setOn(false); view.frame({ nowMs: 450 });
+  assert.ok(view.amount < 1 && depthPass.renderOrder > 200, 'easing out: after the glass again from the first frame');
+  view.setOn(true); for (const t of [500, 700, 900]) view.frame({ nowMs: t });
   assert.ok(mapMeshes(objects.scene).every(m => m.visible), 'with the map on, every mesh of it is drawn');
   view.dispose();
   assert.equal(mapMeshes(objects.scene).length, 0, 'disposed: nothing of the map is left in the scene');
@@ -156,4 +178,22 @@ test('the owner\'s rule on a lit route: the command\'s lane, the report\'s lane 
     }
   }
   assert.ok(lit >= 8, `${lit} lit cord points checked`);
+});
+
+test('the storms\' clocks start again with the map\'s: after a long time on, M off and on, the small flares come again at once', () => {
+  const objects = fakeObjects();
+  const view = createEmapView({ THREE, objects });
+  view.prepare(INPUTS); view.work(1e9);
+  view.setOn(true);
+  for (let t = 0; t <= 60000; t += 50) view.frame({ nowMs: t });
+  const before = view.state().scan.flares;
+  assert.ok(before > 30, `${before} flares in a minute`);
+  view.setOn(false);
+  for (let t = 60050; t <= 61000; t += 50) view.frame({ nowMs: t });
+  assert.equal(view.amount, 0);
+  view.setOn(true);
+  for (let t = 61050; t <= 66000; t += 50) view.frame({ nowMs: t });
+  const after = view.state().scan.flares;
+  assert.ok(after - before >= 1, `${after - before} flares in the 5 s after M off and on`);
+  view.dispose();
 });

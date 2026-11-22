@@ -22,7 +22,7 @@
  * Node can check them.
  */
 import { EMAP, EMAP_FLAG, EMAP_MODE, buildEmapSteps, brainBoxesFromPositions, createEmapState, createEmapFrame, emapStep, emapLastVolley, EMAP_BRAIN_MESH } from './ns-emap.mjs';
-import { EMAP_STORM, createStorms, stepStorms, stormAt, stormActs, scanRampGlsl } from './ns-emap-storm.mjs';
+import { EMAP_STORM, createStorms, stepStorms, stormAt, stormActs, scanRampGlsl, restartStorms } from './ns-emap-storm.mjs';
 import { brainGapGlsl, brainGapUniformValue } from './ns-brain-gap.mjs';
 
 /** The look of the lines (display choices, 21 November 2026; tuned on pictures at 1600 x 900 and at twice that):
@@ -57,11 +57,23 @@ export const EMAP_LOOK = Object.freeze({ minPx: 0.55, maxPx: 1.7, dotMinPx: 2.2,
    * mirror body stands in front of the brain's middle, where every area's fibres and links meet: at the hidden light
    * of 0.4 they still covered its torso; 0.18, then 0.1 after a second checker); idleMirror: the mirror body's own
    * wiring at rest is drawn at this share (its nerves made a white web with a bright cord down its middle; lit routes
-   * are not changed); trafficMirror /
+   * are not changed; 0.6, then 0.45 after a third checker, the cord's strand at cordMirror of that again: it stood as
+   * a bright line down the mirror body's middle; its traffic too, and 0.5 after a fourth checker: at 0.7 on the
+   * resting light only the cord was 4 % dimmer); orderScanDepth: the scan's depth pass is drawn after the strip's own
+   * depth pass (1.5) and before the brain's glass (5 and 6), so the glass is not drawn under the scan and the scan
+   * shows in its own colours on a dark brain (at 200.4 the glass under it kept 80 to 100 % of its light and the scan
+   * read as a lilac brain, a third checker found; as an opaque material it had raced the strip at the rim); only while
+   * the map is wholly on: while it eases in or out the depth pass is drawn after the glass and the scan's colour pass
+   * covers the glass by the map's own amount, so the brain fades from its own colours to the scan and back with no step
+   * (with 4.8 all the time the glass vanished at the first frame of M and jumped back at the last, a fourth checker);
+   * frontOffset: the front pass of the lines is drawn a little nearer (polygon offset factor, units) than the hidden
+   * pass, whose depth test is its exact complement: a line lying on a surface no longer flips between the two from frame
+   * to frame (four spots shimmered at low quality; [-1, -4] moved the flip to other spots, [-2, -16] after a fourth
+   * checker); trafficMirror /
    * trafficOwn: the traffic on the mirror body's wiring and on your own is this much weaker (the mirror body's wiring is
    * dense and small: at full traffic it screened to a white figure); orderScan: drawn after
    * the dark ground, before the lines. */
-  muscleMaxPx: 14, muscleScale: 1.1, netHidden: 0.15, brainHidden: 0.1, trafficMirror: 0.35, trafficOwn: 0.6, cordHeadS: 0.004, cordTailS: 0.014, scanInflateMm: 1.8, orderScan: 200.5, idleMirror: 0.6 });
+  muscleMaxPx: 14, muscleScale: 1.1, netHidden: 0.15, brainHidden: 0.1, trafficMirror: 0.35, trafficOwn: 0.6, cordHeadS: 0.004, cordTailS: 0.014, scanInflateMm: 1.8, orderScan: 200.5, orderScanDepth: 4.8, idleMirror: 0.45, cordMirror: 0.5, frontOffset: Object.freeze([-2, -16]) });
 
 const f = v => { const s = String(Math.round(v * 1e6) / 1e6); return /[.e]/.test(s) ? s : `${s}.0`; };
 
@@ -81,6 +93,7 @@ uniform vec4 uShow;
 uniform vec4 uSt0[ ${S.slots} ];
 uniform vec4 uSt1[ ${S.slots} ];
 uniform float uNSt;
+uniform float uSel;
 attribute vec4 aNet;
 attribute vec3 aPb;
 attribute vec3 aTa;
@@ -156,6 +169,10 @@ void main() {
 		gl_Position = p0;
 	}
 	float fade = show * uOn * smoothstep( ${f(look.nearM[0])}, ${f(look.nearM[1])}, d );
+	// (which lines this mesh draws: all; only the network's, which are kept off the strip's blocks by the stencil; or all
+	// but the network's)
+	bool netLine = ( fl & ${F.net | F.link} ) != 0;
+	if ( ( uSel > 0.5 && uSel < 1.5 && ! netLine ) || ( uSel > 1.5 && netLine ) ) fade = 0.0;
 	if ( ! ( fade > 0.0 ) ) gl_Position = vec4( 2.0, 2.0, 2.0, 1.0 );
 	vLine = vec4( across, core, aSig.y, aSig.z );
 	vMisc = vec4( fade, aSig.w, isDot ? 1.0 : aGeo.w, lane );
@@ -167,8 +184,12 @@ void main() {
 	float sp = ( fl & ${F.net} ) != 0 ? ${f(S.traffic.spacingMm.bundle)} : ( fl & ${F.brain} ) != 0 ? ${f(S.traffic.spacingMm.brain)} : ${f(S.traffic.spacingMm.body)};
 	float wayDir = ( fl & ${F.sens} ) != 0 ? - 1.0 : ( fl & ${F.link | F.net} ) != 0 ? ( hsh < 0.5 ? 1.0 : - 1.0 ) : 1.0;
 	vTr = vec4( ${f(S.traffic.hz[0])} + ${f(S.traffic.hz[1] - S.traffic.hz[0])} * hsh, 1.0 / sp, fract( hsh * 7.31 ), wayDir );
-	vTg = ( fl & ${F.mirror} ) != 0 ? ${f(look.trafficMirror)} : ( fl & ${F.own} ) != 0 ? ${f(look.trafficOwn)} : 1.0;
-	vIg = ( fl & ${F.mirror} ) != 0 && ( fl & ${F.bridge} ) == 0 ? ${f(look.idleMirror)} : 1.0;
+	// (the mirror body's cord and its roots, which together made a bright line down its middle, at cordMirror again)
+	float spine = ( fl & ${F.cord | F.root} ) != 0 ? ${f(look.cordMirror)} : 1.0;
+	vTg = ( fl & ${F.mirror} ) != 0 ? ${f(look.trafficMirror)} * spine : ( fl & ${F.own} ) != 0 ? ${f(look.trafficOwn)} : 1.0;
+	// (the bridges from the big brain meet at the mirror body's neck, where they made the top of that line: at cordMirror)
+	vIg = ( fl & ${F.bridge} ) != 0 ? ${f(look.cordMirror)} : ( fl & ${F.mirror} ) != 0 ? ${f(look.idleMirror)} * spine : 1.0;
+	if ( ( fl & ${F.bridge} ) != 0 ) vTg *= ${f(look.cordMirror)};
 	vHeat = 0.0;
 	if ( ( fl & ${F.brain} ) != 0 && ! isDot ) {
 		for ( int k = 0; k < ${S.slots}; k ++ ) {
@@ -415,6 +436,7 @@ void main() {
 }`;
   const fragmentShader = `
 uniform float uOn;
+uniform float uCover;
 varying vec3 vN;
 varying vec3 vV;
 varying float vSulc;
@@ -430,7 +452,8 @@ void main() {
 	// depth, nsSulc; 0 on the motor areas' copy, which has none)
 	float tn = nsScanTone( vH );
 	vec3 c = nsScanRamp( tn ) * nsScanAmount( tn ) * ( 0.3 + 0.7 * facing * facing ) * ( 1.0 - 0.5 * clamp( vSulc, 0.0, 1.0 ) ) * ( 1.0 - cut ) * uOn;
-	gl_FragColor = vec4( min( c, vec3( 1.0 ) ), 1.0 );
+	// (alpha: how much of what lies under the scan it covers while the map eases in or out, uCover; see frameStep)
+	gl_FragColor = vec4( min( c, vec3( 1.0 ) ), uCover * ( 1.0 - cut ) );
 	#include <colorspace_fragment>
 }`;
   // the depth pass: nothing but the cut
@@ -544,13 +567,13 @@ export function createEmapView({ THREE, objects, o = EMAP, look = EMAP_LOOK, str
   const scene = objects.scene;
   let steps = null, model = null, st = null, frame = null, built = false, buildMs = 0, buildSlices = 0, error = null;
   let want = false, amount = 0, lastMs = NaN, clock0 = NaN;
-  let geo = null, front = null, hidden = null, dimMesh = null, pal = null, palTex = null, wireTex = null, slotTex = null, uniforms = null;
+  let geo = null, front = null, frontNet = null, hidden = null, dimMesh = null, pal = null, palTex = null, wireTex = null, slotTex = null, uniforms = null;
   let segs = null, armBone = null, palKept = null;
   // part 3: the storms (ns-emap-storm), the live scan's meshes and material, each area slot's last start (a new one is a
   // new volley: a storm starts on its block), the area the look rests on
   let storms = null, scanMat = null, keptT0 = null;
   const scanMeshes = [], scanOwnGeo = [], scanDepthMats = [];
-  let scanDiag = null;
+  let scanDiag = null, scanFull = false;
   // (one options object for the storms' step, refilled each frame)
   const stormOpts = { lookRegion: -1, reduced: false, eye: null };
   /** Nothing of the map over a pixel of a visible block: the stencil mark the strip's own depth pass writes (ns-scene-three
@@ -613,9 +636,10 @@ export function createEmapView({ THREE, objects, o = EMAP, look = EMAP_LOOK, str
     uniforms = { uPal: { value: palTex }, uWire: { value: wireTex }, uSlot: { value: slotTex }, uWireW: { value: model.wireTexW }, uTime: { value: 0 }, uOn: { value: 0 },
       uRes: { value: new THREE.Vector2(1, 1) }, uPx: { value: 1 }, uShow: { value: new THREE.Vector4(1, 1, 1, 0) }, uReduced: { value: 0 }, uIdle: { value: look.idleGain },
       uSt0: { value: storms.storm0 }, uSt1: { value: storms.storm1 }, uSt2: { value: storms.storm2 }, uNSt: { value: 0 }, uTraffic: { value: EMAP_STORM.traffic.gain } };
-    const material = (gain, gainLit, depthFunc, netGain) => new THREE.ShaderMaterial({
-      uniforms: { ...uniforms, uGain: { value: gain }, uGainLit: { value: gainLit }, uNetGain: { value: netGain } }, vertexShader: sh.vertexShader, fragmentShader: sh.fragmentShader,
+    const material = (gain, gainLit, depthFunc, netGain, sel = 0, offset = null) => new THREE.ShaderMaterial({
+      uniforms: { ...uniforms, uGain: { value: gain }, uGainLit: { value: gainLit }, uNetGain: { value: netGain }, uSel: { value: sel } }, vertexShader: sh.vertexShader, fragmentShader: sh.fragmentShader,
       transparent: true, depthWrite: false, depthTest: true, depthFunc, toneMapped: false, side: THREE.DoubleSide,
+      polygonOffset: Boolean(offset), polygonOffsetFactor: offset ? offset[0] : 0, polygonOffsetUnits: offset ? offset[1] : 0,
       blending: THREE.CustomBlending, blendEquation: THREE.AddEquation, blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcColorFactor, blendSrcAlpha: THREE.ZeroFactor, blendDstAlpha: THREE.OneFactor
     });
     const mesh = (name, mat, order) => {
@@ -625,8 +649,11 @@ export function createEmapView({ THREE, objects, o = EMAP, look = EMAP_LOOK, str
       scene.add(m);
       return m;
     };
-    hidden = mesh('ns-electrical map, the part hidden behind things (typical routes, simplified; a picture of the simulation, not a recording)', material(o.light.hidden, o.light.hiddenLit, THREE.GreaterDepth, look.netHidden), look.orderHidden);
-    front = mesh('ns-electrical map (typical routes, simplified; a picture of the simulation, not a recording)', material(1, 1, THREE.LessEqualDepth, 1), look.orderFront);
+    // the hidden pass (kept off the strip's blocks: what lies behind a block is not drawn over it), and the front pass in
+    // two parts: the routes and the bodies' wiring over everything, the network's lines not over a block
+    hidden = mesh('ns-electrical map, the part hidden behind things (typical routes, simplified; a picture of the simulation, not a recording)', stripKeep(material(o.light.hidden, o.light.hiddenLit, THREE.GreaterDepth, look.netHidden)), look.orderHidden);
+    front = mesh('ns-electrical map (typical routes, simplified; a picture of the simulation, not a recording)', material(1, 1, THREE.LessEqualDepth, 1, 2, look.frontOffset), look.orderFront);
+    frontNet = mesh('ns-electrical map, the brain\'s network in front of things (generated, drawn; not a recording)', stripKeep(material(1, 1, THREE.LessEqualDepth, 1, 1, look.frontOffset)), look.orderFront);
     const dimMat = new THREE.ShaderMaterial({ uniforms: { uAlpha: { value: 0 } }, vertexShader: DIM_VS, fragmentShader: DIM_FS, transparent: true, depthTest: false, depthWrite: false, toneMapped: false });
     stripKeep(dimMat);
     dimMesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), dimMat);
@@ -640,11 +667,11 @@ export function createEmapView({ THREE, objects, o = EMAP, look = EMAP_LOOK, str
     // dark ground and before the lines; it rides the brain group (its world matrix, copied when it is drawn)
     const ssh = emapScanShaders();
     scanMat = new THREE.ShaderMaterial({
-      uniforms: { uOn: uniforms.uOn, uHeat: { value: 1 }, uInflate: { value: look.scanInflateMm }, uBase: { value: storms.base }, uSt0: uniforms.uSt0, uSt1: uniforms.uSt1, uAct: { value: storms.act }, uNSt: uniforms.uNSt, uNAct: { value: 0 },
+      uniforms: { uOn: uniforms.uOn, uCover: { value: 0 }, uHeat: { value: 1 }, uInflate: { value: look.scanInflateMm }, uBase: { value: storms.base }, uSt0: uniforms.uSt0, uSt1: uniforms.uSt1, uAct: { value: storms.act }, uNSt: uniforms.uNSt, uNAct: { value: 0 },
         nsGapCut: { value: new THREE.Vector4(...brainGapUniformValue()) } },
       vertexShader: ssh.vertexShader, fragmentShader: ssh.fragmentShader, transparent: true, depthWrite: false, depthTest: true, depthFunc: THREE.LessEqualDepth, toneMapped: false, side: THREE.FrontSide,
       polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2,
-      blending: THREE.CustomBlending, blendEquation: THREE.AddEquation, blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcColorFactor, blendSrcAlpha: THREE.ZeroFactor, blendDstAlpha: THREE.OneFactor
+      blending: THREE.CustomBlending, blendEquation: THREE.AddEquation, blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcAlphaFactor, blendSrcAlpha: THREE.ZeroFactor, blendDstAlpha: THREE.OneFactor
     });
     stripKeep(scanMat);
     // (a depth pass of the same copy first: where pieces of the brain meet or lie close behind one another, their pushed
@@ -734,7 +761,7 @@ export function createEmapView({ THREE, objects, o = EMAP, look = EMAP_LOOK, str
   }
 
   /** Every mesh of the map hidden (after a failure: the game goes on without the map). */
-  function hideAll() { for (const m of [front, hidden, dimMesh, ...scanMeshes]) if (m) m.visible = false; }
+  function hideAll() { for (const m of [front, frontNet, hidden, dimMesh, ...scanMeshes]) if (m) m.visible = false; }
   function frameStep(f) {
     if (!built || error) return 0;
     // (a throw inside the step would leave the dark ground and a frozen map on the screen for the session: it switches
@@ -748,11 +775,20 @@ export function createEmapView({ THREE, objects, o = EMAP, look = EMAP_LOOK, str
     const target = want ? 1 : 0;
     if (amount !== target) amount = reduced ? target : target > amount ? Math.min(1, amount + dt / o.easeS) : Math.max(0, amount - dt / o.easeS);
     const show = amount > 0;
-    if (front.visible !== show) { front.visible = show; hidden.visible = show; dimMesh.visible = show; }
+    if (front.visible !== show) { front.visible = show; frontNet.visible = show; hidden.visible = show; dimMesh.visible = show; }
     { const sv = show && objects.brainGroup.visible; for (const m of scanMeshes) if (m.visible !== sv) m.visible = sv; }
     if (!show) { if (st.active || st.sparks) reset(); clock0 = NaN; return 0; }
+    // the scan wholly on: its depth pass before the glass (the glass is not drawn under it; screened colour); easing in
+    // or out: after the glass, and its colour covers the glass by the amount (no step at either end)
+    const full = amount >= 1;
+    if (full !== scanFull && scanMat) {
+      scanFull = full;
+      for (let i = 0; i < scanMeshes.length; i += 2) scanMeshes[i].renderOrder = full ? look.orderScanDepth : look.orderScan - 0.1;
+      scanMat.blendDst = full ? THREE.OneMinusSrcColorFactor : THREE.OneMinusSrcAlphaFactor;
+    }
+    if (scanMat) scanMat.uniforms.uCover.value = full ? 0 : amount;
     const t0 = performance.now();
-    if (!Number.isFinite(clock0)) clock0 = nowMs;
+    if (!Number.isFinite(clock0)) { clock0 = nowMs; restartStorms(storms); } // (the map's clock starts at 0 again: so do the storms' own)
     if (f.segments) segs = f.segments;
     frame.now = (nowMs - clock0) / 1000; frame.reduced = reduced; frame.nLinks = 0; frame.nLit = 0;
     const links = f.links, marks = f.marks, sources = f.sources;
@@ -822,7 +858,7 @@ export function createEmapView({ THREE, objects, o = EMAP, look = EMAP_LOOK, str
     st.wireTex.fill(0); st.slotTex.fill(0);
     for (const s of st.slots) { s.mode = 0; s.area = -1; s.nWires = 0; s.nSigs = 0; s.level = 0; s.target = 0; s.seen = false; s.wasSeen = false; s.hint = false; }
     st.areaSlot.fill(-1); st.active = 0; st.maxLevel = 0; st.sparks = 0; st.lastNow = NaN; st.nextSparkAt = 0; focus = 0;
-    if (storms) { for (const q of storms.slots) q.on = false; storms.nextAt = 0.6; storms.storm0.fill(0); storms.storm2.fill(0); for (let k = 0; k < storms.slots.length; k++) { storms.storm1[4 * k] = 0; storms.storm1[4 * k + 1] = 0; storms.storm1[4 * k + 2] = -1; storms.storm1[4 * k + 3] = -1; } storms.act.fill(0); }
+    if (storms) { restartStorms(storms); storms.storm0.fill(0); storms.storm2.fill(0); for (let k = 0; k < storms.slots.length; k++) { storms.storm1[4 * k] = 0; storms.storm1[4 * k + 1] = 0; storms.storm1[4 * k + 2] = -1; storms.storm1[4 * k + 3] = -1; } storms.act.fill(0); }
     if (keptT0) keptT0.fill(NaN);
     wireTex.needsUpdate = true; slotTex.needsUpdate = true;
   }
@@ -844,11 +880,11 @@ export function createEmapView({ THREE, objects, o = EMAP, look = EMAP_LOOK, str
       scan: built && storms ? { surfaces: scanMeshes.length / 2, drawn: scanMeshes.some(m => m.visible), regions: storms.regions.length, links: storms.links.length, netWires: model.netWires ? model.netWires.length : 0,
         triangles: scanMeshes.filter((m, i) => i % 2 === 1).reduce((n, m) => n + (m.geometry.index ? m.geometry.index.count / 3 : 0), 0), stripKept: dimMesh ? dimMesh.material.stencilFunc === THREE.NotEqualStencilFunc : false,
         stripLeftOut: scanOwnGeo.length > 0, glass: scanDiag,
-        storms: storms.slots.filter(q => q.on).length, started: storms.started, hops: storms.hopsStarted, cordVolleys: storms.cordVolleys, activations: storms.nAct } : null
+        storms: storms.slots.filter(q => q.on).length, started: storms.started, flares: storms.minorStarted, hops: storms.hopsStarted, cordVolleys: storms.cordVolleys, activations: storms.nAct } : null
     };
   }
   function dispose() {
-    for (const m of [front, hidden, dimMesh]) if (m) { scene.remove(m); if (m.material) m.material.dispose(); }
+    for (const m of [front, frontNet, hidden, dimMesh]) if (m) { scene.remove(m); if (m.material) m.material.dispose(); }
     for (const m of scanMeshes) scene.remove(m);
     scanMeshes.length = 0;
     if (scanMat) scanMat.dispose();
@@ -861,7 +897,7 @@ export function createEmapView({ THREE, objects, o = EMAP, look = EMAP_LOOK, str
     if (dimMesh) dimMesh.geometry.dispose();
     if (geo) geo.dispose();
     for (const t of [palTex, wireTex, slotTex]) if (t) t.dispose();
-    front = hidden = dimMesh = null; built = false; steps = null;
+    front = frontNet = hidden = dimMesh = null; built = false; steps = null;
   }
   return { prepare, work, setOn, frame: frameStep, reset, state, dispose, get built() { return built; }, get on() { return want; }, get amount() { return amount; }, get model() { return model; } };
 }

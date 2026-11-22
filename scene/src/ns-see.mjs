@@ -86,7 +86,7 @@
  *
  * Display only: a drawing aid and a picking aid. It changes no pose, activity value or collision.
  */
-import { OUTLINE, OUTLINE_GROUPS, OUTLINE_ADJACENT, OUTLINE_MIRROR_OFFSET, OUTLINE_ID_VS, OUTLINE_SKIN_ID_VS, OUTLINE_SKIN_BATCH_VS } from './ns-outline.mjs';
+import { OUTLINE, OUTLINE_GROUPS, OUTLINE_ADJACENT, OUTLINE_MIRROR_OFFSET, OUTLINE_FACE_EDGE_GROUP, OUTLINE_ID_VS, OUTLINE_SKIN_ID_VS, OUTLINE_SKIN_BATCH_VS } from './ns-outline.mjs';
 
 /** Display and picking choices (18 November 2026; the widening of 19 November 2026).
  *  gapM / gapRel: how far behind the front part (metres, plus a share of its distance) a part must lie to be hidden.
@@ -173,11 +173,13 @@ export function seeLimbKey(code) {
 }
 const bodyOfGroup = g => (g >= OUTLINE_MIRROR_OFFSET ? 2 : g > 0 ? 1 : 0);
 /** The THING (ghost code) of an outline group (19 November 2026): its limb (seeLimbOfGroup), or its body's trunk (the
- * trunk, neck and head are one piece: SEE_THINGS.ownTrunk / mirrorTrunk); 0 when it is no body group. */
+ * trunk, neck and head are one piece: SEE_THINGS.ownTrunk / mirrorTrunk); 0 when it is no body group. The face's moving
+ * edges (ns-outline OUTLINE_FACE_EDGE_GROUP, 15 and the mirror body's 31; update 65) are the head's. */
 export function seeThingOfGroup(group) {
   const g = Number.isInteger(group) ? group : -1;
   if (g <= 0 || g >= 2 * OUTLINE_MIRROR_OFFSET) return 0;
   const k = g >= OUTLINE_MIRROR_OFFSET ? g - OUTLINE_MIRROR_OFFSET : g;
+  if (k === OUTLINE_FACE_EDGE_GROUP) return g >= OUTLINE_MIRROR_OFFSET ? T.mirrorTrunk : T.ownTrunk;
   if (!(k >= 1 && k <= G.rFoot)) return 0;
   return seeLimbOfGroup(g) || (g >= OUTLINE_MIRROR_OFFSET ? T.mirrorTrunk : T.ownTrunk);
 }
@@ -304,6 +306,12 @@ export const SEE_JOIN_MASKS = (() => {
   const t = new Array(M).fill(0);
   for (const g of Object.values(G)) t[g] |= 1 << g;
   for (const [a, b] of OUTLINE_ADJACENT) { t[G[a]] |= 1 << G[b]; t[G[b]] |= 1 << G[a]; }
+  // (update 65: the face's moving edges, OUTLINE_FACE_EDGE_GROUP, join what the head joins, the head itself included)
+  const F = OUTLINE_FACE_EDGE_GROUP;
+  if (F > 0 && F < M) {
+    for (let g = 0; g < M; g++) if ((t[g] >> G.head) & 1) t[g] |= 1 << F;
+    t[F] = t[G.head];
+  }
   return Object.freeze(t);
 })();
 const JOIN_MASKS = SEE_JOIN_MASKS;
@@ -313,6 +321,7 @@ int nsGroupOf( vec4 c ) { return int( c.r * 255.0 + 0.5 ); }
 int nsLimbOf( int g ) {
 	int m = g >= ${M} ? 4 : 0;
 	int k = g >= ${M} ? g - ${M} : g;
+	if ( k == ${OUTLINE_FACE_EDGE_GROUP} ) k = ${G.head}; // (the face's moving edges are the head's)
 	if ( k >= ${G.lUpper} && k <= ${G.lHand} ) return 1 + m;
 	if ( k >= ${G.rUpper} && k <= ${G.rHand} ) return 2 + m;
 	if ( k >= ${G.lThigh} && k <= ${G.lFoot} ) return 3 + m;
@@ -325,6 +334,7 @@ int nsThingOf( int g ) {
 	int l = nsLimbOf( g );
 	if ( l > 0 ) return l;
 	int k = g >= ${M} ? g - ${M} : g;
+	if ( k == ${OUTLINE_FACE_EDGE_GROUP} ) k = ${G.head}; // (the face's moving edges are the head's)
 	if ( k < 1 || k > ${G.rFoot} ) return 0;
 	return g >= ${M} ? ${T.mirrorTrunk} : ${T.ownTrunk};
 }

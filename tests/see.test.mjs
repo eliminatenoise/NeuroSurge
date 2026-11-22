@@ -42,7 +42,8 @@ test('every part of a body is a thing: its limb, or its trunk with the neck and 
   assert.equal(seeThingOfGroup(G.trunk + M), SEE_THINGS.mirrorTrunk);
   assert.equal(seeThingOfGroup(G.lFoot + M), 7);
   assert.equal(seeThingOfGroup(0), 0);
-  assert.equal(seeThingOfGroup(15), 0, 'no such group');
+  assert.equal(seeThingOfGroup(15), SEE_THINGS.ownTrunk, 'the face\'s moving edges (ns-outline OUTLINE_FACE_EDGE_GROUP, 22 November 2026) are the head\'s');
+  assert.equal(seeThingOfGroup(M), 0, 'no such group');
   assert.equal(seeThingOfGroup(99), 0);
   assert.equal(seeBodyOfThing(3), 1);
   assert.equal(seeBodyOfThing(SEE_THINGS.ownTrunk), 1);

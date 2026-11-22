@@ -89,6 +89,8 @@ test('storms: one starts every one to three seconds, some where the look rests, 
   assert.ok(S.hopsStarted >= starts.length, `${S.hopsStarted} regions flared from a front`);
   assert.ok(maxOn >= 4, 'several at once');
   assert.ok(S.cordVolleys >= 0.15 * starts.length && S.cordVolleys <= 0.5 * starts.length, `${S.cordVolleys} volleys down the cord`);
+  // between them, small flares of their own (no cascade, no volley), about one a second or more
+  assert.ok(S.minorStarted >= 120 / EMAP_STORM.minor.everyS[1] - 5 && S.minorStarted <= 120 / EMAP_STORM.minor.everyS[0] + 5, `${S.minorStarted} small flares`);
 });
 
 test('a storm\'s hops: the joined region flares when the front along the fibre arrives, weaker, and the front reaches it along the fibre', () => {

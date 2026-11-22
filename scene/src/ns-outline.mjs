@@ -141,6 +141,16 @@ export const OUTLINE_GROUPS = Object.freeze({
   lThigh: 9, lShank: 10, lFoot: 11, rThigh: 12, rShank: 13, rFoot: 14
 });
 export const OUTLINE_MIRROR_OFFSET = 16;
+/**
+ * 22 November 2026 (SEEMOVE, section 189; the owner: every movement clear from the start view, Message 204). The face's
+ * moving edges: a code of their own in the ID pass (15; the mirror body's 31), adjacent to no other group, so the ink
+ * line is drawn where the muscles that carry them border the rest of the face: the brow line (the forehead muscle's
+ * edge), the eyelid margins (the eyelids' part of the ring muscle round each eye) and the lips (their ring muscle).
+ * The face is about 40 px tall on the mirror body at the start view, where a move of 3 to 5 px reads on a dark line and
+ * not on a matte pink surface. Within the group (the two halves of one muscle) no line. ns-scene-three FACE_EDGE_INK
+ * chooses the muscles.
+ */
+export const OUTLINE_FACE_EDGE_GROUP = 15;
 /** Groups that join each other at a joint (same body): a boundary between them without a depth step is a muscle
  * parting (faint), not an overlap. Every other pair of groups is set apart by a strong line. */
 export const OUTLINE_ADJACENT = Object.freeze([
@@ -238,12 +248,14 @@ export function outlineGroupForBlend(blend, fallbackSegment = null) {
   return outlineGroupForShares(sums) || outlineGroupForBodySegment(fallbackSegment);
 }
 /** Adjacency table (size x size bytes, row = group code a, column = code b): 255 where a and b are in the same body and
- * are the same group or join at a joint, else 0. Codes 1..14 are your body, 17..30 the mirror body. */
+ * are the same group or join at a joint, else 0. Codes 1..14 are your body, 17..30 the mirror body (15 and 31: the
+ * face's moving edges, OUTLINE_FACE_EDGE_GROUP). */
 export function outlineAdjacency(size = 32) {
   const t = new Uint8Array(size * size);
   const set = (a, b) => { if (a < size && b < size) { t[a * size + b] = 255; t[b * size + a] = 255; } };
   for (const off of [0, OUTLINE_MIRROR_OFFSET]) {
     for (const g of Object.values(OUTLINE_GROUPS)) set(g + off, g + off);
+    set(OUTLINE_FACE_EDGE_GROUP + off, OUTLINE_FACE_EDGE_GROUP + off); // (22 November 2026: the face's moving edges)
     for (const [a, b] of OUTLINE_ADJACENT) set(OUTLINE_GROUPS[a] + off, OUTLINE_GROUPS[b] + off);
   }
   return t;
