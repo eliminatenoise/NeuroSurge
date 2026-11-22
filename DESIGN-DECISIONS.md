@@ -6875,6 +6875,265 @@ to 0.5 on the lead and on another branch of the same base, in both runs, and was
 - Not looked at: other browsers, twice the pixel density, the electrical map (M) with these changes, a touch screen,
   Firefox's own focus ring rule.
 
+## 199. A limb you choose during a trunk movement still goes back, and no long frame sinks one limb into another (22 November)
+
+The owner, Message 206: "no permanent movements": a movement from the brain contracts and returns, and only the player's
+own placing stays. Message 174: a limb that collides pushes the other "out of the way rather than going through them".
+A check of Body update 67 found, stepping the game at 60 frames a second: with the right arm chosen, "Bend trunk
+forward" pushed the right leg, and if the right leg was chosen during the movement it stayed 86 mm off its place for
+good (90 mm with a side bend; finding 1); and one long frame let a knee sink deep into an arm, which the stop then held
+(finding 3). The SEEMOVE checks had left two cases of the right arm: keys used on it during a trunk movement undone when
+it is let go (R7), and a look turned while a newly chosen arm waits for the trunk not moving it (N2, 82 mm). And the
+frame table showed the limb turn about 6 % slower than on update 66.
+
+**A pushed limb you choose before the trunk is back still goes back (`PUSH_BACK.chosenKept`, `pushBackStep`'s `own`,
+`ns-limb-pace.mjs`; `stepPushBack` and `stepLimbHoldCore` in `ns-app.mjs`).** `stepPushBack` dropped a limb's way back
+as soon as that limb became the chosen one ("a pushed limb you choose is yours"). Choosing a limb is not moving it: the
+record is now kept and the way back goes on with the trunk's return. What the player then does to that limb is the
+player's own placing: the hold hands over the change it made this frame (`holdOwn`: from where the joints were), and
+the way back carries it into both ends of its path, so the push is undone and the player's move stays. Two faults
+found on the way and fixed: read from the joints' places alone, a change the hold made (a place it sets is also where
+the joint is) counted the joint's lag behind the way back as the player's, and a look that carried the leg during the
+return cancelled the whole way back (the leg ended exactly as on update 67); and the way back moving the leg's joints
+made the hold take the leg up afresh every frame, with the moving trunk as its reference, so the look carried the leg
+with the camera. While the chosen limb's way back runs, the hold now keeps its reference and its look and only takes
+the place again from where the end is (`backMoves`). Also: no way back of a push is recorded for the right arm while its
+own way back (`rightBack`, `holdArmBack`) runs, and creating that one drops a push record of the right arm (two records
+on one arm set opposite places every frame; the check found this in Node only). Tried and dropped: dropping a joint the
+player moves from the record, as the right arm's way back does for the limb turn (the push's part of it stayed); a
+chosen leg waiting, not taken up, until its way back is done (keys on it would then be undone, as on a waiting arm).
+`chosenKept` false gives the old rule.
+
+**The stop is tested before a move is taken (`LIMB_BLOCK.ahead`, `aheadSteps` 5, `aheadAllowM`, `aheadShare` in
+`ns-limb-pace.mjs`; `aheadCut` in `ns-app.mjs`).** The keys' step and the knee's pace grow with the frame's time (up to
+`MAX_FRAME_DT`, 0.1 s), so on a busy machine one frame took the knee 100 to 147 mm; the first touch was found after the
+move, and the stop then held whatever overlap that frame had left. Now a move of the chosen limb (the keys or the look,
+the trunk at rest) is first tested against every other limb it is not already blocked by: where it would sink in
+deeper than the overlap now and deeper than `deepM` past where the two first touched (`slackM` when they do not touch
+yet), only the share of the move that stays within is taken, found by five halvings; none of it, the move waits. The
+push and the stop then go on as on short frames. It costs one more pose a frame of the keys, and five more only when a
+move would sink in. Tried and dropped: refusing the whole move (on long frames a leg then stopped a step short of the
+arm and never touched it); the frame time capped at 1/30 s for the keys' step (the limbs slow down on a busy machine,
+and a long frame still sank the knee about 50 mm).
+
+**A look turned while a newly chosen right arm waits is carried when it is taken up (`HOLD_BODY.waitLook`,
+`holdWaitLook`, `stepLimbHoldCore`).** An arm chosen during a trunk movement waits until the trunk is at rest, riding on
+the trunk; a look turned meanwhile was lost. The look is now kept as the arm begins to wait (and again on a frame of
+the keys while it waits), and at the take-up the arm's place in the picture is the one it had with that look; the look
+since then carries it, at the hold's rejoin pace (`rejoinMps`, 1.2 m/s). The left arm is not changed: it rides on its
+own place beside the shoulder.
+
+**R7 is not fixed.** Keys on the held right arm while the trunk is not at rest, then the arm let go before the trunk is
+back: its way back takes it to its places from before the movement, and the keys' move is undone (88.4 mm off its
+control). A key's move made with the trunk bent has no one equal at rest. Tried in this round and dropped: going back
+to the places that put the hand where the view held it in the room, solved once with the trunk at rest as the arm is
+let go: R7 82.1 mm off its control, and the same with W, which barely moves the arm at rest (3.0 mm), 46.2 mm off it.
+Round 6 carried the keys' joint changes and left R2 232 mm off; even the view keeping the arm to the end, with no
+let-go (R7b), ends 33.7 mm off the control on both builds. The note is in the `HOLD_BODY` comment.
+
+**The limb turn: nothing of update 67 found that costs it a frame.** Profiled in the browser (the page's own CPU
+profile, 4 s of the held limb turn, update 66 against update 67, twice at the start view and twice at the frame table's
+own view): no function of `ns-app.mjs` or `ns-limb-pace.mjs` takes more than 0.02 ms a frame more on update 67;
+`stepLimbHold`, `stepLimbPush`, `stepPushBack` and `stepArmBack` are not among the 40 costliest `ns-app` functions on
+either build (each under 0.02 ms a frame). In the turn the twisted left forearm pushes the left leg 46 times in 4 s on
+both builds, and update 67's stop blocks 11 times (one overlap measure a frame). Timed without the profiler, in turns:
+at the start view at High 41.5 / 44.3 / 42.9 against 41.2 / 42.9 / 37.0 frames a second (the last with every part
+slower, the machine), the part where all the limb code runs ("other") 0.98 against 1.0 ms. The frame table's own
+sequence draws the limb turn wherever the look and up-down phases left the view, and they count mouse steps per loop,
+not per time, so a slower run ends elsewhere: four runs ended at four looks (yaw -1.01 to -0.64), and the drawing part
+followed the view (4.3 to 5.9 ms). With the mouse steps fixed (the same view every run): 38.5 / 39.3 against 37.9 /
+36.9 (update 66's second run at the lower picture level lite-0.9). Nothing was changed for this item; the new work of
+this section runs only on frames of the keys or the look on a body limb, or while a chosen limb's way back runs.
+
+**Measured** (the game stepped at 60 frames a second through its own QA step, this branch against port 18930, update 67;
+each sequence beside a control with the same inputs and no trunk movement; distances of the hand or ankle from the
+control's at the end, after everything has settled):
+- Finding 1, right arm chosen, "Bend trunk forward", right leg chosen at 0.1 / 0.3 / 0.6 s: 26.2 / 85.6 / 85.6 mm on
+  update 67, 1.4 / 1.4 / 1.4 now; with the side bend at 0.3 s 89.6, now 1.4. The leg chosen at 0.3 s and then the right
+  arm again at 0.5 s: 85.6, now 0. With D on the leg after the choice: 85.4, now 3.6; with S: 69.3, now 42.8 (S's joint
+  changes made at the pushed pose are kept, and they do not take the ankle where S takes it from the leg's own place); a
+  look moved during the return: 83.1, now 18.4; a limb turn after the choice: 85.6 (and 15.1 on the left leg), now 11.0
+  (0). The pictures of the end show the mirror body's right shin pulled in across the middle on update 67 and splayed out
+  as in the control now.
+- Finding 3, a leg swung into the arm on its side (right leg S 1.2 s, A 0.5 s, D 2 s; left leg S 1.2 s, A 2 s), the deepest
+  and the last overlap of the game's rods: at 60 frames a second 8 / 5 and 4 / 4 mm on update 67, 7 / 7 and 3 / 3 now; at
+  15 frames a second 74 / 74 and 46 / 46, now 3 / 2 and 1 / 0; at 10, 75 / 75 and 110 / 110, now 4 / 2 and 1 / 1. The knee
+  still goes up to 100 to 126 mm in one such frame (its pace in real time is unchanged), but no longer into the arm.
+- N2, the right arm chosen at 0.3 s during "Bend trunk forward", the look turned 6 degrees during the return: 82.2 mm on
+  update 67, now 1.4; turned while it waits (0.4 to 0.8 s): 81.3, now 1.7. With W on the waiting arm first and then the
+  look: 82.9, now 72.3 (not right). W on the waiting arm alone (K8w) 8.1, now 7.1; R2 3.0 on both.
+- No throw: the largest step a frame of each limb is the same on both builds in every sequence (the movement's own).
+
+**Checked.** `tests/limbs3.test.mjs` (new): the way back of a chosen limb with and without the player's change, through
+the activity's own events with the key made as the hold makes it (and the lag fault shown when the change is read from
+the places alone); the stop tested ahead, a long frame's knee in by under 12 mm instead of 147; the new switch. Unit files limbs3, limbs2,
+seemove, limb-hold, limb-pair-push, fix63 and words2: 80 pass, 0 fail. The start check `?case=boot` ok. Browser tests
+`startup`, `keyboard-aim` and `limb-controls` pass. Frame table (still / look / up and down / limb turn, this branch
+against port 18930 in turns): 60.0 / 41.1 / 46.4 / 47.1 against 60.0 / 39.0 / 43.5 / 48.9; 60.1 / 40.5 / 41.8 / 47.3
+against 60.0 / 38.0 / 43.8 / 48.6. The limb turn is lower in both pairs by about 3 %, though none of this section's code
+runs in it (the left arm chosen, no key, nothing pushed back); with the mouse steps fixed, so that both draw the limb
+turn from the same view, three pairs: 37.7 / 33.1 / 38.1 against 37.0 / 38.1 / 37.8 (in the second every part of
+the frame was slower, the input and the drawing too), the part where the limb code runs 2.56 / 3.31 / 2.71 against 2.67 /
+2.57 / 2.70 ms.
+
+**Not done, or not right.**
+- R7 above: keys on the held right arm during a trunk movement are undone if it is let go before the trunk is back.
+- Keys used on a pushed leg after choosing it during the movement are kept as joint changes: S ended 42.8 mm from where
+  S takes the leg with no push (update 67: 69.3). A look carrying it during the return ends 18.4 mm off; a limb turn
+  11.0 mm.
+- A look turned while the right arm waits is carried; keys on the waiting arm and then a look leave it 72.3 mm off. The
+  carried arm catches up at 1.2 m/s once the trunk is back, a quick move of up to about a second. The left arm, waiting,
+  is not carried.
+- The stop is still on rods, not the drawn surfaces, and still not for your left arm or during a trunk movement; it was
+  measured stepped at fixed long frames, not on a machine that is really slow.
+- The 6 % of the limb turn was not found in the limb code; the frame table's own phases leave the view where the
+  machine's speed puts it, so its limb-turn column compares different pictures from run to run.
+
+## 200. Letting go without one long frame, no false "behind you" from outside, labels off the map card, whole sentences on the cards, a steady brain edge at Low (22 November)
+
+The owner: "Performance and reliability should be our number one priority" (Message 134); "The game currently
+physically hurts to look at with your eyes" (Message 133); on the brain's beat, "far less noticeable. But there, if you
+really, really pay attention" (19 November); and the standing rules that a hint must be true, that words show whole or
+not at all (the short card's rule since Messages 44 and 48, on text that is easy to read: each part whole or left out)
+and that labels never cover a card. Six small faults left by the check of update 67 and by sections 192, 196 and 198, each measured on the lead's
+server (update 67) before and on this branch after, at 1600 x 900 unless said.
+
+**Letting go of the brain or the mirror body: the arrows' work is done one piece per frame** (`ARROW_REPLAN.stepped`,
+`holdFrames` 2, `holdMax` 0 in `ns-scene-three.mjs`; `RELEASE_STEPS`, `releaseStep`, `releaseCursorAt` in
+`ns-arrows3d.mjs`). Before, on the lead (quality forced to High, ten timed releases in each of two runs: the brain
+carried up with S three times, carried 170 px aside by the look three times, let go where it was once, the mirror body
+carried with S three times; the game's own frame callback timed for every frame): the fourth frame after the keyup,
+the one that plans, was the longest frame of 15 of the 20 releases: 33 to 68 ms after a carry aside (both frames were
+planned on it: the mirror body's kept tips lay on the moved brain's motor areas), 39 to 44 ms after the mirror body's
+own carry, against held frames of 7 to 13 ms and frames of 11 to 14 ms once a release had settled. A profile of that
+frame (83 ms with the profiler on) put 31 ms in the planner's search, most of it the sight lines against your own body
+and the cover of your body those lines are tested against, built on that same frame for each plan (its parts and its
+grid), and 8 ms in the opening fit of the mirror body's top tip. Now the frame that lets go and the next do no arrow
+work, as before; then one step per drawn frame: the motor-area grids and whether the mirror body's tips may stay; the
+cover of your body seen from the brain's plan view, built ahead (`sightAheadFor`; the plan's sight lines take it,
+`sightFor`); the brain's plan (or its keep); and, only when the mirror body's frame is planned too (its own release, or
+its tips may not stay), its cover and then its plan. Each item's arrows stay hidden until its own plan; at a brain
+release the mirror body's are hidden from the frame that decides they must move (their old places lay on motor areas
+and took the click there). The opening fit now reads the tutorial prompt's box from the HUD read during a release's
+plan instead of from the page, where it forced a layout inside the frame (1.4 to 2 ms with the profiler on; the
+start's plans read the page as before). A wait of the first step for still bodies (`holdMax`, tried at 12 frames) never held:
+in every measured release the pose counters were already unchanged when it could start (the third frame); it is kept
+off (0), since with a look that moves on through the release it would only hold the arrows back. The arrows are back about 85 ms (the brain's, at the fifth frame) to 115 ms (the mirror body's, at the
+seventh) after the keyup at 60 frames a second, against about 65 ms (the fourth frame) before. After, on this branch,
+the same scenario, two runs: the steps cost 0 to 5.2 ms (prepare; 10.7 and 17.5 ms on the first release of a run,
+with the code still cold), 1.0 to 9.0 ms (each cover), 1.2 to 8.5 ms (the brain's plan) and 1.0 to 7.9 ms (the mirror
+body's plan), read from the arrow readback (`releaseSteps`); the longest frame of each release was 32 to 49 ms after a
+carry aside (two of them, 43 and 45 ms, the release frame or the next, with no arrow work in them), 26 to 35 ms after the mirror body's carry, 26 to
+36 ms after the carry up, 21 and 27 ms for a brain let go where it was. Pooled, the first eight frames of all ten releases:
+before median 18.5 and 19.4 ms, 90th percentile 36.3 and 38.8, longest 64.8 and 67.8, 8 and 8 of 80 frames over 34 ms;
+after median 20.9 and 20.0, 90th percentile 32.1 and 30.6, longest 42.9 and 48.7, 4 and 4 of 80 over 34 ms. For
+comparison, an ordinary moving frame (the look swept for 3 s, in the same runs): median 15 to 21 ms, 90th percentile
+20 to 34, the longest 34 to 88. Two runs between (before the prompt box was read from the HUD) still had a 51 to 59 ms
+frame after a carry aside: the mirror body's plan step took 11 to 20 ms there (once a cover, 16 ms).
+
+**The frame timer keeps the last frames part by part** (`recent` and `FRAME_NOTES` in `ns-perf.mjs`;
+`inspect({ perfRecent })` in `ns-app.mjs`; `lastArrowsMs` / `lastOverlayMs` in the scene). To see which part made a
+long frame without a profiler, which doubles every time: the last frames' parts, and two notes inside the draw part
+(the arrows' visibility and plans; the overlay's layout), kept beside the parts and not added to the total. Worked out
+only when asked. It showed what is left after a release (below).
+
+**"The brain is behind you" waits while the brain fills the edges of the view from outside** (`BRAIN_LOST.boundsToo`
+and `brainSeenForTip` in `ns-reference-graph.mjs`, `brainBoundsMeet` in `ns-scene-three.mjs`). Before, on the lead
+(Space on the brain, S for 5.5 s, let go, E): the tip said "The brain is behind you" while pink pieces of the brain
+filled both edges of the picture; the brain lay round the camera, so none of its sample points was in the picture
+(share 0) although its surface was. Now the scene also says whether the box round the sample points in front of the
+camera meets the picture, and while it does the share counts as not known, so neither tip nor the cards' line shows.
+In the eye view after the same carry that box misses the picture and the tip shows as before. After, on this branch: eye view, tip shown (share 0, box false); view from outside, no tip (share 0, box true);
+outside with the look turned 120 px left, no tip (share 0.012); eye view again, tip shown.
+
+**Region labels keep off the electrical map's card** (`readHudRectsNow` in `ns-scene-three.mjs`). Before, on the lead
+at 800 x 600, Low, map on, start look: the "Face and neck" label lay 1,217 px² over the card's honesty line ("... Not
+a recording.") and "Right arm" 441 px² over the card. The card (`ns-emap-card`, shown by CSS while the map is on) is
+now one of the HUD boxes the region labels keep off, as the quiet layer's are (labels only: the arrows keep their
+places while the map comes and goes); it is watched for size even while hidden, since it shows by the app root's
+`data-ns-emap`, which the HUD watcher does not see. After: no label over the card at the start look or with the look
+turned up and right; the "Face and neck" pair sits below the card.
+
+**The card's lead sentence is shown whole or left out whole** (`INFO_WHOLE` and `leadSentenceMark` in
+`ns-scene-three.mjs`, `fitInfoCard`; two rules in `neurosurge.css`). Before, on the lead at 800 x 600, Low: the short
+right card is 150 px wide; the look passed over the whole strip met 14 areas, and the lead sentence of every one of
+them was cut by the short card's 3-line clamp in the middle of a word ("tells your left thi..."), while the card had
+room to spare (its words no taller than its box). The clamp is 2 lines in an upright window. Now the sentence has no
+clamp (`data-ns-lead="whole"`), and when the short card is then taller than its box, the sentence is left out whole
+first (`data-ns-lead="drop"`), the order the short card's other parts already go in, and the way the "Keep in mind"
+lines go (section 197). Key R's opened card scrolls, so there it is always whole. A first try that left out every
+sentence the clamp would cut was dropped before it was run: at 800 x 600 it would have taken the sentence off all 14
+cards that had room for it. After: 11 areas met, all 11 sentences whole (6 to 8 lines), every card fits; the left
+leg's card after S and A reads its whole sentence above "Muscles that pull".
+
+**At picture quality Low the brain does not swell with the beat** (`LIVE_AT_LOW.swellAtLow` and `liveRulesFor` in
+`ns-scene-three.mjs`). Before, on the lead at Low, the start view with the look still, 4 s twice (each pixel's rises
+and falls within any one second, the map checkers' measure): 25 and 23 pixels rose and fell 4 or more times a second at
+a 32-level step (at most 5), 210 and 265 at a 16-level step, most of them on the brain's right outline at the top of the
+picture and a few on the strip's borders and round the mirror body. With reduced motion (no beat at all) the same
+measure gave none, map off and on: all of it was the living brain. The beat's swell moves the outline about 1.3 CSS px,
+0.8 of a drawn pixel at Low's 0.6 scale, so edge pixels stepped between the pale brain and the dark ground with each
+beat and its small second bump. Now at the cheapest level (Low, which is also the automatic controller's last level)
+the brain does not grow with the beat or the breath; it still flushes and its wet light still slides with the beat,
+and every other level swells as before. After: 0 and 0 pixels at both steps. A close-up of the brain's edge before and
+after shows the same picture.
+
+**The map's two wire spots at Low: already steady on update 67; no change.** Section 192 left two spots on the mirror
+body's wires (782,338 and 817,340) rising and falling 15/5 and 16/10 times a second with the map on at Low. On the
+lead now (paired runs, map off, on, off, on, the checkers' measure and their per-pixel comparison): with the map on 1
+and 0 pixels rise and fall 4 or more times a second at the 32-level step, 1 and 0 of them only with the map on (two
+map-off runs differ by 8 and 12), and the two spots read 3/0 and 2/1, 2/0 and 2/1. The same comparison of the map's
+own pass-5 data gives 15/5 and 16/10 there, so the shimmer went between that pass and update 67; the likely cause is
+section 198's multisampling at Low (`MSAA_AT_LOW`), merged after it (not proven). On this branch: 0 and 0 at the
+32-level step with the map on.
+
+**Checked.** `tests/ui3.test.mjs` (new, 11 tests: the release's steps walked the way the scene calls the arrows, a pick
+before each drawing, for a brain release with and without the mirror body planned again and for a mirror body release;
+the cursor's cadence and the wait for still bodies; brainSeenForTip with brainLostWords; leadSentenceMark and the
+stylesheet's rules; the map card as a labels-only box; the frame timer's recent frames and notes; the living brain's
+rules at Low) with the touched `carry-release` and the neighbouring `perf`, `hud-layout`, `info-settle`, `words2`,
+`chunking`, `brain-live`, `look-calm`, `emap-view`, `shader-safe` and `outline-idle`: 90 of 90 pass. The start check:
+`"ok":true`. Browser tests `startup`, `keyboard-aim`, `brain-compass`, `mirror-compass`, `emap` and
+`camera-resize`: all pass (and `keyboard-aim`, `brain-compass`, `mirror-compass` again after `holdMax` went to 0). The frame table, in turns (still / look / up and down / limb turn, frames a second, full
+quality): this branch 59.5 / 37.7 / 42.8 / 46.7, the lead 60.0 / 36.7 / 43.7 / 54.0, this branch 60.0 / 37.3 / 43.1 /
+52.8, the lead 60.1 / 37.7 / 42.2 / 52.0 (this branch's first limb turn 7 frames a second below the lead's, the second
+pair level; of this section only the release's steps at the limb turn's start run there). How it was measured: one
+scenario per group of faults (the round's work folder, not in the repository), run on the lead's server and on this
+branch: the releases, the look sweep and the lost-brain tip at High (the game's frame callback timed round every
+frame, the frame timer's parts and the arrow readback after each release; a CPU profile of a few releases, cut to each
+frame by name); the cards and the map card at 800 x 600, Low (every card the look meets on a coarse pass over the
+strip; every shown label's box against the card's); the start view at Low with the map off, on, off, on (each pixel's
+rises and falls in its busiest second, compared pixel by pixel), and once with reduced motion. Pictures opened: the
+view from outside after the carry behind, before and after; the left leg's card and the map card at 800 x 600, before
+and after; a close-up of the brain's edge at Low, before and after; the mirror body's wires with the map on at Low.
+
+**Not done, or not right.**
+- The frames after a release are still longer than held ones. The first seven run about 15 to 30 ms against 7 to 13
+  while held and 11 to 14 once it has settled: the left hand going back to rest re-skins (up to 4 to 11 ms on the first
+  two frames), the outline pass and the pose redo (2 to 6 ms each), the arrows' visibility test runs again after each
+  plan, and frame 6 carries 3 to 7 ms the frame timer files under "other" that I did not trace. That is about what an
+  ordinary moving frame costs here (the look sweep's median 15 to 21 ms), but a step that coincides with a slow moment
+  still makes a frame of 40 to 49 ms in some releases. The same step's cost varies up to eightfold from one release to
+  the next (the same plan, the same 617 places and 1,395 sight lines: 1.2 ms in one release, 10 in another); I did not
+  find why (garbage collection is likely, not shown).
+- The arrows come back 20 to 50 ms later than before (about 85 to 115 ms after the keyup).
+- The wait for still bodies (`holdMax`) is off: tried at 12 frames, it never held in the measured releases (the pose
+  counters were unchanged by the third frame, where the steps start anyway). The two final timing runs, the start check
+  and the frame tables were made with it at 12, where it never held; `keyboard-aim`, `brain-compass` and
+  `mirror-compass` were run again at 0 and pass (`startup`, `emap` and `camera-resize` were not run again).
+- The timings come from one processor shared with other jobs (one heavy job at a time); single runs differ by more
+  than the change in places. Ten releases per run, two runs per build for the final code (and two of the code before its last change).
+- Item 2: a brain only partly round the camera whose box meets the picture while none of it is drawn there would keep
+  the tip away; not seen.
+- Item 3: at 800 x 600 with the map on, the arm labels ("Left arm", "Right arm") are now drawn faded at the start look
+  (seen in the picture; before, the right one lay partly on the card). Why the label layout fades both was not traced.
+- Item 4: at 800 x 600 the cards are taller (6 to 8 lines of lead sentence in a 150 px column: the left leg's card 343
+  px against 287) and cover more of the picture's lower right; a portrait window was not tried in the browser (there the sentence was clamped to 2 lines; now it
+  is whole, or left out when the card runs over).
+- Item 6: at Low the brain no longer visibly swells; the beat shows only in its flush and wet light. Measured at Low
+  only (section 198 counted 26 to 40 such pixels at High, as noise; not measured here).
+- Item 5 was not changed; its fix is only inferred.
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**
@@ -6893,9 +7152,11 @@ to 0.5 on the lead and on another branch of the same base, in both runs, and was
 - While you look up at the brain, a held forward trunk bend is drawn smaller than the 80 degrees it holds (68).
 - Small upright windows, narrower than about 340 pixels or shorter than about 800, cannot start and say so; on a phone-sized screen the panels crowd the brain. The game needs a keyboard and a mouse or trackpad in any case (15).
 - When even the last good view cannot be drawn, the view turns part of the way back by itself (16).
-- Letting go of a carried brain or mirror body still costs frames of about 20 to 60 ms on the test machine: the arrows'
-  plan is spread over the frames after it, but the hand's skin, the outline pass and the labels on the release frame, and
-  the plan of the frame that is planned again, are not looked at yet (196).
+- Letting go of a carried brain or mirror body: the arrows' work is done one piece per frame (each piece took at most 9
+  ms in the last two measured runs, 11 to 22 ms on the first release after the start), yet the seven frames after a release still run about 15
+  to 30 ms on the test machine against 7 to 13 while held, as long as an ordinary moving frame there: the left hand
+  going back re-skins, the outline and the pose redo, and a few frames of 40 to 49 ms remain where a step meets a slow
+  moment (196, 200).
 - From one measured pose the view from behind cannot be shown until the hand or the look moves; the game says so (18).
 - Your own arm can hide part of the brain's left arrow (19). The overlap of the brain's top arrow with the mirror body's top arrow noted there is gone since section 59, which puts the brain above the mirror body.
 - The shoulder-girdle slide has not been compared with reference images (9).
@@ -6907,17 +7168,20 @@ to 0.5 on the lead and on another branch of the same base, in both runs, and was
 - At the start view the face, jaw and throat movements travel under 6 pixels on the mirror body's face (the ink on the eyelids and lips makes most of them readable; the brows, the nose, the jaw's sideways move and the throat read by their light), and fourteen other small movements under 12 pixels; at the look on a hand area your own left arm stands wherever the look has brought it, sometimes with the hand beyond the frame (189).
 - The leg blocks' borders are smoother since section 198 but still wave, most on the purple Left leg block: the
   along-gyrus coordinate itself waves next to the medial wall's pinned vertices (198).
-- At picture quality Low a few dozen pixels of the start view still rise and fall up to 6 times a second; during a held
-  arrow walk the look's soft glow and white frame step from block to block with the view (198).
+- At picture quality Low the brain does not swell with the beat (its edge only stepped a pixel; none of the start view
+  rises and falls now, map on or off); it still flushes with it. During a held arrow walk the look's soft glow and white
+  frame step from block to block with the view (198, 200).
 - The nerve data for the electrical map is typical and simplified: 74 of its 152 main roots are choices where the sources read mark none, a plexus is one bundle, the cranial nerves' openings in the skull are placed by offsets, and 1.4 % of the drawn length still lies in bone (most of it in the skull's own passages); nothing of it has been seen drawn in the game on its own branch (193).
 - With the right elbow fully bent, A and D swing the folded arm out to the side and back by its upper arm; across the chest A is a slow curl; a folded leg's A and D stop at the thigh's 45-degree sideways lift (195).
+- Keys on the held right arm during a trunk movement are undone if it is let go before the trunk is back; keys on a pushed
+  leg chosen during the movement are kept as joint changes, not as the same move from its own place (199).
 
 **Asked for in the user's notes and not done yet.** These stay with the author of these changes.
 - The electrical map (the owner's notes of 20, 21 and 22 November: "a live brain scan map where you have electrical wire, electrical storm activity going everywhere"). It is there on M, as a live scan with storms, and no person has played it. The strip's blocks show under the dark ground, not over it as the lead asked (a second draw broke them into dark triangles); an activated block is not the brightest spot. The lit nerves at your own raised shoulder are a tangle, and lines kink at strongly bent joints; the beads cannot be told apart on the small mirror body; two lit areas that share a wire show one colour; the report's way up is a drawn convention; the first M press takes about 0.7 s (192).
 - Performance (Messages 42, 48 and 50). Holding and carrying the mirror body, the slow limb turn and the view over the shoulder still fall below 60 frames a second on the test machine (66, 71).
 - Part-way positions from the brain (Message 47). An activation takes a part to the end of its movement (59).
 - Controls (Message 46). Replaced on 17 November: a held thing follows the pointer across the view (80). The mirror body's top and bottom arrows turn it (73).
-- Limbs knocking each other about (Message 39). Your own limbs are checked against each other as two rods each: the limb you move pushes another aside and stops against it where it cannot give way (139, 195); overlaps of a centimetre or two remain, and your left arm, when you move it, is not stopped (195).
+- Limbs knocking each other about (Message 39). Your own limbs are checked against each other as two rods each: the limb you move pushes another aside and stops against it where it cannot give way, also after a long frame (139, 195, 199); overlaps of a centimetre or two remain, and your left arm, when you move it, is not stopped (195).
 - From the notes of 17 and 18 November, not done yet: limbs that do not look small in the start picture, with bulkier muscles, wider far ends of the limbs and chunky fingers and toes; a thicker neck; the mirror body magnified and nearer; a down arrow for the brain that is always reachable; vessels laid out as anatomy and a brain plainly different in shade from muscle; a neon blinking, shuddering effect on activity; muscles that swell as they contract; the colour code of the strip and the body redone from scratch with visible links between an area and its part; grouping ("chunking") of every overlay (the Esc page, its full instructions, the controls card and the tip are grouped; the cards are not: 115, 197); a pass over all earlier notes for small fixes; collision effects (one limb pushes another since 174, with the limits above); a limb hidden behind another limb staying visible; what the sweep of 87 still shows (the kneecap and the lower end of rectus femoris at a fully bent knee) and a rule for joint angles in combination; the move from the Borderlands look toward a more detailed, glossy, fleshy graphic-novel look.
 - Arrow places (Messages 7 and 31). The brain's bottom arrow is off the middle of its side (59).
 - The graphics as a whole (Message 41), and the review of earlier notes and versions asked for in Message 48, are done in part only.

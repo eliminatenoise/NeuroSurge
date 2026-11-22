@@ -136,7 +136,7 @@ test('H6: the fast grid is much quicker on a brain-sized mesh (8,100 points, 16,
 
 test('H6, H7: what letting go plans again (ARROW_REPLAN) and the mirror body\'s reset (MIRROR_RESET)', () => {
   assert.deepEqual({ ...ARROW_REPLAN }, { keepUnmoved: true, keepClearOfMotor: true, liveCrosshair: true, liveCrossPx: 32, restGrids: 4, startPlans: 8,
-    spreadFrames: 3, hudReadLag: true });
+    spreadFrames: 3, hudReadLag: true, stepped: true, holdFrames: 2, holdMax: 0 }); // (stepped, holdFrames, holdMax: UI3, section 200)
   assert.ok(Object.isFrozen(ARROW_REPLAN) && Object.isFrozen(MIRROR_RESET));
   assert.equal(MIRROR_RESET.keepStart, true);
   // the decisions are the pure functions below; the scene only feeds them (one line each, read from the source)

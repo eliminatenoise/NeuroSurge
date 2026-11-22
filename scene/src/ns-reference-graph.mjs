@@ -180,6 +180,21 @@ export function brainLostWords({ behind = false, away = false, seenShare = null 
   if (seenShare !== 0) return null;
   return behind ? 'behind' : away ? 'away' : null;
 }
+/**
+ * 22 November 2026 (UI3, a check of update 67, finding 4: in the view from outside, E, "The brain is behind you" showed
+ * while large pink pieces of the brain filled both edges of the picture; the brain carried behind you lay round the
+ * camera, so none of its sample points was in the picture although its surface was). boundsToo true: the share the tips
+ * read counts as not known (no lost-brain words) while none of the brain's sample points is in the picture but the box
+ * round the points in front of the camera meets it (the scene's brainBoundsMeet). In the eye view after the same carry
+ * every point lies behind the camera, so the tip there is unchanged. false: the share alone, as in section 196. Display
+ * choice. */
+export const BRAIN_LOST = Object.freeze({ boundsToo: true });
+/** PURE (BRAIN_LOST): the share of the brain in the picture as the lost-brain words read it (brainLostWords, the HUD's
+ * brainAway): `share` itself, or null (not known) when it is 0 and `boundsMeet` is true. */
+export function brainSeenForTip({ share = null, boundsMeet = null, rules = BRAIN_LOST } = {}) {
+  if (!Number.isFinite(share)) return null;
+  return share === 0 && rules.boundsToo && boundsMeet === true ? null : share;
+}
 export function initialObjectCarry() {
   return { held: false, target: null, lastPick: null, lastLook: null, lastOrigin: null, brainKeyOffset: [0, 0, 0], keyVel: [0, 0], mirror: null, diagnostic: null };
 }

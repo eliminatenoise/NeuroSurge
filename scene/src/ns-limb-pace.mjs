@@ -192,8 +192,39 @@ export function holdLightStep(prev, d, o = HOLD_LIGHT) {
  * forward" carried it onto the thigh, the hold could not keep the hand in its place, and the arm was left 260 mm off it
  * when the trunk came back): a movement from the brain carries the limbs together and back by itself (PUSH_BACK).
  * A display rule on rods (each limb two rods with a thickness), not the drawn surfaces.
+ * 22 November 2026, round r30 (LIMBS3; a check of update 67, finding 3: the stop depended on the frame's length. The keys'
+ * step and the knee's pace grow with the frame's time, so one long frame (a busy machine, 15 to 22 frames a second) took
+ * the knee 147 mm in one frame; the first touch was found after the move, and the stop then held whatever overlap that
+ * frame had left: both legs ended 81 and 94 mm into the arms).
+ *   ahead   a move of the chosen limb (the keys or the look, with your trunk at rest) is first tested against each other
+ *           limb it is not yet blocked by: where it would sink in deeper than the overlap now and deeper than deepM past
+ *           where they first touched (slackM when they do not touch yet), only the share of the move that stays within
+ *           that is taken (aheadShare; none: the move waits this frame). So however long a frame is, a limb comes in no
+ *           deeper than the stop allows, and the push and the stop go on from there as on short frames. A move along or
+ *           away is not changed. Tried and dropped: refusing the whole move (on long frames a leg then stopped up to a
+ *           step short of the arm and never touched it); capping the frame time the keys' step uses at 1/30 s (the limbs
+ *           slow down on a busy machine, and a long frame still sank the knee up to 50 mm).
+ * ahead false: only the block below, after the first touch, as before.
  */
-export const LIMB_BLOCK = Object.freeze({ on: true, deepM: 0.008, tolM: 0.001 });
+export const LIMB_BLOCK = Object.freeze({ on: true, deepM: 0.008, tolM: 0.001, ahead: true, aheadSteps: 5 });
+
+/** LIMB_BLOCK ahead: the overlap (m) a move of the chosen limb may reach with another limb it is not blocked by: the
+ * overlap now (penNow) or deepM past where they first touched (firstM: slackM when they do not touch yet), whichever is
+ * more. Pure. */
+export function aheadAllowM(penNow, firstM, o = LIMB_BLOCK) {
+  return Math.max(Number.isFinite(penNow) ? penNow : -Infinity, (Number.isFinite(firstM) ? firstM : 0) + o.deepM);
+}
+
+/** LIMB_BLOCK ahead: the share (0..1) of a move to take. overAt(s): how far (m) the move's share s goes past what it may
+ * reach (> 0: too deep; aheadAllowM against each limb, the worst); overAt(1) is asked first. 1 when the whole move is
+ * within (tolM), else the largest share found within by aheadSteps halvings (0: none). Pure (overAt is the caller's). */
+export function aheadShare(overAt, o = LIMB_BLOCK) {
+  if (!o || o.on === false || o.ahead === false || typeof overAt !== 'function') return 1;
+  if (!(overAt(1) > o.tolM)) return 1;
+  let lo = 0, hi = 1;
+  for (let i = 0; i < (o.aheadSteps || 5); i++) { const m = (lo + hi) / 2; if (overAt(m) > o.tolM) hi = m; else lo = m; }
+  return lo;
+}
 
 /** The deepest overlap (m) of two limbs' rods (each { root, bend, tip, r: [upper, lower] }, world m): the largest sum
  * of two rods' thicknesses less their distance, over the four pairs of rods (negative: apart by that much). nearest:
@@ -238,8 +269,20 @@ export function blockRefuses(penNow, penNew, o = LIMB_BLOCK, allowM = -Infinity)
  * app sets these places as places only (the activity's 'limbPlace', from SEEMOVE round 8), so a movement of the joint
  * under way goes on and returns to the new place; `moving` (leave such a joint alone) is for a caller that can only
  * set a joint's place and position at once. The push itself leaves a joint in a movement alone (ns-app stepLimbPush).
+ * 22 November 2026, round r30 (LIMBS3; a check of update 67, finding 1: with the right arm chosen, "Bend trunk forward"
+ * pushed the right leg, and the right leg chosen during the movement, Digit3 at 0.3 or 0.6 s, stayed 86 mm off its place
+ * for good, 90 mm with a side bend; the owner, Message 206: no permanent movements). The record was dropped as soon as the
+ * pushed limb became the chosen one ("a pushed limb you choose is yours"). Choosing a limb is not moving it:
+ *   chosenKept  the record of a limb you choose is kept, and its way back goes on with the trunk's return. What you then
+ *               do to that limb yourself (the keys, the look carrying it, a drag) is yours: a joint whose place changed
+ *               that way has the change carried into the place it goes back to (pushBackStep `own`), so the push is
+ *               undone and your own move is kept. Tried and dropped: dropping such a joint from the record (the push's
+ *               part of it then stayed: a leg moved with S after the choice ended 86 mm plus S off its control); letting
+ *               a chosen leg wait, untaken by the view, until its way back is done (the keys on it would then be undone
+ *               with the trunk's return, as they are on a waiting right arm).
+ * chosenKept false: a pushed limb you choose before the trunk is back stays where it is, as before.
  */
-export const PUSH_BACK = Object.freeze({ on: true, shareMin: 0.02, restDegS: 90 });
+export const PUSH_BACK = Object.freeze({ on: true, shareMin: 0.02, restDegS: 90, chosenKept: true });
 
 /** PUSH_BACK: the record of a limb pushed during a movement after one more push. rec: the record so far or null;
  * before / after: the limb's joint PLACES before and after this push (degrees by joint); away: how far the trunk is from
@@ -255,17 +298,29 @@ export function pushBackAfter(rec, before, after, away) {
  * distance from rest, atRest, dt (s) }. Each joint's place goes from `from` to `to` in step with the share of the trunk's
  * way still to go (it never grows again); a moving joint is left alone; a joint whose place something else changed (the
  * end of its movement, another push) goes on from where it is; near rest and after it, what is left goes at most
- * restDegS. Returns { rec, joints (places to set now), done (at rest, every joint home, none moving) }. Pure. */
-export function pushBackStep(rec, { place = {}, moving = () => false, away = 0, atRest = false, dt = 0 } = {}, o = PUSH_BACK) {
+ * restDegS. own (r30, chosenKept: the limb is the chosen one): a joint whose place something else changed was moved by
+ * the player, and the change is carried into both ends of its way (`to` and `from`): kept, not undone; own may give the
+ * player's change itself ({ jointId: degrees }, measured from where the joint WAS: a place set by the player is also
+ * where the joint is, so the place's own change would count the joint's lag behind the way back as the player's).
+ * Returns { rec,
+ * joints (places to set now), done (at rest, every joint home, none moving) }. Pure. */
+export function pushBackStep(rec, { place = {}, moving = () => false, away = 0, atRest = false, dt = 0, own = false } = {}, o = PUSH_BACK) {
   const share = atRest ? 0 : Math.max(0, Math.min(rec.share, rec.away0 > 1e-9 ? away / rec.away0 : 0));
   const from = { ...rec.from }, last = { ...(rec.last || {}) }, joints = {};
-  let busy = false, left = false;
+  let busy = false, left = false, goals = rec.to;
   for (const id of Object.keys(rec.to)) {
-    const to = rec.to[id];
+    let to = rec.to[id];
     if (!Number.isFinite(to)) continue;
     if (moving(id)) { busy = true; continue; }
     const p = Number.isFinite(place[id]) ? place[id] : to;
-    if (Number.isFinite(last[id]) && Math.abs(p - last[id]) > 1e-6 && share > o.shareMin) from[id] = to + (p - to) / share;
+    const moved = Number.isFinite(last[id]) && Math.abs(p - last[id]) > 1e-6;
+    const ownD = own && typeof own === 'object' && Number.isFinite(own[id]) ? own[id] : null;
+    if ((moved || ownD !== null) && own && o.chosenKept !== false) {
+      const d = ownD !== null ? ownD : p - last[id];
+      if (goals === rec.to) goals = { ...rec.to };
+      to = goals[id] = to + d + 0;
+      if (Number.isFinite(from[id])) from[id] += d;
+    } else if (moved && share > o.shareMin) from[id] = to + (p - to) / share;
     let v;
     if (share > o.shareMin) v = to + ((Number.isFinite(from[id]) ? from[id] : p) - to) * share;
     else { const step = o.restDegS * (dt > 0 ? Math.min(dt, 0.1) : 0); v = Math.abs(to - p) <= step ? to : p + Math.sign(to - p) * step; }
@@ -273,5 +328,5 @@ export function pushBackStep(rec, { place = {}, moving = () => false, away = 0, 
     last[id] = v + 0;
     if (Math.abs(v - to) > 1e-6) left = true;
   }
-  return { rec: { ...rec, from, last, share }, joints, done: atRest && !busy && !left };
+  return { rec: { ...rec, to: goals, from, last, share }, joints, done: atRest && !busy && !left };
 }

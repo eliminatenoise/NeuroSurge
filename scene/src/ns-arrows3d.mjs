@@ -847,6 +847,45 @@ export function releasePlanStage(age, spread = 0) {
   return age >= n ? 'prepare' : 'hold';
 }
 
+/** 22 November 2026 (UI3; H6 measured again on update 67: the one frame that planned after a release was 29 to 70 ms
+ * against an ordinary 12 to 14 ms, most of it the planner's search, the cover of your own body its sight lines are
+ * tested against, built on that frame, and, when the mirror body's frame was planned too, all of it twice). The work of
+ * a release, one piece per drawn frame after the frames that only hold (ns-scene-three ARROW_REPLAN.stepped):
+ *  prepare        the motor-area grids the plans need, and whether the mirror body's tips may stay;
+ *  tester-brain   the cover of your own body as seen from the brain's plan view, built ahead of the plan;
+ *  plan-brain     the brain's frame (planned again, or kept);
+ *  tester-mirror  the same for the mirror body's plan view(s), only when its frame is planned too (its own release, or
+ *                 its tips may not stay where they are);
+ *  plan-mirror    the mirror body's frame.
+ * The brain's frame comes first, as it always did (the mirror body's tips keep off the brain's). */
+export const RELEASE_STEPS = freeze(['prepare', 'tester-brain', 'plan-brain', 'tester-mirror', 'plan-mirror']);
+/** PURE (RELEASE_STEPS): the step of a release at `cursor` (0: still holding; 1: the first working frame; one more per
+ * drawn frame). released: 'brain' | 'mirror'; mirrorPlan: the mirror body's frame is planned too (always at its own
+ * release). Returns { step ('hold', a RELEASE_STEPS name, or 'done' after the last), last (this step ends the release),
+ * hidden: { brain, mirror } (whose arrows stay hidden on this frame: the released item's until its plan, and the mirror
+ * body's, once it is known that it is planned again, until its plan; a plan step shows its set on its own frame) }. */
+export function releaseStep(cursor, { released = 'brain', mirrorPlan = false } = {}) {
+  const steps = mirrorPlan || released === 'mirror' ? RELEASE_STEPS : RELEASE_STEPS.slice(0, 3);
+  const k = Number.isFinite(cursor) ? Math.max(0, Math.floor(cursor)) : steps.length + 1;
+  const step = k === 0 ? 'hold' : k <= steps.length ? steps[k - 1] : 'done';
+  const planB = steps.indexOf('plan-brain') + 1, planM = steps.indexOf('plan-mirror') + 1;
+  const hidden = {
+    brain: released === 'brain' && k < planB,
+    mirror: planM > 0 && k < planM && (released === 'mirror' || k >= 1)
+  };
+  return { step, last: k >= steps.length, hidden };
+}
+/** PURE (RELEASE_STEPS): the release's cursor after a call in drawn frame `serial` (the scene counts drawn frames):
+ * one step on for the first call in each drawn frame once more than `hold` frames have been drawn since the release
+ * (`releaseAt`); a second call in the same frame (a pick, the overlay) keeps the step. The first step also waits while
+ * the bodies still move (`still` false: the hand going back to rest after the grip, whose skin and outline already make
+ * those frames longer), but no longer than `holdMax` frames. Returns { cursor, at }. */
+export function releaseCursorAt({ cursor = 0, at = -1, serial = 0, releaseAt = 0, hold = 2, still = true, holdMax = Infinity } = {}) {
+  const age = serial - releaseAt;
+  if (age > hold && at !== serial && (cursor > 0 || still || age > holdMax)) return { cursor: cursor + 1, at: serial };
+  return { cursor, at };
+}
+
 /** R558 (performance, P3): frameArrowAnchors for one spot at a time from one camera and centre, worked out once: the
  * same checks (a bad centre or camera throws as frameArrowAnchors does) and the same arithmetic in the same order (pure).
  * Returns (x, y) -> [x, y, z] | null (a spot that is not finite), or null when the centre is not in front of the camera. */
