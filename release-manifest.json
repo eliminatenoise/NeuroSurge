@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-24-body-70-free-look-offline",
-  "source": "Full and Lite start with a free pointer. Drag on empty space to look or choose Capture mouse from the Escape menu. Both editions share a motor strip and mirror body, and include the current trunk and limb movement. The offline bundle includes motion commands, the shoulder and hip tutorial and an opt-in video recorder. It can replay takes from video or timed pictures. The optional local model can forecast a tracked point and use its nearest comparison frame on the source clock.",
+  "version": "experimental-2026-11-24-selected-follow",
+  "source": "Full and Lite start with a free pointer. Drag on empty space to look or choose Capture mouse from the Escape menu. Both editions share a motor strip and mirror body, and include the current trunk and limb movement. The offline bundle includes motion commands, the shoulder and hip tutorial and an opt-in video recorder. It can replay takes from video or timed pictures. The optional local model can forecast a tracked point and use its nearest comparison frame on the source clock. In the Movement mirror, the limbs that follow the source are independent of the point being forecast.",
   "experimental": true,
   "incomplete_acceptance": true,
   "root_checksum_includes_this_manifest": true,
@@ -54,18 +54,18 @@
     },
     {
       "path": "PLAYER-GUIDE-TECHNICAL.md",
-      "bytes": 9496,
-      "sha256": "0527a6eb303f0530b3e2dcc720040bf4a32545a3b5e0059afbbc5cd9f1bc262d"
+      "bytes": 10231,
+      "sha256": "2d568af35db5f2f9147841954860cd23196a4ce2dc361020012f443b899094a6"
     },
     {
       "path": "PLAYER-GUIDE.md",
-      "bytes": 13507,
-      "sha256": "5ded50d623a5d715fa017f09d4c9dac66fc628c40fe64d48d638e2e166fa3e5a"
+      "bytes": 14357,
+      "sha256": "936051052e82cc65560df45356cd29a2fec3ffc39511918d56e10d5ddd64ee37"
     },
     {
       "path": "PREVIEW-NOTES.html",
-      "bytes": 6038,
-      "sha256": "760d015a623bf9bffb3246fc84f62c08666262d0b95bc452f6df3840e678019f"
+      "bytes": 6490,
+      "sha256": "ffce9e9fe240fca4326f0913cc774c33dfe177160e2ff0a6ea94b5509ec222e7"
     },
     {
       "path": "PROJECT-CONTEXT.json",
@@ -104,13 +104,13 @@
     },
     {
       "path": "README.md",
-      "bytes": 3443,
-      "sha256": "2acfd3257f4733414c295091cb9de98d77db57d4ac78671edc318afde1d902ea"
+      "bytes": 3441,
+      "sha256": "731349bc4acf847e29e8055611056b47e319f5a532e35abf738bea7b5529ed5e"
     },
     {
       "path": "START.html",
-      "bytes": 5872,
-      "sha256": "60218301ae1c417834940a5a6574679de39c71582f6dce603b5a139009a6670b"
+      "bytes": 5860,
+      "sha256": "657f953e76154d9490a306c37612314f47b46736231c3c4d216bf9b11066b903"
     },
     {
       "path": "assets/hand-search/CDLA-Permissive-2.0.txt",
@@ -174,8 +174,8 @@
     },
     {
       "path": "assets/player-guides/PLAYER-GUIDE.txt",
-      "bytes": 37261,
-      "sha256": "584561115eeb1d03920be6b61a62a00b07f1976ca62da31d524371a86c7d1bcc"
+      "bytes": 37871,
+      "sha256": "844607efa163f0d7aa102666aaefe7a1fe0093601c2f29796093958469a72f6a"
     },
     {
       "path": "assets/spatial-motion/02_06.json",
@@ -199,8 +199,8 @@
     },
     {
       "path": "index.html",
-      "bytes": 3929,
-      "sha256": "bcc90a48ca6aea35ec83db8b063191bc6023c0c477d563e8755be27811eae5e9"
+      "bytes": 3919,
+      "sha256": "39eaa622a8ee5caa9389c1568ffe9ae958840c8b32647dc566d2e441c4ac7486"
     },
     {
       "path": "inputs/FULLBODY-MESH-MANIFEST.json",
@@ -309,8 +309,8 @@
     },
     {
       "path": "lite/README.md",
-      "bytes": 1762,
-      "sha256": "0a8bff10439d1040c3467b758467a9c7c4703abfdab32ece246ba67909c3b754"
+      "bytes": 1760,
+      "sha256": "54438b87df91533e4f4c62dc17bb81599984a7ec4fe0b551896fed8f1da91607"
     },
     {
       "path": "lite/asset-pin.mjs",
@@ -379,13 +379,13 @@
     },
     {
       "path": "lite/simple.html",
-      "bytes": 3401,
-      "sha256": "55407bac5fb4b84a323f7492fe2b334c732be3020dacee9cb3983d46e9f1d7af"
+      "bytes": 3399,
+      "sha256": "f725a191c5ddca8ae1ba5795d3f710f14ac606ff71da4f5861a936c64022c6da"
     },
     {
       "path": "lite/technical.html",
-      "bytes": 2532,
-      "sha256": "0c0d6f2c08d8b9467ba60b5325234eddbf4df5aee43aa7b4224495cce6456bc3"
+      "bytes": 2530,
+      "sha256": "29a40ef75d21914a189a40749b3d8e90bd4c6e0bbfd2426bdfb2e16111b01d2b"
     },
     {
       "path": "media/game-view.webp",
@@ -4664,8 +4664,8 @@
     },
     {
       "path": "scene/src/camera.mjs",
-      "bytes": 33393,
-      "sha256": "7fdfa1caaf34519c3797744301503ca9b0f0c256ad127494f3043da0f7e282ae"
+      "bytes": 32160,
+      "sha256": "8e61cefb057b634aec4e6559f19fafb148ba8512a2ddb0b7a316236d37e64ae1"
     },
     {
       "path": "scene/src/camera/README.md",
@@ -4684,13 +4684,13 @@
     },
     {
       "path": "scene/src/camera/limb-pose.mjs",
-      "bytes": 9043,
-      "sha256": "189718061e9997283b7b2e84e2c119d4a980f7fce2af726241ae720d4cae7b03"
+      "bytes": 10319,
+      "sha256": "b410f37e0e5365e7ec3d02e1e7679964a0c9ba962abb1b1b497a8674516c0d74"
     },
     {
       "path": "scene/src/camera/limb-take.mjs",
-      "bytes": 14192,
-      "sha256": "d28e6ed7410219ac3d19f3dff9ddcbba8320a839e5317395b54a3dd0e656bc97"
+      "bytes": 14567,
+      "sha256": "d34ca7f9537ca8688b4e35e7607a844056e1298c57b3417bd31a981c321ebc5f"
     },
     {
       "path": "scene/src/camera/named-takes.mjs",
@@ -4924,8 +4924,8 @@
     },
     {
       "path": "scene/src/joint/media.mjs",
-      "bytes": 7948,
-      "sha256": "09199d6981abc9c02fb115ebe520f813a521e53e5555ccc469cca3d83ab3bbfc"
+      "bytes": 8062,
+      "sha256": "1e03ea826ca5f4a515468da86a2093e92d1a909e6b06d292e5e4c7f2797666b4"
     },
     {
       "path": "scene/src/joint/route.mjs",
@@ -4944,8 +4944,8 @@
     },
     {
       "path": "scene/src/joint/view.mjs",
-      "bytes": 25531,
-      "sha256": "fe8b1f6ef230531080d9191ef36ad723c699ddd2308c42be521f9a3e8aec45e6"
+      "bytes": 27655,
+      "sha256": "7d52d52ddd939898b7ea685900f60bce3bd7f33d8b9f51f3a793160959a0b27c"
     },
     {
       "path": "scene/src/ns-action-chat.mjs",
@@ -5838,14 +5838,19 @@
       "sha256": "3f0fa9c5f5d047897a89256b4080edce1280e1479ce47f4938c1f5d53b4511c4"
     },
     {
+      "path": "tests/joint-follow.test.mjs",
+      "bytes": 1853,
+      "sha256": "3b1c456062ae8045f52cd03c8ca3d87117c1c360a20e434bc6143bab98b94baf"
+    },
+    {
       "path": "tests/joint-route.test.mjs",
       "bytes": 836,
       "sha256": "771b4670be7d461aacd89385ff195bbda253f5e1a194774c8a3d099d534cea4f"
     },
     {
       "path": "tests/joint-timing.test.mjs",
-      "bytes": 5402,
-      "sha256": "11d1605b0a1c444d3a78ad91124babf3283976ddbb774c5ab68568c707b348d5"
+      "bytes": 5516,
+      "sha256": "76dc8230a96f3742f2bc6861fdd6d65301989771c569b7ca900559f65c0fa279"
     },
     {
       "path": "tests/joints.test.mjs",

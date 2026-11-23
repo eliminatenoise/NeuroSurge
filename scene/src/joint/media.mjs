@@ -16,7 +16,7 @@ export function readKeyframes(files, times, {minimum=1} = {}) {
   return rows;
 }
 export function captureSource({kind,video,clip,stills,followKnees=false,getLimb,captureWrists=false,
-  waitForFinalFrame=false,onFrame,onReset,onStatus,onError,onEnd}) {
+  waitForFinalFrame=false,getBodyRevision,onFrame,onReset,onStatus,onError,onEnd}) {
   let closed=false, epoch=0, id=0, busy=false, clock=0, callback, stream, objectURL, worker, timer, silence, finish;
   let endPending=false;
   const buffer=document.createElement('canvas'), ctx=buffer.getContext('2d',{alpha:false});
@@ -65,6 +65,7 @@ export function captureSource({kind,video,clip,stills,followKnees=false,getLimb,
     if (!w || !h || !Number.isFinite(t) || busy || closed) return;
     const gen=epoch, grabbed=performance.now(), scale=Math.min(1,640/Math.max(w,h));
     const limb = getLimb ? getLimb() : followKnees ? 'armsAndKnees' : 'bothArms';
+    const bodyRevision = getBodyRevision?.();
     busy=true;
     try {
       buffer.width=Math.max(1,Math.round(w*scale)); buffer.height=Math.max(1,Math.round(h*scale));
@@ -82,6 +83,7 @@ export function captureSource({kind,video,clip,stills,followKnees=false,getLimb,
         silence=setTimeout(()=>{if(!closed)reset('Camera frame gap. Waiting for fresh observations.');},400);
       }
       onFrame({id:sequence,t,xy:result.xy,pose:result.result,w:buffer.width,h:buffer.height,bitmap:buffer,
+        ...(getBodyRevision ? {bodyRevision} : {}),
         ...(getLimb ? {limbPaths:result.limbPaths} : {}),
         ...(captureWrists ? {wrists:result.wrists,armGeometry:result.armGeometry} : {})});
     } catch (error) {

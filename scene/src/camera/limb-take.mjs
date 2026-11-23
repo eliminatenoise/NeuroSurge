@@ -1,5 +1,7 @@
 // Each take lives in this page's memory. The camera passes only its selected
 // rig pose, frame time and projected arm points after side and tracking checks.
+import {trackingChoices} from './limb-pose.mjs';
+
 export const TAKE_LIMIT_MS = 8000;
 const groupedLimbs = {
   bothArms: ['leftArm', 'rightArm'],
@@ -38,6 +40,14 @@ function copyLimb(result, limb, pose) {
   const joints = pose.joints ??= {};
   for (const key of jointKeys[limb]) joints[key] = result.joints[key];
   return true;
+}
+
+export function poseForFollow(result, selection) {
+  const choice = Object.hasOwn(trackingChoices, selection) ? trackingChoices[selection] : null;
+  if (!result || !choice) return null;
+  const pose = {};
+  for (const limb of choice.parts) copyLimb(result, limb, pose);
+  return pose.leftArm || pose.joints ? pose : null;
 }
 
 // One timestamp covers both sides of a camera frame. A missing side contributes

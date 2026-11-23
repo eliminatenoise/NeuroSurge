@@ -103,9 +103,11 @@ test('the mirror waits for the final tracker result and preserves seeks and trac
     cancelVideoFrameCallback() { this.callback = null; },
   });
   const events = [];
+  let bodyRevision = 0;
   const capture = captureSource({
     kind: 'clip', video, clip: new Blob(['test']), waitForFinalFrame: true,
-    onFrame: frame => events.push(['frame', frame.t]),
+    getBodyRevision: () => bodyRevision,
+    onFrame: frame => events.push(['frame', frame.t, frame.bodyRevision]),
     onReset: () => events.push(['reset']),
     onStatus() {},
     onError: error => events.push(['error', error]),
@@ -115,12 +117,13 @@ test('the mirror waits for the final tracker result and preserves seeks and trac
     await setImmediate();
     video.callback(0, {mediaTime: .5, presentedFrames: 5});
     await setImmediate();
+    bodyRevision++;
     video.ended = true;
     video.dispatchEvent(new Event('ended'));
     assert.deepEqual(events, []);
     worker.onmessage({data: {type: 'pose', xy: []}});
     await setImmediate();
-    assert.deepEqual(events, [['frame', .5], ['end']]);
+    assert.deepEqual(events, [['frame', .5, 0], ['end']]);
 
     video.ended = false;
     video.callback(0, {mediaTime: .8, presentedFrames: 8});
@@ -131,7 +134,7 @@ test('the mirror waits for the final tracker result and preserves seeks and trac
     video.dispatchEvent(new Event('seeking'));
     worker.onmessage({data: {type: 'pose', xy: []}});
     await setImmediate();
-    assert.deepEqual(events, [['frame', .5], ['end'], ['reset']]);
+    assert.deepEqual(events, [['frame', .5, 0], ['end'], ['reset']]);
 
     video.callback(0, {mediaTime: .9, presentedFrames: 9});
     await setImmediate();
@@ -139,7 +142,7 @@ test('the mirror waits for the final tracker result and preserves seeks and trac
     video.dispatchEvent(new Event('ended'));
     worker.onmessage({data: {type: 'error', message: 'test failure'}});
     await setImmediate();
-    assert.deepEqual(events, [['frame', .5], ['end'], ['reset'], ['error', 'Local pose tracking failed: test failure']]);
+    assert.deepEqual(events, [['frame', .5, 0], ['end'], ['reset'], ['error', 'Local pose tracking failed: test failure']]);
   } finally {
     capture.stop();
   }

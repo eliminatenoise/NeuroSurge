@@ -1,18 +1,8 @@
 // Opt-in control. No camera, worker, or model asset is opened during construction.
 import {createLimbTake, createTakeTimeline, createVideoTakeWindow, TAKE_LIMIT_MS} from './camera/limb-take.mjs';
 import {createCameraPreview} from './camera/preview.mjs';
-import {calibratedPose, kneeJoints, trackedLimbs} from './camera/limb-pose.mjs';
+import {calibratedPose, kneeJoints, trackedLimbs, trackingChoices as choices} from './camera/limb-pose.mjs';
 import {captureSource, readKeyframes, MAX_LOCAL_VIDEO_BYTES} from './joint/media.mjs';
-const choices = {
-  rightArm: {name: 'Right arm', frame: 'Face the lens. Show both shoulders, your right elbow and wrist.', motion: 'Right shoulder and elbow', parts: ['rightArm']},
-  leftArm: {name: 'Left arm', frame: 'Face the lens. Show both shoulders, your left elbow and wrist.', motion: 'Left arm reach and elbow', parts: ['leftArm']},
-  bothArms: {name: 'Both arms', frame: 'Face the lens with both shoulders, elbows and wrists in view.', motion: 'Both arms', parts: ['leftArm', 'rightArm']},
-  leftLeg: {name: 'Left knee', frame: 'Turn partway sideways. Show shoulders, hips, your left knee and ankle.', motion: 'Left knee', parts: ['leftLeg']},
-  rightLeg: {name: 'Right knee', frame: 'Turn partway sideways. Show shoulders, hips, your right knee and ankle.', motion: 'Right knee', parts: ['rightLeg']},
-  armsAndKnees: {name: 'Both arms and knees', frame: 'Keep shoulders, elbows, wrists, hips and feet in view. Bend each knee where the lens can see it.', motion: 'Both arms and knees', parts: ['leftArm', 'rightArm', 'leftLeg', 'rightLeg']},
-  bothKnees: {name: 'Both knees', frame: 'Turn partway sideways. Keep your shoulders, hips, knees and feet in view. Show a clear bend on each side.', motion: 'Both knees', parts: ['leftLeg', 'rightLeg']}
-};
-
 const MAX_FRAME_AGE_MS = 1200;
 const FRAME_TIMEOUT_MS = 15000;
 const POLL_INTERVAL_MS = 90;

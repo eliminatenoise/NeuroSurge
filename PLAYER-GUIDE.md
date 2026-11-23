@@ -38,6 +38,10 @@ Press and drag on a limb to move the joint you pressed on. Press **Space** to gr
 4. Choose **Stop** in the Movement mirror or **Stop camera** in the recorder when you finish. Use **Close** or **Escape** to return from the Movement mirror. Your own mouse still controls the view of the game while the body follows the camera.
 5. To replay a movement, start video in the recorder. Choose **Record take** and **Finish take**. In the Command box, enter **replay my take** to move the simulated body through the saved poses. Takes stay in the current tab.
 
+In the Movement mirror, **Body follows** starts with both arms and knees. Choose one arm or knee, a pair, or both arms and knees. Choose **Forecast only** to keep the body under your game controls. A limb you turn off stops following at once. A limb you turn on waits for the next usable picture. If the panel is compact, open **Controls** to switch during playback.
+
+Use **Point to forecast** for a separate choice. The body can follow your right arm while the model forecasts where your left ankle will appear. A change to **Body follows** keeps the point forecast running. A change to **Point to forecast** starts a fresh forecast and keeps the selected limbs following. Pausing, seeking or finishing a video releases the tracked limbs. Timed pictures release them when the sequence ends. The last comparison stays on screen if one is available.
+
 The Movement mirror uses the five most recent pictures to forecast where a point will be 0.12 seconds later. “Forecast from frame 5” means the fifth picture was the last one used for that prediction. The score uses the point found in the image closest to the target time, up to 0.04 seconds either side. It gives the difference in pixels, the small units that make up the picture.
 
 The score says when the tracker finished processing the matching image before the model replied. It still uses the same match. If the tracker finds no matching point, the score says it is unavailable. A virtual movement is scored against a simulated point. Switching points, seeking a clip, or losing track starts a fresh comparison.

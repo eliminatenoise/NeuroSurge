@@ -1,6 +1,7 @@
 import {BONES,WRIST,TRACKED_POINTS,trackedPoint,observation,endpoint,observeTarget,parseGoal,virtualFrame,checkGoal,virtualUnits} from './landmark.mjs';
 import {captureSource,readKeyframes} from './media.mjs';
-import {calibratedPose, poseForSelection} from '../camera/limb-pose.mjs';
+import {calibratedPose, poseForSelection, trackedLimbs, trackingChoices} from '../camera/limb-pose.mjs';
+import {poseForFollow} from '../camera/limb-take.mjs';
 
 import {bindTouch, isTouchQuestion, touchPanel} from './touch.mjs';
 
@@ -16,8 +17,10 @@ const markup=`
 <label data-clip-wrap hidden>Local video <input data-clip type="file" accept="video/*"></label>
 <div data-stills-wrap hidden><label>Still images <input data-stills type="file" multiple accept="image/*"></label>
 <p data-names></p><label>Times in seconds, in file order <input data-times placeholder="0, .1, .2, .3, .4"></label></div>
+<label data-follow-wrap hidden>Body follows <select data-follow aria-describedby="joint-follow-help"></select></label>
+<p id="joint-follow-help" hidden>Choose what moves the avatar. Choose Forecast only to keep manual control. For live camera, show a clear bend in each knee you want the body to follow.</p>
 <label>Point to forecast <select data-side><option value="auto">Either visible wrist</option></select></label>
-<p id="joint-forecast-help" hidden>The on-screen body can follow visible arm movements and knee bends. For live camera control, keep your feet in view and show a clear bend in each knee you want to move. Choose a point to forecast where it may appear in the image 0.12 seconds later. Forecasts can include hips and ankles.</p>
+<p id="joint-forecast-help" hidden>The forecast can use a different point, including a hip or ankle. It shows where that point may appear in the image 0.12 seconds later.</p>
 <button data-start type="button">Start camera</button> <button data-stop type="button" disabled>Stop</button>
 <video muted playsinline hidden></video><p data-status role="status">Camera off. Images stay on this device.</p>
 </fieldset><form><label for="joint-outcome"><strong>F · Command box</strong></label>
@@ -38,14 +41,20 @@ export function bindJointView({host,onPose=()=>{},embedded=false,readRig=null,on
   const el=s=>node.querySelector(s), text=(s,v)=>{el(s).textContent=v;};
   const canvas=el('canvas'),ctx=canvas.getContext('2d'),video=el('video');
   const stageImage=document.createElement('canvas'), frameCtx=stageImage.getContext('2d',{alpha:false});
-  const source=el('[data-source]'),pointControl=el('[data-side]'),goalField=el('#joint-outcome');
+  const source=el('[data-source]'),pointControl=el('[data-side]'),followControl=el('[data-follow]'),goalField=el('#joint-outcome');
   const cameraFollow=el('[data-camera-follow]'), title=el('.joint-title h1');
   const startButton=el('[data-start]'), stopButton=el('[data-stop]'), sizeButton=el('[data-size]');
   const partList=new Intl.ListFormat('en');
   if (embedded) {
     title.tabIndex=-1;
+    el('[data-follow-wrap]').hidden=false;
+    el('#joint-follow-help').hidden=false;
     el('#joint-forecast-help').hidden=false;
     pointControl.setAttribute('aria-describedby','joint-forecast-help');
+    for (const choice of ['armsAndKnees','leftArm','rightArm','bothArms','leftLeg','rightLeg','bothKnees']) {
+      followControl.add(new Option(trackingChoices[choice].name, choice));
+    }
+    followControl.add(new Option('Forecast only', 'none'));
   }
   for (const [key, point] of Object.entries(TRACKED_POINTS)) {
     const title=point.label[0].toUpperCase()+point.label.slice(1);
@@ -54,6 +63,7 @@ export function bindJointView({host,onPose=()=>{},embedded=false,readRig=null,on
   const comparisons=new Set();
   let media=null,epoch=0,controller=new AbortController(),pending=null,busy=false,rows=[],latest=null,shown=null,schedule=null,modelHash=null,recognizer=null,active=false,simSide=null,lastIssue=-Infinity,activePoint=null;
   let lastComparisonIssue=-Infinity;
+  let lastBodyPose = null, bodyRevision = 0;
   if (!embedded) {el('[data-close]').hidden=true;el('[data-size]').hidden=true;}
   function compact(value) {
     const collapsed=embedded && value;
@@ -83,34 +93,40 @@ export function bindJointView({host,onPose=()=>{},embedded=false,readRig=null,on
       ctx.strokeStyle='#ffba61';ctx.lineWidth=3;ctx.beginPath();ctx.arc(...shown.pred,Math.max(6,w*.016),0,Math.PI*2);ctx.stroke();
     }
   }
-  function clearHistory(reason='') {
-    epoch++;controller.abort();controller=new AbortController();pending=null;rows=[];shown=null;latest=null;lastIssue=-Infinity;activePoint=null;
+  function clearHistory(reason='', {keepImage=false}={}) {
+    epoch++;controller.abort();controller=new AbortController();pending=null;rows=[];shown=null;lastIssue=-Infinity;activePoint=null;
+    if (!keepImage) latest=null;
     comparisons.clear();lastComparisonIssue=-Infinity;
-    text('[data-frame]',reason||'Waiting for movement.');text('[data-forecast]','');text('[data-score]','');onPose(null);paint();
+    text('[data-frame]',reason||'Waiting for movement.');text('[data-forecast]','');text('[data-score]','');paint();
+  }
+  function applyCapturePose(pose) {
+    lastBodyPose = pose;
+    onPose(pose);
+  }
+  function releaseCapturePose() {
+    bodyRevision++;
+    applyCapturePose(null);
   }
   function cameraMessage(message) {
     if (!cameraFollow.hidden && cameraFollow.textContent !== message) cameraFollow.textContent=message;
   }
-  function showCameraFollow(pose, observed) {
+  function showCameraFollow(pose, observed, kind) {
     if (cameraFollow.hidden) return;
-    const parts=[
-      ['left arm',Boolean(pose?.leftArm)],
-      ['right arm',Number.isFinite(pose?.joints?.r_elbow_flex)],
-      ['left knee',Number.isFinite(pose?.joints?.knee_ext_L)],
-      ['right knee',Number.isFinite(pose?.joints?.knee_ext_R)]
-    ];
-    const available=parts.filter(([,ready])=>ready).map(([name])=>name);
-    const missing=parts.filter(([,ready])=>!ready).map(([name])=>name);
-    const waitingForBend=[
-      ['left knee', 'knee_ext_L'],
-      ['right knee', 'knee_ext_R']
-    ].filter(([,key])=>Number.isFinite(observed?.joints?.[key]) && !Number.isFinite(pose?.joints?.[key]))
-      .map(([name])=>name);
-    const message=!available.length ? 'No arm or knee updates from the camera.' :
-      !missing.length ? 'Camera can update both arms and both knees.' :
-      'Camera can update the '+partList.format(available)+'. Waiting for the '+partList.format(missing)+'.';
-    cameraMessage(waitingForBend.length ?
-      message+' Show a clear bend in your '+partList.format(waitingForBend)+'.' : message);
+    const choice = trackingChoices[followControl.value];
+    if (!choice) {
+      cameraMessage('Manual body controls. Forecasts use the source images.');
+      return;
+    }
+    const accepted = trackedLimbs(pose), seen = trackedLimbs(observed);
+    const names = limbs => partList.format(limbs.map(limb => trackingChoices[limb].name.toLowerCase()));
+    const missing = choice.parts.filter(limb => !accepted.includes(limb));
+    const waitingForBend = kind==='camera'
+      ? missing.filter(limb => limb.endsWith('Leg') && seen.includes(limb)) : [];
+    const statements = [];
+    if (accepted.length) statements.push('Following '+names(accepted)+'.');
+    if (missing.length) statements.push('Waiting for '+names(missing)+'.');
+    if (waitingForBend.length) statements.push('Show a clear bend in your '+names(waitingForBend)+'.');
+    cameraMessage(statements.join(' '));
   }
   function stopDictation() {
     const speech=recognizer;
@@ -125,7 +141,7 @@ export function bindJointView({host,onPose=()=>{},embedded=false,readRig=null,on
     video.hidden=true;el('[data-stop]').disabled=true;
     cameraFollow.hidden=true;cameraFollow.textContent='';
     if(!keep){clearHistory();text('[data-goal]','');}
-    text('[data-status]','Capture stopped.');onPose(null);
+    text('[data-status]','Capture stopped.');releaseCapturePose();
   }
   async function forecast(task,X,signal) {
     const r=await fetch('/api/forecast',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({task,X}),signal});
@@ -197,7 +213,7 @@ export function bindJointView({host,onPose=()=>{},embedded=false,readRig=null,on
     if(frame.bitmap){stageImage.width=frame.w;stageImage.height=frame.h;frameCtx.drawImage(frame.bitmap,0,0);}
     latest={xy:frame.xy,t:frame.t,id:frame.id,w:frame.w,h:frame.h,photo:!!frame.bitmap};
     if (!present) text('[data-forecast]',(point?.label || 'Selected point')+' obscured. Forecast withheld.');
-    rows.push(latest);rows=rows.slice(-5);if(Object.hasOwn(frame,'pose'))onPose(frame.pose);
+    rows.push(latest);rows=rows.slice(-5);
     text('[data-frame]',kind+' · frame '+frame.id+' · '+frame.t.toFixed(3)+' s · '+frame.xy.filter(finitePair).length+(frame.bitmap?' tracked points':' simulated points'));
     for (const job of comparisons) {
       observeTarget(job, frame);
@@ -228,7 +244,7 @@ export function bindJointView({host,onPose=()=>{},embedded=false,readRig=null,on
       const clip=el('[data-clip]').files[0],stills=kind==='stills'?readKeyframes([...el('[data-stills]').files],el('[data-times]').value):null;
       if(kind==='clip' && !clip) throw Error('Choose a video first.');
       active=true;el('[data-stop]').disabled=false;compact(kind==='camera');video.hidden=kind!=='clip';video.controls=kind==='clip';
-      cameraFollow.hidden=!embedded || kind!=='camera';
+      cameraFollow.hidden=!embedded;
       if (kind==='camera') {
         const message='Waiting for camera permission.';
         text('[data-status]',message);
@@ -237,24 +253,32 @@ export function bindJointView({host,onPose=()=>{},embedded=false,readRig=null,on
       const cameraKnees=kind==='camera' && embedded ? {} : null;
       let lastCameraPoseAt=null;
       media=captureSource({kind,video,clip,stills,followKnees:embedded,waitForFinalFrame:true,
+        getBodyRevision:()=>kind==='clip' && video.paused ? null : bodyRevision,
         onFrame:f=>{
           let pose=f.pose;
           if (cameraKnees) {
             lastCameraPoseAt=performance.now();
             pose=calibratedPose(cameraKnees,'armsAndKnees',pose,lastCameraPoseAt);
           }
-          add({...f,pose},{camera:'Live camera estimate',clip:'Recorded video estimate',stills:'Still-image estimate'}[kind],pointControl.value);
-          showCameraFollow(pose,f.pose);
+          // Source images remain eligible for the forecast. The avatar uses
+          // only those acquired after its most recent control change.
+          if (f.bodyRevision===bodyRevision && (kind!=='clip' || !video.paused)) {
+            const selected = embedded ? poseForFollow(pose, followControl.value) : pose;
+            applyCapturePose(selected);
+            showCameraFollow(selected,f.pose,kind);
+          }
+          add(f,{camera:'Live camera estimate',clip:'Recorded video estimate',stills:'Still-image estimate'}[kind],pointControl.value);
         },
         onReset:reason=>{
           if (cameraKnees && lastCameraPoseAt!==null) {
             calibratedPose(cameraKnees,'armsAndKnees',null,lastCameraPoseAt);
           }
+          releaseCapturePose();
           clearHistory(reason);
-          cameraMessage('Waiting for a fresh camera image.');
+          cameraMessage('Waiting for a fresh source image.');
         },onStatus:m=>{
           text('[data-status]',m);
-          if (kind==='camera') cameraMessage('Waiting for the first camera image.');
+          cameraMessage('Waiting for the first source image.');
         },
         onError:m=>{
           stop();compact(false);text('[data-status]',m);
@@ -262,6 +286,8 @@ export function bindJointView({host,onPose=()=>{},embedded=false,readRig=null,on
         },
         onEnd:()=>{
           finishComparisons();
+          releaseCapturePose();
+          cameraMessage('Source ended. Manual body controls are available.');
           text('[data-status]',kind==='clip'?'Clip ended. Seek or replay to inspect another interval.':'All still images processed.');
           if(kind==='stills'){media?.stop();media=null;active=false;el('[data-stop]').disabled=true;}
         }});
@@ -290,7 +316,8 @@ export function bindJointView({host,onPose=()=>{},embedded=false,readRig=null,on
           lastRig=drawn;
         }
       } else {
-        add({xy,t:i*.06,id:i,w:640,h:480,pose},'Virtual arm',side);
+        onPose(pose);
+        add({xy,t:i*.06,id:i,w:640,h:480},'Virtual arm',side);
       }
       if(i>=19){
         const ready=lastRig && lastRig.t>first.t && drawnFresh(lastRig);
@@ -337,7 +364,26 @@ export function bindJointView({host,onPose=()=>{},embedded=false,readRig=null,on
   }
   el('form').addEventListener('submit',submit);
   goalField.addEventListener('input',stopDictation);
-  source.addEventListener('change',changeSource);pointControl.addEventListener('change',()=>clearHistory('Point changed. Building a new window.'));
+  source.addEventListener('change',changeSource);
+  pointControl.addEventListener('change',()=>clearHistory('Point changed. Building a new window.', {keepImage:true}));
+  followControl.addEventListener('change',()=>{
+    if (!media || simSide) return;
+    bodyRevision++;
+    // Keep any active channels that are still selected. Newly selected limbs
+    // wait for the next source image.
+    const selected = poseForFollow(lastBodyPose, followControl.value);
+    applyCapturePose(selected);
+    if (source.value==='clip' && video.paused) {
+      cameraMessage((video.ended ? 'Source ended' : 'Video paused')+'. Manual body controls are available.');
+    } else showCameraFollow(selected,null,source.value);
+  });
+  function releaseClipPose() {
+    if (!media || source.value!=='clip') return;
+    releaseCapturePose();
+    cameraMessage((video.ended ? 'Source ended' : 'Video paused')+'. Manual body controls are available.');
+  }
+  video.addEventListener('pause',releaseClipPose);
+  video.addEventListener('ended',releaseClipPose);
   const stillFiles=el('[data-stills]'), stillTimes=el('[data-times]');
   let hadStillFiles=false;
   function invalidateStillRun() {
