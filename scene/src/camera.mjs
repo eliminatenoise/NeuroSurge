@@ -1,7 +1,7 @@
 // Opt-in control. No camera, worker, or model asset is opened during construction.
 import {createLimbTake, createTakeTimeline, createVideoTakeWindow, TAKE_LIMIT_MS} from './camera/limb-take.mjs';
 import {createCameraPreview} from './camera/preview.mjs';
-import {trackedLimbs} from './camera/limb-pose.mjs';
+import {calibratedPose, kneeJoints, trackedLimbs} from './camera/limb-pose.mjs';
 import {captureSource, readKeyframes, MAX_LOCAL_VIDEO_BYTES} from './joint/media.mjs';
 const choices = {
   rightArm: {name: 'Right arm', frame: 'Face the lens. Show both shoulders, your right elbow and wrist.', motion: 'Right shoulder and elbow', parts: ['rightArm']},
@@ -13,52 +13,12 @@ const choices = {
   bothKnees: {name: 'Both knees', frame: 'Turn partway sideways. Keep your shoulders, hips, knees and feet in view. Show a clear bend on each side.', motion: 'Both knees', parts: ['leftLeg', 'rightLeg']}
 };
 
-// Preserve the player's view calibration across a momentary low-confidence frame.
-// No missing frame supplies a pose. A longer gap requires a new visible bend.
-const BRIEF_KNEE_GAP_MS = 600;
 const MAX_FRAME_AGE_MS = 1200;
 const FRAME_TIMEOUT_MS = 15000;
 const POLL_INTERVAL_MS = 90;
 const MIN_FRAME_INTERVAL_MS = 50;
 const WAITING_FOR_VIDEO = 'Camera on. Waiting for video.';
 const WAITING_FOR_CLIP_FRAME = 'Waiting for a current video frame.';
-const kneeJoints = {leftLeg: ['knee_ext_L'], rightLeg: ['knee_ext_R'], bothKnees: ['knee_ext_L', 'knee_ext_R'], armsAndKnees: ['knee_ext_L', 'knee_ext_R']};
-
-// Each knee must show two consecutive bends in the picture before its straight
-// projection can drive the game. A missing frame withholds only that knee.
-function calibratedPose(stored, selection, result, now) {
-  const keys = kneeJoints[selection];
-  if (!keys) return result;
-  // In the mixed mode a knee can wait for its second clear bend while the
-  // same frame already drives either arm. Copy only the surviving channels.
-  const pose = {}, joints = {};
-  if (selection === 'armsAndKnees') {
-    if (result?.leftArm) pose.leftArm = result.leftArm;
-    const rightArm = ['r_shoulder_abd', 'r_shoulder_flex', 'r_elbow_flex'];
-    if (rightArm.every(key => Number.isFinite(result?.joints?.[key]))) {
-      for (const key of rightArm) joints[key] = result.joints[key];
-    }
-  }
-  for (const key of keys) {
-    const state = stored[key] ??= {ready: false, bends: 0, missingSince: null};
-    const angle = result?.joints?.[key];
-    if (state.missingSince !== null && now - state.missingSince >= BRIEF_KNEE_GAP_MS) state.ready = false;
-    if (!Number.isFinite(angle)) {
-      state.missingSince ??= now;
-      state.bends = 0;
-      continue;
-    }
-    state.missingSince = null;
-    if (!state.ready) {
-      state.bends = -angle >= 45 ? state.bends + 1 : 0;
-      state.ready = state.bends >= 2;
-    }
-    if (state.ready) joints[key] = angle;
-  }
-  if (Object.keys(joints).length) pose.joints = joints;
-  return pose.leftArm || pose.joints ? pose : null;
-}
-
 function createTrackingFeedback(document) {
   const list = document.createElement('ul');
   list.setAttribute('role', 'list');

@@ -1,6 +1,6 @@
 import {BONES,WRIST,TRACKED_POINTS,trackedPoint,observation,endpoint,parseGoal,virtualFrame,checkGoal,virtualUnits} from './landmark.mjs';
 import {captureSource,readKeyframes} from './media.mjs';
-import {poseForSelection} from '../camera/limb-pose.mjs';
+import {calibratedPose, poseForSelection} from '../camera/limb-pose.mjs';
 
 import {bindTouch, isTouchQuestion, touchPanel} from './touch.mjs';
 
@@ -17,7 +17,7 @@ const markup=`
 <div data-stills-wrap hidden><label>Still images <input data-stills type="file" multiple accept="image/*"></label>
 <p data-names></p><label>Times in seconds, in file order <input data-times placeholder="0, .1, .2, .3, .4"></label></div>
 <label>Point to forecast <select data-side><option value="auto">Either visible wrist</option></select></label>
-<p id="joint-forecast-help" hidden>The on-screen body can follow visible arm movements and knee bends. For live tracking, keep your feet in view. Choose a point to see where it may appear in the image 0.12 seconds later. You can forecast hip and ankle points while the game controls those joints.</p>
+<p id="joint-forecast-help" hidden>The on-screen body can follow visible arm movements and knee bends. For live camera control, keep your feet in view and show a clear bend in each knee you want to move. Choose a point to forecast where it may appear in the image 0.12 seconds later. Forecasts can include hips and ankles.</p>
 <button data-start type="button">Start camera</button> <button data-stop type="button" disabled>Stop</button>
 <video muted playsinline hidden></video><p data-status role="status">Camera off. Images stay on this device.</p>
 </fieldset><form><label for="joint-outcome"><strong>F · Command box</strong></label>
@@ -88,7 +88,7 @@ export function bindJointView({host,onPose=()=>{},embedded=false,readRig=null,on
   function cameraMessage(message) {
     if (!cameraFollow.hidden && cameraFollow.textContent !== message) cameraFollow.textContent=message;
   }
-  function showCameraFollow(pose) {
+  function showCameraFollow(pose, observed) {
     if (cameraFollow.hidden) return;
     const parts=[
       ['left arm',Boolean(pose?.leftArm)],
@@ -98,9 +98,16 @@ export function bindJointView({host,onPose=()=>{},embedded=false,readRig=null,on
     ];
     const available=parts.filter(([,ready])=>ready).map(([name])=>name);
     const missing=parts.filter(([,ready])=>!ready).map(([name])=>name);
-    if (!available.length) cameraMessage('No arm or knee updates from the camera.');
-    else if (!missing.length) cameraMessage('Camera can update both arms and both knees.');
-    else cameraMessage('Camera can update the '+partList.format(available)+'. Waiting for the '+partList.format(missing)+'.');
+    const waitingForBend=[
+      ['left knee', 'knee_ext_L'],
+      ['right knee', 'knee_ext_R']
+    ].filter(([,key])=>Number.isFinite(observed?.joints?.[key]) && !Number.isFinite(pose?.joints?.[key]))
+      .map(([name])=>name);
+    const message=!available.length ? 'No arm or knee updates from the camera.' :
+      !missing.length ? 'Camera can update both arms and both knees.' :
+      'Camera can update the '+partList.format(available)+'. Waiting for the '+partList.format(missing)+'.';
+    cameraMessage(waitingForBend.length ?
+      message+' Show a clear bend in your '+partList.format(waitingForBend)+'.' : message);
   }
   function stopDictation() {
     const speech=recognizer;
@@ -196,12 +203,22 @@ export function bindJointView({host,onPose=()=>{},embedded=false,readRig=null,on
         text('[data-status]',message);
         cameraMessage(message);
       }
+      const cameraKnees=kind==='camera' && embedded ? {} : null;
+      let lastCameraPoseAt=null;
       media=captureSource({kind,video,clip,stills,followKnees:embedded,
         onFrame:f=>{
-          add(f,{camera:'Live camera estimate',clip:'Recorded video estimate',stills:'Still-image estimate'}[kind],pointControl.value);
-          showCameraFollow(f.pose);
+          let pose=f.pose;
+          if (cameraKnees) {
+            lastCameraPoseAt=performance.now();
+            pose=calibratedPose(cameraKnees,'armsAndKnees',pose,lastCameraPoseAt);
+          }
+          add({...f,pose},{camera:'Live camera estimate',clip:'Recorded video estimate',stills:'Still-image estimate'}[kind],pointControl.value);
+          showCameraFollow(pose,f.pose);
         },
         onReset:reason=>{
+          if (cameraKnees && lastCameraPoseAt!==null) {
+            calibratedPose(cameraKnees,'armsAndKnees',null,lastCameraPoseAt);
+          }
           clearHistory(reason);
           cameraMessage('Waiting for a fresh camera image.');
         },onStatus:m=>{

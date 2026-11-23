@@ -18,6 +18,45 @@ export function trackedLimbs(pose) {
   ].filter(Boolean);
 }
 
+// A short loss releases the knee while retaining its starting calibration.
+const BRIEF_KNEE_GAP_MS = 600;
+export const kneeJoints = {leftLeg: ['knee_ext_L'], rightLeg: ['knee_ext_R'], bothKnees: ['knee_ext_L', 'knee_ext_R'], armsAndKnees: ['knee_ext_L', 'knee_ext_R']};
+
+// Each knee must show two consecutive bends in the picture before its straight
+// projection can drive the game. A missing frame withholds only that knee.
+export function calibratedPose(stored, selection, result, now) {
+  const keys = kneeJoints[selection];
+  if (!keys) return result;
+  // In the mixed mode a knee can wait for its second clear bend while the
+  // same frame already drives either arm. Copy only the surviving channels.
+  const pose = {}, joints = {};
+  if (selection === 'armsAndKnees') {
+    if (result?.leftArm) pose.leftArm = result.leftArm;
+    const rightArm = ['r_shoulder_abd', 'r_shoulder_flex', 'r_elbow_flex'];
+    if (rightArm.every(key => Number.isFinite(result?.joints?.[key]))) {
+      for (const key of rightArm) joints[key] = result.joints[key];
+    }
+  }
+  for (const key of keys) {
+    const state = stored[key] ??= {ready: false, bends: 0, missingSince: null};
+    const angle = result?.joints?.[key];
+    if (state.missingSince !== null && now - state.missingSince >= BRIEF_KNEE_GAP_MS) state.ready = false;
+    if (!Number.isFinite(angle)) {
+      state.missingSince ??= now;
+      state.bends = 0;
+      continue;
+    }
+    state.missingSince = null;
+    if (!state.ready) {
+      state.bends = -angle >= 45 ? state.bends + 1 : 0;
+      state.ready = state.bends >= 2;
+    }
+    if (state.ready) joints[key] = angle;
+  }
+  if (Object.keys(joints).length) pose.joints = joints;
+  return pose.leftArm || pose.joints ? pose : null;
+}
+
 // The preview draws only the three points used for an accepted limb.
 export function observedLimbPaths(points, pose) {
   return Object.fromEntries(trackedLimbs(pose).map(limb => [

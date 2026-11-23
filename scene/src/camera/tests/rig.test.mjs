@@ -25,7 +25,24 @@ test('missing, back-facing, off-frame, collapsed and low-visibility views releas
   }
 });
 
-import {poseForLimb} from '../limb-pose.mjs';
+import {calibratedPose, poseForLimb} from '../limb-pose.mjs';
+
+test('knees start and recover separately while an accepted arm keeps its pose', () => {
+  const state = {};
+  const arm = {r_shoulder_abd: 25, r_shoulder_flex: 0, r_elbow_flex: 12};
+  const frame = (now, knees = {}) =>
+    calibratedPose(state, 'armsAndKnees', {joints: {...arm, ...knees}}, now).joints;
+  assert.deepEqual(frame(0, {knee_ext_L: -15, knee_ext_R: -12}), arm);
+  assert.deepEqual(frame(50, {knee_ext_L: -45, knee_ext_R: -5}), arm);
+  assert.deepEqual(frame(100, {knee_ext_L: -46, knee_ext_R: -55}), {...arm, knee_ext_L: -46});
+  assert.deepEqual(frame(150, {knee_ext_L: -10, knee_ext_R: -56}), {...arm, knee_ext_L: -10, knee_ext_R: -56});
+  assert.deepEqual(frame(200, {knee_ext_R: -7}), {...arm, knee_ext_R: -7});
+  assert.deepEqual(frame(799, {knee_ext_L: -8, knee_ext_R: -6}), {...arm, knee_ext_L: -8, knee_ext_R: -6});
+  assert.deepEqual(frame(850, {knee_ext_R: -5}), {...arm, knee_ext_R: -5});
+  assert.deepEqual(frame(1450, {knee_ext_L: -11, knee_ext_R: -4}), {...arm, knee_ext_R: -4});
+  assert.deepEqual(frame(1500, {knee_ext_L: -65, knee_ext_R: -3}), {...arm, knee_ext_R: -3});
+  assert.deepEqual(frame(1550, {knee_ext_L: -66, knee_ext_R: -2}), {...arm, knee_ext_L: -66, knee_ext_R: -2});
+});
 
 test('each side uses its own projected joints with square pixels and signed game knee flexion', () => {
   const pose = [];
