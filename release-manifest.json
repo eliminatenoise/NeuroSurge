@@ -104,13 +104,13 @@
     },
     {
       "path": "README.md",
-      "bytes": 3408,
-      "sha256": "f6c7cc78216e39fafc1d010caf4faf5bf92cd8c2153badd4841b037afc28448c"
+      "bytes": 3441,
+      "sha256": "2d795a61253f2ed9b64cc91aa386ab7230b4fc3e171a60f62c2ec84d4f3fc2d6"
     },
     {
       "path": "START.html",
-      "bytes": 5408,
-      "sha256": "79e13a337d8a72724704e06b334977acdbf867774bd0324ffa0858786e8f2cca"
+      "bytes": 5859,
+      "sha256": "8a9c53ab9fa94db643cb3803f96e420fddef4da8d0b47caab73dfaef8b522701"
     },
     {
       "path": "assets/hand-search/CDLA-Permissive-2.0.txt",
