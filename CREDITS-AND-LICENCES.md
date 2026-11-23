@@ -425,6 +425,7 @@ are typical and simplified, laid by rule over this atlas. They are not traced fr
 ## Camera and recording sources
 
 - NeuroSurge bundles Google’s MediaPipe Pose Landmarker Lite and Tasks Vision runtime under Apache 2.0. The camera estimates arm and knee poses in the browser. [Camera and test-image sources](scene/src/camera/README.md#sources-and-licences) · [Apache 2.0 licence and notices](scene/src/camera/vendor/LICENSE)
+- The Movement mirror’s browser forecast uses the released NeuroTranslate 0.0 landmark and next-unit parameters. [Original checkpoint, recording sources and licences](scene/src/joint/model/NOTICE.html)
 - The whole-body marker replays use Carnegie Mellon Graphics Lab trials 02_06, 13_11 and 132_23. Funding came from NSF EIA-0196217. CMU permits copying, modifying and redistributing the data, including in commercial products. Its terms prohibit direct resale of the data, including converted copies. [CMU terms](https://mocap.cs.cmu.edu/faqs.php)
 - Hand frames and descriptions from HoloAssist retain CDLA-Permissive-2.0. The source page describes how the recording was converted. [Hand data and credits](assets/hand-search/hand-source-credits.html)
 - The rat and wrist replays and model comparisons carry the source terms and derived-data credits listed with each recording. The cortex summaries retain CC BY-SA 4.0 and the archive’s participant-privacy terms. [Recording and forecast credits](ACTIVITY-MAP.md)

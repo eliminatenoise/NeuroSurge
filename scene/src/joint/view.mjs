@@ -6,7 +6,7 @@ import {createVideoTakeWindow, pictureOffsetMs, poseForFollow} from '../camera/l
 import {bindTouch, isTouchQuestion, touchPanel} from './touch.mjs';
 
 const markup=`
-<header class="joint-title"><div><small>NeuroSurge · local experiment</small><h1>Movement mirror</h1></div><div><button data-size type="button">Compact</button> <button data-close type="button">Close</button></div></header>
+<header class="joint-title"><div><h1>Movement mirror</h1></div><div><button data-size type="button">Compact</button> <button data-close type="button">Close</button></div></header>
 <div class="joint-layout"><div class="joint-stage">
 <canvas width="640" height="480" aria-label="Frontal field with the tracked skeleton and the forecast for the selected point"></canvas>
 <p class="joint-key"><span>● Observed or simulated</span><span>◎ Forecast +120 ms</span></p>
@@ -32,15 +32,17 @@ const markup=`
 ${touchPanel}
 <details><summary>Virtual brain</summary><p>Three invented unit histories. Which unit would the model rank first for the next single-spike bin?</p><button data-brain type="button">Score virtual units</button><output data-brain-output></output></details>
 <details><summary>Measurements and limits</summary><p>The tracker estimates 2D joint positions in each source image. The model uses the last five frames to forecast the selected point 120 ms ahead. The score uses the nearest tracked frame within 40 ms of the target time, even when the reply arrives later. Simulated movement is compared with a simulated frame.</p><p>The model trained on tracked animal movement. Human camera accuracy remains unmeasured. Sparse keyframes and tracking losses can leave gaps. No frames are interpolated. Camera images contain no neural recording. The 3D game checks the drawn wrist and shoulder in world metres. The standalone two-link arm checks its drawing in pixels.</p></details>
-<p data-model>Checkpoint pending.</p>
+<p data-model></p>
 </div></div>`;
 const finitePair=p=>Array.isArray(p)&&p.length===2&&p.every(Number.isFinite);
-export function bindJointView({host,onPose=()=>{},embedded=false,readRig=null,onClose=()=>{},onSaveTake=null,onOpenCommand=null}) {
+export function bindJointView({host,onPose=()=>{},embedded=false,readRig=null,onClose=()=>{},onSaveTake=null,onOpenCommand=null,backend='local-model'}) {
   const node=document.createElement('section');
   node.className='joint-view'+(embedded?' joint-overlay':'');
   node.setAttribute('aria-label','Movement mirror'); node.innerHTML=markup;
   host.append(node);
   const el=s=>node.querySelector(s), text=(s,v)=>{el(s).textContent=v;};
+  const browserModel = backend === 'browser';
+  text('[data-model]', browserModel ? 'NeuroTranslate 0.0 runs in this browser.' : 'Waiting for the local NeuroTranslate model.');
   const canvas=el('canvas'),ctx=canvas.getContext('2d'),video=el('video');
   const stageImage=document.createElement('canvas'), frameCtx=stageImage.getContext('2d',{alpha:false});
   const source=el('[data-source]'),pointControl=el('[data-side]'),followControl=el('[data-follow]'),goalField=el('#joint-outcome');
@@ -193,12 +195,21 @@ export function bindJointView({host,onPose=()=>{},embedded=false,readRig=null,on
     text('[data-status]','Capture stopped.');releaseCapturePose();
   }
   async function forecast(task,X,signal) {
-    const r=await fetch('/api/forecast',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({task,X}),signal});
-    if(!r.ok) throw Error('Local forecast service returned '+r.status+'.');
-    const d=await r.json();
+    let d;
+    if (browserModel) {
+      const { predictBrowserTask } = await import('./browser-forecast.mjs');
+      signal.throwIfAborted();
+      d = predictBrowserTask(task, X);
+    } else {
+      const r=await fetch('/api/forecast',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({task,X}),signal});
+      if(!r.ok) throw Error('Local forecast service returned '+r.status+'.');
+      d=await r.json();
+    }
+    signal.throwIfAborted();
     if(d.task!==task || !/^[a-f0-9]{64}$/.test(d.checkpoint_sha256) || (modelHash && d.checkpoint_sha256!==modelHash)) throw Error('The selected checkpoint changed. Reopen this session.');
     modelHash=d.checkpoint_sha256;
-    text('[data-model]','Checkpoint '+modelHash);node.dataset.checkpoint=modelHash;
+    text('[data-model]', (browserModel ? 'Browser checkpoint ' : 'Local checkpoint ') + modelHash);
+    node.dataset.checkpoint=modelHash;
     return d.prediction[0];
   }
   async function drain() {
@@ -397,12 +408,12 @@ export function bindJointView({host,onPose=()=>{},embedded=false,readRig=null,on
     function drawnFresh(snapshot){return performance.now()/1000-snapshot.t<.35;}
     tick();
   }
-  const touch = bindTouch(node, forecast);
+  const touch = browserModel ? null : bindTouch(node, forecast);
   async function askTouch(words) {
     node.hidden = false;
     compact(false);
     goalField.value = words;
-    const supported = await touch.run();
+    const supported = await touch?.run();
     text('[data-language]', supported ? 'Using the invented plate load and earlier nerve activity below.' :
       'Open the Touch study with this game to forecast fingertip spikes.');
   }
@@ -488,7 +499,7 @@ export function bindJointView({host,onPose=()=>{},embedded=false,readRig=null,on
     takeStatus.hidden = true;
     takeCommand.hidden = true;
   }
-  const close=()=>{touch.clear();stop();hideTakeMessage();if(embedded){node.hidden=true;onClose();}};
+  const close=()=>{touch?.clear();stop();hideTakeMessage();if(embedded){node.hidden=true;onClose();}};
   el('[data-close]').onclick=close;
   function leave(){
     stop();
@@ -517,6 +528,6 @@ export function bindJointView({host,onPose=()=>{},embedded=false,readRig=null,on
   const params=new URLSearchParams(location.search);
   if(params.get('goal')==='above_shoulder' && ['left_hand','right_hand'].includes(params.get('effector')))goalField.value='Raise my '+params.get('effector').split('_')[0]+' hand above my shoulder';
   changeSource();if(embedded)node.hidden=true;
-  return {askTouch,open(){node.hidden=false;compact(false);el('[data-start]').focus();},run(intent,words){node.hidden=false;goalField.value=words||('Raise my '+intent.side+' hand above my shoulder');runGoal(intent);},stop,close,get active(){return active;},get visible(){return !node.hidden;},
-    dispose(){touch.clear();stop();document.removeEventListener('visibilitychange',visibility);window.removeEventListener('pagehide',leave);window.removeEventListener('keydown',keys);window.removeEventListener('keydown',closeFocusedMirror,true);node.remove();}};
+  return {askTouch: browserModel ? null : askTouch,open(){node.hidden=false;compact(false);el('[data-start]').focus();},run(intent,words){node.hidden=false;goalField.value=words||('Raise my '+intent.side+' hand above my shoulder');runGoal(intent);},stop,close,get active(){return active;},get visible(){return !node.hidden;},
+    dispose(){touch?.clear();stop();document.removeEventListener('visibilitychange',visibility);window.removeEventListener('pagehide',leave);window.removeEventListener('keydown',keys);window.removeEventListener('keydown',closeFocusedMirror,true);node.remove();}};
 }

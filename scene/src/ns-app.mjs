@@ -61,7 +61,7 @@
 import { DEG, clamp, transformPoint, transformDirection, rotationTranspose } from './ns-math.mjs';
 import * as WholeArmDisplay from './ns-whole-arm-display.mjs';
 import { bindActionChat } from './ns-action-chat.mjs';
-import { isLocalModelMount } from './joint/route.mjs';
+import { movementMirrorBackend } from './joint/route.mjs';
 import { bindActivityMap } from './activity/map.mjs';
 import {bindJointView} from './joint/view.mjs';
 import { createCameraCapture } from './camera.mjs';
@@ -6738,7 +6738,7 @@ export function start(params = {}) {
   const isPlaceholder = placeholder === true;
   const qaEnabled = qa === true;
   const useShell = Boolean(shellRoot);
-  const hasMovementMirror = isLocalModelMount(view.location);
+  const mirrorBackend = movementMirrorBackend(view.location);
   hud.render(hudStatic({ placeholder: isPlaceholder, shell: useShell }));
 
   const perf = view.performance && typeof view.performance.now === 'function' ? view.performance : null;
@@ -7694,7 +7694,7 @@ export function start(params = {}) {
     // Context loss freezes drawing without changing shell mode. Discard input on both flag transitions;
     // lastMs remains unchanged here so the existing wall-clock pulse aging is retained on restoration.
     if (before.contextLost !== after.contextLost) cancelPendingGameplay(after.contextLost ? 'context-lost' : 'context-restored');
-    if (hasMovementMirror && after.contextLost && !before.contextLost) {
+    if (mirrorBackend && after.contextLost && !before.contextLost) {
       // Loss can arrive with C open and idle, a modal above the notice, or the pointer captured.
       jointView?.close();
       for (const dialog of [chatDialog, activityDialog]) {
@@ -8065,9 +8065,9 @@ export function start(params = {}) {
       onPlay: requestPlay,
       onPlayUnlocked: () => dispatch({ type: 'playUnlocked' }),
       onReload: () => { try { view.location.reload(); } catch { /* nothing else to do */ } },
-      onMovementMirror: hasMovementMirror ? () => {
+      onMovementMirror: mirrorBackend ? () => {
         // Stop camera tracks, pending model requests, the draw loop and owned asset streams.
-        try { stop(); } finally { view.location.replace('/game/movement-mirror.html'); }
+        try { stop(); } finally { view.location.replace('../../movement-mirror.html'); }
       } : null,
       onResetBody: resetBody,
       onResetBrain: resetBrainView,
@@ -8111,7 +8111,7 @@ export function start(params = {}) {
   const activityOpen = doc.getElementById?.('ns-activity-open');
   const chatDialog = doc.getElementById?.('ns-action-chat');
   const chatOpen = doc.getElementById?.('ns-chat-open');
-  if (hasMovementMirror) {
+  if (mirrorBackend) {
     // A stalled renderer may never deliver the next animation frame. Use the actual canvas lifecycle.
     listen(canvas, 'webglcontextlost', () => dispatch({ type: 'contextLost', atMs: clockMs() }));
     listen(canvas, 'webglcontextrestored', () => dispatch({ type: 'contextRestored' }));
@@ -8139,8 +8139,9 @@ export function start(params = {}) {
 
     motionCamera = createCameraCapture({host:doc.body,onPose:applyTrackedPose,
       returnFocus() {if (gameReady() && shellIsPlaying(shellState)) canvas.focus({preventScroll:true});}});
-    if (hasMovementMirror) {
+    if (mirrorBackend) {
       jointView = bindJointView({host:doc.body,onPose:applyTrackedPose,readRig:()=>readJointRig?.(),embedded:true,
+        backend:mirrorBackend,
         onSaveTake:(take,source)=>motionCamera.saveTake(take,source),
         onOpenCommand:chatOpen ? ()=>chatOpen.click() : null,
         onClose(){canvas.focus({preventScroll:true});}});

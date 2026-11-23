@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NeuroTranslate 0.0 forecast sources</title>
+  <style>html{color-scheme:light dark;font:1rem/1.65 system-ui,sans-serif}main{max-width:45rem;margin:2rem auto;padding:0 1rem;overflow-wrap:anywhere}h1{line-height:1.15}a{text-underline-offset:.18em}</style>
+</head>
+<body><main>
+  <h1>NeuroTranslate 0.0 forecasts in the Movement mirror</h1>
+  <p><code>weights.mjs</code> contains the parameters for <code>landmark_motion</code> and <code>rat_next_unit</code>. The original <code>joint_alpha/neurotranslate.npz</code> has SHA-256 <code>f58dec8857015d84962aeb00259badf71b42d9bf7105cec35851a87826ed57d6</code>. The export copies the original 32-bit floating-point values. It reuses the shared attention block, input projections and output heads for those tasks. <a href="https://raw.githubusercontent.com/eliminatenoise/NeuroTranslation/main/models/neurotranslate-0.0.zip">Published model download</a> · <a href="https://github.com/eliminatenoise/NeuroTranslation/tree/46a0a90e8ae43c67774c530de97a523178671693/models/neurotranslate-0.0/joint_alpha">Original inference and recording notices</a></p>
+  <p>The point forecast estimates x and y displacement from tracked positions in five earlier images. The fit uses optical animal tracks and scales distances to the size of the body in the last image. It includes mouse and gerbil recordings from the SLEAP collection and uses the other sources listed in the original preparation. Human video accuracy remains unmeasured. <a href="https://github.com/eliminatenoise/NeuroTranslation/blob/46a0a90e8ae43c67774c530de97a523178671693/models/neurotranslate-0.0/joint_alpha/inputs/sources/landmark/SOURCES.md">Source credits, transformations and recordings</a> · <a href="SLEAP-LICENSE.txt">SLEAP data terms</a></p>
+  <p>The next-unit fit uses Justin Shin and Shantanu Jadhav’s <em>Single Day W-Track Learning</em> recordings. The browser example supplies invented spike histories. The source counts activity through the last observed bin and asks which local sorted unit fires next when one source fires alone. <a href="https://doi.org/10.48324/dandi.000978/0.240511.0307">Original recordings</a> · <a href="CC-BY-4.0.txt">CC BY 4.0</a></p>
+  <p>The project’s browser inference and export code are CC0. Keep the applicable original recording and derived-parameter notices with redistribution. This bundle contains fitted parameters and scaling statistics.</p>
+</main></body></html>

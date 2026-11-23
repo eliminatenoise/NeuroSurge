@@ -142,11 +142,11 @@ export function bindActionChat({ dialog, trigger, canvas, canOpen, pause, resume
   const localSpeech = Boolean(Recognition && 'processLocally' in Recognition.prototype);
   const unavailable = 'Voice is unavailable on this device. Type your movement.';
   const stoppedMessage = 'Dictation stopped. Type your movement or try again.';
-  const localGoalHelp = 'This goal uses the local NeuroTranslate model. Open the local model launcher, or enter a movement such as “Bend my right elbow”.';
+  const localGoalHelp = 'Open the game over HTTPS or use the local NeuroTranslate launcher for movement goals.';
   const localTouchHelp = 'This forecast uses the local fingertip touch launcher. Open that launcher to run it.';
   for (const tip of dialog.querySelectorAll('[data-checkpoint-required]')) tip.hidden = !runJointGoal;
   const localModelLink = dialog.querySelector('[data-start-local-model]');
-  if (localModelLink) localModelLink.hidden = Boolean(runJointGoal);
+  if (localModelLink) localModelLink.hidden = Boolean(askTouch);
   const named = bindNamedTakes(dialog.querySelector('[data-named-takes]'), getLatestTake);
   let recognition = null;
   let manifestRequest;

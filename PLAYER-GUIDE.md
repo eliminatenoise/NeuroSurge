@@ -29,7 +29,7 @@ Press and drag on a limb to move the joint you pressed on. Press **Space** to gr
 
 ## Follow a movement or save a take
 
-1. Press **C** to open the recorder in the standalone game. When you play through the local model launcher, **C** opens the **Movement mirror**. To use the recorder there, choose **Record a limb take** in the game toolbar.
+1. Press **C** to open the **Movement mirror** in Full or Lite. The browser does the tracking and the forecasting. The camera is off until you choose **Start camera**. To use the separate recorder, choose **Record a limb take** in the game toolbar.
 2. In the recorder, use **Follow** to choose an arm, a knee, a pair, or both arms and knees. Choose your own left or right. You can make this choice before or during capture. If you are recording, choose **Finish take** before switching limbs to keep the take. Use the arrow keys while **Follow** has focus. Press **Tab** to reach **Start camera** when you are ready.
 3. Select **Start camera** and allow video if the browser asks. Video stays on your device. The recorder shows your own image as a mirror. **Following** and a green line show which limbs the recorder can use to move the virtual body. An arm line joins the estimated shoulder, elbow and wrist. A leg line joins the estimated hip, knee and ankle. If you see **Show a bend**, turn partway sideways and bend that knee so the camera can see the angle. If you see **Bring into view**, make room for that arm or leg in the picture and check that its joints are visible.
 
@@ -54,11 +54,11 @@ The recorder checks one picture at a time. When the browser reports new pictures
 
 When the browser can tell the game that new pictures have stopped arriving, the green lines disappear after about 1.2 seconds. The recorder says **Camera on. Waiting for video.** You can still move the virtual body with the game controls. The recorder can follow you again when new pictures arrive. It turns off the camera after roughly 15 seconds without a new picture. Select **Start camera** to try again. A motionless arm can keep tracking as long as the camera keeps sending pictures. Some older browsers only report how long the video has played. If their camera picture freezes and the lines stay on, select **Stop camera**, then **Start camera**.
 
-A local model can also forecast a tracked point or answer a supported movement goal. It receives point histories or game inputs from the interface. The movement shown on screen, the points estimated from video, and the model's forecast are three distinct readings.
+The browser uses the saved NeuroTranslate 0.0 model for these point forecasts. The model learned from video tracks of animals. The game has yet to measure how accurate its forecasts are on footage of people. You can also press **F** and type **raise my right hand above my shoulder**. The game moves the virtual arm, reports where it finished and shows a separate forecast. The **Virtual brain** section uses invented spike histories to show how the model ranks the next possible spike source. The separate fingertip touch study uses the [local model launcher](START.html#local-model). [Forecast sources and reuse](scene/src/joint/model/NOTICE.html)
 
 ## Follow a video file
 
-1. In the standalone game, press **C** and choose **Recorded video** under **Source**. Under **Follow**, select the visible arm or knee you want the virtual body to follow. You can also select both arms, both knees, or both pairs.
+1. Choose **Record a limb take** in the game toolbar and select **Recorded video** under **Source**. Under **Follow**, select the visible arm or knee you want the virtual body to follow. You can also select both arms, both knees, or both pairs.
 2. Choose a file under **Local video**, then select **Play video**. Use a file up to about 537 MB. Your browser must be able to play it and tell the game when each new picture appears. The file stays on this device. The game shows the picture as it was saved, so a mirrored recording can reverse left and right.
 3. **Following** and a green line show which limbs the game can use. **Waiting for a bend** means the game can see the knee and needs a clearer starting bend. **No usable pose** means the joints in that picture could not be used. Try a part of the video where you can see more of the limb.
 4. Pause or move to another time with the video controls. The previous tracking clears. The game also clears a result that falls 1.2 seconds or more behind playback. Choose **Stop video** to stop early or press **F** to stop and open the Command box. You can play the selected file again after it ends or you choose Stop video.
@@ -69,13 +69,13 @@ When you seek, change limbs or open a new file, the game starts a fresh window f
 
 To save one limb, it needs to be tracked in at least two pictures. For **Both arms** or **Both knees**, each side needs two. For **Both arms and knees**, one limb appearing in two tracked pictures is enough. The take can include the other limbs when the tracker sees them.
 
-With the local model launcher, choose **Record a limb take** for the recorder controls above. You can also use **Save take** in the Movement mirror while following a saved video or after reading timed pictures.
+You can also press **C** and use **Save take** in the Movement mirror while following a saved video or after reading timed pictures.
 
 The tracker estimates joints in the picture. The virtual body moves from those estimates. The game simulates its electrical activity.
 
 ## Make a take from timed pictures
 
-1. Press **C** and choose **Timed pictures** under **Source**. In the local model game, use **Record a limb take** to open the recorder. Choose the limb or pair you want the body to follow.
+1. Choose **Record a limb take** in the game toolbar and choose **Timed pictures** under **Source**. Choose the limb or pair you want the body to follow.
 2. Add two to 256 local pictures. Use pictures up to 32 MiB each. Enter one time in seconds per picture in the displayed order. Use zero or positive times. For example, `0, 0.5, 1.25` gives a half-second first step and a longer second step. You can leave the times field blank and use filenames such as `0.jpg`, `0.5.jpg` and `1.25.jpg`. Use different times for each picture and keep the first and last within eight seconds of each other.
 3. Choose **Track pictures** and wait for the result. A take needs two tracked pictures for a single limb, two per side for a pair, or two from any one limb in **Both arms and knees**. For knees, start with two pictures that show a clear bend of at least 45 degrees and add another clear view so there are enough poses to save. Use **Save picture take** once it appears.
 4. Press **F** and type **replay my take**. Save a name under **Named takes** to call the movement back later in this tab. The virtual body moves between the poses from the pictures. If a timed picture loses a limb, the game releases that limb at that time. Comparisons and forecasts use the tracked pictures at their assigned times.

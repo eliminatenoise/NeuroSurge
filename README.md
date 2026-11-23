@@ -1,6 +1,6 @@
 # NeuroSurge
 
-**[Play Full](https://eliminatenoise.github.io/NeuroSurge/scene/example/preview.html) · [Play Lite](https://eliminatenoise.github.io/NeuroSurge/scene/example/preview.html?edition=lite) · [Download Lite offline preview](https://github.com/eliminatenoise/NeuroSurge/releases/download/lite-mirror-replay-2026-11-24/NeuroSurge-Lite.zip) · [Open the game menu](https://eliminatenoise.github.io/NeuroSurge/) · [Download launchers](https://eliminatenoise.github.io/NeuroSurge/START.html)**
+**[Play Full](https://eliminatenoise.github.io/NeuroSurge/scene/example/preview.html) · [Play Lite](https://eliminatenoise.github.io/NeuroSurge/scene/example/preview.html?edition=lite) · [Download Lite offline preview](https://github.com/eliminatenoise/NeuroSurge/releases/download/lite-browser-forecast-2026-11-24/NeuroSurge-Lite.zip) · [Open the game menu](https://eliminatenoise.github.io/NeuroSurge/) · [Download launchers](https://eliminatenoise.github.io/NeuroSurge/START.html)**
 
 **[Open the interactive project browser](https://eliminatenoise.github.io/NeuroTranslation/projects/?project=neurosurge)** · [Technical index](https://eliminatenoise.github.io/NeuroTranslation/projects/technical.html?project=neurosurge)
 
@@ -14,9 +14,9 @@ NeuroSurge is a 3D browser game. Aim at a coloured area of the motor strip, the 
 
 **F** opens the Command box. Type **bend my right elbow** and choose **Move**. Where your browser supports on-device dictation, **Use voice** fills in the words for you to review.
 
-**C** opens camera controls. Choose **Start camera** to let the virtual body follow visible arms and knees. Video stays in your browser. Choose **Recorded video** to follow a file instead. From **Live camera**, you can save a short take of the estimated poses and play it back with the camera off.
+In this build, **C** opens the Movement mirror. Choose **Start camera** to let the virtual body follow visible arms and knees, or choose a local video or timed pictures. The included NeuroTranslate 0.0 model forecasts a tracked point in the browser. The images stay on your device. Choose **Save take**, then press **F** and enter **replay my take** to play it with the camera off.
 
-Open `START.html` in the locally running game and follow **Open the local NeuroTranslate model** for movement goals and forecasts. In that version, **Save take** in the Movement mirror keeps recent tracked movement for replay through **F**.
+Use the regular game launcher for these controls. Open `START.html` and follow **Open the local NeuroTranslate model** for the separate fingertip touch study. [Checkpoint and source details](scene/src/joint/model/NOTICE.html)
 
 ## Choose an edition
 

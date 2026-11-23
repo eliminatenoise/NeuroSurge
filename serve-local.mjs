@@ -64,8 +64,8 @@ export const SECURITY_HEADERS = Object.freeze({
   'Cache-Control': 'no-cache'
 });
 
-// Only the playable page can ask for devices. Permission is still granted by
-// the browser on the user's device. The pose worker compiles its local WASM.
+// Permit devices on the game and the standalone Movement mirror. Both still
+// request permission in the browser. The pose worker compiles its local WASM.
 const PLAYABLE_HEADERS = Object.freeze({
   ...SECURITY_HEADERS,
   'Content-Security-Policy': `${SECURITY_HEADERS['Content-Security-Policy']}; media-src 'self' blob:`,
@@ -172,7 +172,8 @@ export function createHandler({ root, allowedHosts = null, log = () => {} }) {
       if (!st.isFile()) { send(res, 404, 'Not found'); return done(404); }
       const validators = { ETag: etagFor(st), 'Last-Modified': new Date(Math.floor(st.mtimeMs / 1000) * 1000).toUTCString() };
       let headers = SECURITY_HEADERS;
-      if (real === path.join(rootReal, 'scene', 'example', 'preview.html')) headers = PLAYABLE_HEADERS;
+      if (real === path.join(rootReal, 'scene', 'example', 'preview.html') ||
+          real === path.join(rootReal, 'movement-mirror.html')) headers = PLAYABLE_HEADERS;
       if (real === path.join(rootReal, 'scene', 'src', 'camera', 'pose-worker.js')) headers = POSE_WORKER_HEADERS;
       if (notModified(req.headers, st)) { res.writeHead(304, { ...headers, ...validators }); res.end(); return done(304); }
       res.writeHead(200, { ...headers, 'Content-Type': contentTypeFor(real), 'Content-Length': st.size, ...validators });
