@@ -67,13 +67,13 @@
     },
     {
       "path": "README.md",
-      "bytes": 2807,
-      "sha256": "ab1e8c7566e0906ff475522e2583f0ba0f8582222a7e451d2bfd2e784face393"
+      "bytes": 2805,
+      "sha256": "5e83876d8920ea55ffef98fe939b3b774da786444f344624a3a66cf7547ff91c"
     },
     {
       "path": "START.html",
-      "bytes": 4516,
-      "sha256": "3de11035d228e4b176a6abb1b047b6e2075d9c1846f40d14ad22b994274a6d6b"
+      "bytes": 4514,
+      "sha256": "8c31e70be5fd7a211f401edb91e339056aff95e81185be993177478075c9e23b"
     },
     {
       "path": "index.html",
@@ -232,13 +232,13 @@
     },
     {
       "path": "lite/simple.html",
-      "bytes": 3399,
-      "sha256": "f725a191c5ddca8ae1ba5795d3f710f14ac606ff71da4f5861a936c64022c6da"
+      "bytes": 3397,
+      "sha256": "2a91ac238572154aa7ed468617c14e5ba8de73aea1ac9942dcce8edc9e2ebbbb"
     },
     {
       "path": "lite/technical.html",
-      "bytes": 2530,
-      "sha256": "29a40ef75d21914a189a40749b3d8e90bd4c6e0bbfd2426bdfb2e16111b01d2b"
+      "bytes": 2528,
+      "sha256": "f5499b48a3c63c3719fd030f09d56f4a09e8ad54929d9f2fc328d65889d3e729"
     },
     {
       "path": "media/game-view.webp",
