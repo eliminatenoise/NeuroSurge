@@ -8,6 +8,7 @@
 // changes the level in the middle of the run, and the test compares pictures taken before and after the map.
 // NS_PLAYWRIGHT_MODULE and NS_CHROMIUM can point to a local installation; NS_ANGLE selects the graphics back end.
 import assert from 'node:assert/strict';
+import {captureMouse} from './capture-mouse.mjs';
 import { once } from 'node:events';
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
@@ -71,7 +72,7 @@ try {
   const frames = async n => { const from = (await inspect()).frames; await page.waitForFunction(({ from, n }) => window.__nsQA.inspect().frames >= from + n, { from, n }, { polling: 60 }); };
   const mapIs = amount => page.waitForFunction(a => { const e = window.__nsQA.inspect().emap; return e && (a > 0 ? e.built && e.amount >= a : e.amount <= 0); }, amount, { polling: 80 });
 
-  await page.mouse.click(800, 450); // the look is captured, as in play
+  await captureMouse(page, 800, 450);
   await frames(6);
   const first = await inspect();
   assert.ok(first.healthy);

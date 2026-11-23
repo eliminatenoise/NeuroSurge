@@ -9,6 +9,7 @@
 // switched on by globalThis.__nsLimbDraw): no vertex of your body may be cut and no muscle of either body culled while
 // on screen. It also checks that the arm really went into the box (else it would prove nothing).
 import assert from 'node:assert/strict';
+import {captureMouse} from './capture-mouse.mjs';
 import { once } from 'node:events';
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
@@ -53,8 +54,7 @@ try {
 
   await page.keyboard.press('4');
   await page.waitForFunction(() => window.__nsQA.inspect().limbs.limb === 'rightArm', null, poll);
-  await page.mouse.click(viewport.width / 2, viewport.height / 2);
-  await page.waitForFunction(() => document.pointerLockElement?.id === 'ns-canvas', null, poll);
+  await captureMouse(page, viewport.width / 2, viewport.height / 2);
 
   // the look carries the right arm: up beside and over the head, round to the right (the camera then looks across the
   // place of your head), down the body, and back up on the other side

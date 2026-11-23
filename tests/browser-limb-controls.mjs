@@ -1,6 +1,7 @@
 // Runs the normal preview in Chromium. The Node, Playwright and Chromium settings
 // match browser-keyboard-aim.mjs. NS_RAW=1 exercises the normal raw mesh fallback.
 import assert from 'node:assert/strict';
+import {captureMouse} from './capture-mouse.mjs';
 import { once } from 'node:events';
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
@@ -160,8 +161,7 @@ try {
   // hand is now well out of it, and 4 starts a real turn.)
   await page.keyboard.press('1');
   await page.waitForFunction(() => window.__nsQA.inspect().limbs.limb === 'leftArm', null, poll);
-  await page.mouse.click(viewport.width / 2, viewport.height / 2);
-  await page.waitForFunction(() => document.pointerLockElement?.id === 'ns-canvas', null, poll);
+  await captureMouse(page, viewport.width / 2, viewport.height / 2);
   await page.mouse.move(viewport.width / 2 + 90, viewport.height / 2 - 130);
   await page.waitForFunction(yaw => Math.abs(window.__nsQA.inspect().camera.pose.yaw - yaw) > 0.15, right.camera.yaw, poll);
   await advance((await inspect()).frames);
@@ -189,8 +189,7 @@ try {
   // The player looks back to the start look (the pointer captured again, the same move back), and Reset body there puts
   // everything where it was at the start, the left hand too (with the left arm chosen the look up and down also moves
   // it: main's joint aim, ns-app updateJointAim).
-  await page.mouse.click(viewport.width / 2 + 90, viewport.height / 2 - 130);
-  await page.waitForFunction(() => document.pointerLockElement?.id === 'ns-canvas', null, poll);
+  await captureMouse(page, viewport.width / 2 + 90, viewport.height / 2 - 130);
   await page.mouse.move(viewport.width / 2, viewport.height / 2);
   await page.waitForFunction(yaw => Math.abs(window.__nsQA.inspect().camera.pose.yaw - yaw) < 1e-6, start.camera.yaw, poll);
   await resetBody();

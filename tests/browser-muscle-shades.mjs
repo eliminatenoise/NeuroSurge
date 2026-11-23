@@ -13,6 +13,7 @@
 // muscles the pictures show side by side and the light on each; scene/src/ns-muscle-seen.mjs to replace it).
 // NS_SCREENSHOTS=<folder> saves a picture of every view measured.
 import assert from 'node:assert/strict';
+import {captureMouse} from './capture-mouse.mjs';
 import { once } from 'node:events';
 import { readFile, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
@@ -56,7 +57,7 @@ try {
     await page.waitForFunction(() => ['playing', 'error'].includes(document.querySelector('#ns-app')?.dataset.nsPhase));
     assert.equal(await page.evaluate(() => document.querySelector('#ns-app').dataset.nsPhase), 'playing');
     await sleep(2500);
-    await page.mouse.click(800, 450); // the pointer is captured: a move turns the look by its difference
+    await captureMouse(page, 800, 450);
     await sleep(500);
   };
   await page.goto(`http://${host}/scene/example/preview.html`, { waitUntil: 'domcontentloaded' });

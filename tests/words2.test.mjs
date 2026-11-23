@@ -65,7 +65,7 @@ test('H15: the full instructions are cut hard, and each control is said once', (
   assert.doesNotMatch(full, /trunk bends|press a number (?:key|to choose)|press the numbers/i);
   const rows = SHELL.controls.map(r => r.join(' ')).join('\n');
   assert.match(rows, /past their reach your eyes turn further/);
-  assert.match(rows, /in the eye view the chosen limb goes with your view/);
+  assert.match(rows, /in the eye view, the chosen limb goes with your view/);
   // M, the electrical map, is in the Controls list and says it is made up, not a recording (package item 9)
   const m = SHELL.controls.find(r => r[0] === 'M');
   assert.ok(m && /electrical map/.test(m[1]) && /made up/.test(m[1]) && /not a recording/.test(m[1]));
@@ -77,7 +77,9 @@ test('H14: the short Esc page names the drag without Space, the limb drag, the a
   assert.equal(rows['Drag, arrow tips'], 'turn the brain or mirror body');
   const does = SHELL.menu.flatMap(g => g.rows.map(r => r[1]));
   assert.equal(new Set(does).size, does.length, 'no two rows say the same');
-  assert.equal(rows['Esc twice'], 'play with a free mouse pointer');
+  assert.equal(rows['Drag empty space'], 'look around');
+  assert.equal(rows['Capture mouse'], 'look with each mouse movement');
+  assert.match(SHELL.pausedNote, /Resume keeps the pointer free/);
   assert.doesNotMatch(SHELL.menu.flatMap(g => g.rows.flat()).join(' '), /held brain/);
   assert.match(SHELL.menu.find(g => g.id === 'move').note, /Press on a limb and drag to turn or bend it\./);
   assert.match(SHELL.menu.find(g => g.id === 'move').note, /In the eye view the chosen limb goes with your view: look up to raise it, down to lower it/);

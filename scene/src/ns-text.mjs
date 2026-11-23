@@ -236,8 +236,8 @@ const STEP_TABLE = [
   // 20 November 2026: a look turns the head and neck and then the eyes; it no longer turns the chest or bends the trunk
   // (ns-app LOOK_BENDS_TRUNK false since 19 November, headPoseForLook).
   { head: 'Look around.', parts: [part('You see through the eyes of a body that lies back in one place, as on a sofa. It has no skin, just ' +
-    'bones and muscles. Move the mouse or trackpad to look around: the head and neck turn, and past their reach the eyes turn further.')],
-  intro: [part('Move the mouse or trackpad to turn your head and look around. Your body has no skin, just bones and muscles.')] },
+    'bones and muscles. Drag on empty space to look around. As you look, the head and neck turn, and past their reach the eyes turn further.')],
+  intro: [part('Drag on empty space to look around. Your body shows its bones and muscles.')] },
   // 19 November 2026 (the view holds the chosen limb, ns-app LIMB_KEYS.view; in the eye view only: holdCarries)
   { head: 'Your limbs.', parts: [part('One limb is always the chosen one: your left arm at the start. Press 1, 2, 3 or 4 to choose ' +
     'your left arm, left leg, right leg or right arm. In the eye view the chosen limb goes with your view, and W, A, S and D ' +
@@ -309,7 +309,7 @@ const STEP_TABLE = [
 // SPACE_GRIP (Message 204), LIMB_KEYS.view.hold, CARRY_THROUGH, REACH_CODES (Shift), the arrows, E (viewAfterRelease),
 // R (toggleInfoDetail: read, more, off), M (EMAP, section 192) and Esc (pausedNote: Esc again keeps the pointer free).
 const CONTROL_TABLE = [
-  ['Mouse / trackpad', 'look around: your head and neck turn, and past their reach your eyes turn further; in the eye view the chosen limb goes with your view (look up to raise it, down to lower it)'],
+  ['Mouse / trackpad', 'drag on empty space to look around. Your head and neck turn, and past their reach your eyes turn further. As you look up or down in the eye view, the chosen limb goes with your view'],
   ['1 to 4', 'choose a limb: 1 left arm, 2 left leg, 3 right leg, 4 right arm. The chosen limb lights up.'],
   ['Double click', 'choose the next limb; keep the second click held to keep stepping'],
   ['W / S', 'W reaches the chosen limb\'s hand or foot straight out from its shoulder or hip; S draws it straight back in'],
@@ -333,7 +333,7 @@ const CONTROL_TABLE = [
 /** R5-text: the short control words for the 2 s start page (introControls), by control key. R558 (Messages 55 and 56):
  * the Esc page opens with these short words too; its "Show the full instructions" button swaps in CONTROL_TABLE's. */
 const INTRO_CONTROL_WORDS = {
-  'Mouse / trackpad': 'turn your head to look around',
+  'Mouse / trackpad': 'drag on empty space to look around',
   '1 to 4': 'choose the limb W A S D move',
   'Double click': 'the next limb; hold to keep stepping',
   'W / S': 'W reaches out, S draws in; combine with A/D',
@@ -404,12 +404,12 @@ export const SHELL = deepFreeze({
   // R4-integrator (R4-load W8): while the rest of the body still streams in, the 2 s timer has not started yet.
   introNoteLoading: 'This page closes by itself 2 seconds after your body has loaded. Click to start now. Press Esc to ' +
     'see it again.',
-  pausedNote: 'Press Esc or activate Resume with the keyboard to keep the pointer free. Click Resume to capture it.',
+  pausedNote: 'Resume keeps the pointer free. Choose Capture mouse to turn the view with every mouse movement. Press Esc to release it.',
   play: 'Start now',
   resume: 'Resume (Esc)',
   resetBody: 'Reset body',
   resetBrain: 'Reset brain view',
-  playUnlocked: 'Resume without locking the mouse',
+  captureMouse: 'Capture mouse',
   reload: 'Reload page',
   bodyReset: 'Body reset: your pose, the palm turn and the marks on used areas are cleared, and your head faces straight ahead again. The brain stays where you left it.',
   // R558: shown once if the game had to put things back by itself because the view could not be drawn.
@@ -456,7 +456,7 @@ export const SHELL = deepFreeze({
   // plays on with the pointer free, SHELL.pausedNote). Added: "Drag, arrow tips" here, the limb drag in the Move
   // group's note (its repeat of the W S and A D rows is gone), Esc twice in Views and reading; the held-drag row is gone.
   menu: [
-    { id: 'look', title: 'Look and press', picture: 'pad', rows: [['Move', 'look; your chosen limb follows'], ['Click', 'press the area you look at'],
+    { id: 'look', title: 'Look and press', picture: 'pad', rows: [['Drag empty space', 'look around'], ['Click', 'press a motor area'],
       ['← →', 'aim at the next motor area'], ['Drag, arrow tips', 'turn the brain or mirror body']] }, // (second pass: one row)
     { id: 'move', title: 'Move', picture: 'wasd', rows: [
       ['1 / 2', 'choose left arm / left leg'],
@@ -476,7 +476,7 @@ export const SHELL = deepFreeze({
     // (21 November 2026, EMAP: M, the electrical map)
     { id: 'view', title: 'Views and reading', picture: 'keys', keys: ['E', 'R', 'M', 'Esc'], rows: [['E', 'switch eye and outside views'],
       ['R', 'information: short, more, off'], ['M', 'electrical map: on, off'], ['Esc', 'pause for controls and settings'],
-      ['Esc twice', 'play with a free mouse pointer']] }
+      ['Capture mouse', 'look with each mouse movement']] }
   ],
   sensitivity: 'Look speed',
   invertY: 'Flip up and down (invert Y)',
@@ -501,7 +501,7 @@ export const SHELL = deepFreeze({
     // (21 November 2026, late: Space on one of your limbs chooses it, ns-app LIMB_KEYS.view.hold; the line said it takes hold of a limb)
     lineSpace: 'Space takes hold of the brain or the mirror body: hold it, or tap once (tap again to let go). On one of your limbs it chooses that limb. While Space is down, or keeps a hold after a tap, both hands close and the toes curl. Tap twice: all four limbs turn once. Tap twice and hold: they keep turning, slowly.',
     padTitle: 'Trackpad or mouse',
-    padMove: 'Move: turn your head to look around.',
+    padMove: 'Drag empty space to look around.',
     padClick: 'Click a motor area: its body part moves. Click a muscle: its motor area switches on.',
     padDrag: 'Press and drag: turn the brain, the mirror body or a limb.'
   },
@@ -526,10 +526,9 @@ export const SHELL = deepFreeze({
   // The information key (R) works in captured play, so the toast names it.
   // 17 November 2026 (far less text): three short parts; the Esc page has the rest.
   // (21 November 2026, EMAP: the map key is named beside Esc)
-  captureHint: 'Click to look around · M: electrical map · Esc: controls',
-  lockRefused: 'The browser did not lock the mouse. After Esc it waits about a second. Click the scene to try again, or ' +
-    'hold a button and drag to look. Clicks still switch areas on · Esc: how to play',
-  lookOff: 'Mouse lock does not work here. W/A/S/D, Space and clicks still work · Esc: how to play',
+  freeLookHint: 'Drag empty space to look around · M: electrical map · Esc: controls',
+  lockRefused: 'Mouse capture unavailable. Drag empty space to look · Esc: controls',
+  lookOff: 'Use W/A/S/D, Space and clicks · Esc: controls',
   contextLost: 'The graphics stopped (WebGL context lost). The game waits until the browser brings them back.',
   contextLostLong: 'The graphics have not come back. Reloading the page usually fixes this.'
 });
@@ -594,9 +593,11 @@ export const HUD = deepFreeze({
   // HUD's hint slot, hintShell when the game shell is on, which it always is in the preview, and the style sheet hides
   // that slot inside the HUD: neurosurge.css `.ns-hud .ns-slot-hint { display: none; }`. Kept, true, for a page without
   // that style.)
-  hint: 'Move to look. 1 to 4 choose a limb; W/S reach its hand or foot out or draw it in; A/D swing it left or right. Hold Space on the brain or the mirror body ' +
-    'to carry it with look and W/A/S/D (or tap Space to take hold, and tap again to let go); a carried thing goes through you and through anything. Space on one of your limbs chooses that limb. Hold Shift as you press to reach the other thing in line (the body part in front of an area, or what is behind). Tap Space twice: all four limbs turn once; tap twice and hold: they keep turning slowly. Look at an area: its movement happens at once, then the part goes back. Click to do it again. Click the scene to capture the mouse; ' +
-    'Esc frees it.',
+  hint: 'Drag on empty space to look. Keys 1 to 4 choose a limb. W and S reach its hand or foot out or draw it in. A and D swing it left or right. ' +
+    'Hold Space on the brain or mirror body to carry it. Use the view and movement keys to guide it. A tap takes hold and another tap releases it. ' +
+    'Carried objects can pass through the virtual body and other objects. Space on a limb selects it. Tap Space twice to turn all four limbs once. ' +
+    'Hold the second tap to keep them turning. Press Shift to reach the item behind the first one. Looking at a motor area moves its body part. Click to repeat the movement. ' +
+    'In the Esc menu, choose Capture mouse if you want to look with each mouse movement. Press Esc to release it.',
   hintShell: 'Look to aim. 1 to 4 choose a limb; it goes with your view. W/S reach its hand or foot straight out or draw it in, A/D swing it left or right. Tap Space twice: all four limbs turn ' +
     'once; tap twice and hold: they keep turning slowly. Look at a motor area to see its movement; click to do it again. Hold Space on ' +
     'the brain or the mirror body. Move the pointer or press W/A/S/D to carry it. Let go to leave it there (or tap Space to take hold, and tap again to let go). Shift + a press reaches the other thing in line. Esc: controls and reset.',
@@ -1682,11 +1683,11 @@ export const GUIDE = deepFreeze({
     dragBrain: 'Hold Space on the brain: both hands and feet grip. Turn your view to carry it, then let go.',
     // R4-fix (review RP4): with the mouse captured the crosshair must look far from the brain to reach an arrow; a free
     // mouse (Esc twice) lets you click the arrows while you watch the brain. R5-text (D16): no "curved" (user R20).
-    orbit: 'Press Esc twice for a free mouse. Then click or hold an arrow by the brain to turn the brain.',
+    orbit: 'Click or hold a grey arrow to turn the brain. If you captured the mouse, press Esc and choose Resume first.',
     // R5-text (D18): E to the view from behind, and E again back to your own eyes.
     thirdPerson: 'Press E to see your own back. Press E again to go back.',
     // The mirror step completes when the player turns the body, by arrow or drag.
-    mirror: 'Click a green arrow by the mirror body to turn it. Press Esc twice for a free pointer.',
+    mirror: 'Click a green arrow to turn the mirror body. If you captured the mouse, press Esc and choose Resume first.',
     // 19 November 2026 (the tutorial, ns-guide TUTORIAL_GOAL_IDS): the steps the older guide did not have. A look only
     // arms an area; a click or its number presses it; a number key held runs the movement for as long as it is held.
     lookStrip: "Aim at a coloured motor area on the brain until its body part moves.",

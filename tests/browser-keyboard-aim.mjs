@@ -3,6 +3,7 @@
 // NS_RAW=1 refuses the pack index and requires real OBJ responses for every normal game load.
 // NS_REDUCED=1 runs the first-person framing check with reduced motion enabled.
 import assert from 'node:assert/strict';
+import {captureMouse} from './capture-mouse.mjs';
 import { once } from 'node:events';
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
@@ -173,7 +174,7 @@ try {
     const before = await inspect();
     await page.keyboard.down('Space');
     await waitForMirror();
-    await page.waitForFunction(() => document.pointerLockElement?.id === 'ns-canvas', null, { timeout: 5_000 });
+    assert.equal(await page.evaluate(() => document.pointerLockElement), null, 'Space keeps the pointer free');
     await page.mouse.move(x + dx, y + dy);
     await nextFrames(before.frames, 8);
     await page.waitForTimeout(300); // Past the tap-to-keep threshold.
@@ -187,14 +188,13 @@ try {
 
   async function aim() {
     const initial = await openPreview();
-    await page.mouse.click(width / 2, height / 2);
-    await page.waitForFunction(() => document.pointerLockElement?.id === 'ns-canvas');
+    await captureMouse(page, width / 2, height / 2);
     // 24 November 2026 (DESIGN-DECISIONS section 204, CAM70 pass 2): the click at the middle of the window takes the
     // pointer and does nothing else. With the arrows planned from the player camera's eye view but along the brain's
     // placement direction, the mirror body's lower tip lay on the crosshair at the start: this click tilted the mirror
     // body by 15 degrees, and every walk below was made with it tilted.
     const captured = await nextFrames((await inspect()).frames, 6);
-    assert.deepEqual(turnOf(captured), turnOf(initial), 'the capture click at the middle of the window leaves the mirror body as it was');
+    assert.deepEqual(turnOf(captured), turnOf(initial), 'choosing Capture mouse leaves the mirror body as it was');
 
     // 21 November 2026 (browser hunt of update 62, H6; restated): from a look on no area the first arrow key now goes to
     // the nearest area on ITS side of the crosshair. This walk pressed the RIGHT key first and was taken to the throat
@@ -345,9 +345,8 @@ try {
     // turned the view, just far enough). Look up (the pointer captured) until both ankles have left the picture's band,
     // then choose the right leg.
     const beforeCapture = await inspect();
-    await page.mouse.click(width / 2, height / 2);
-    await page.waitForFunction(() => document.pointerLockElement?.id === 'ns-canvas');
-    assert.deepEqual(turnOf(await nextFrames((await inspect()).frames, 6)), turnOf(beforeCapture), 'this capture click leaves the mirror body as it was too');
+    await captureMouse(page, width / 2, height / 2);
+    assert.deepEqual(turnOf(await nextFrames((await inspect()).frames, 6)), turnOf(beforeCapture), 'choosing Capture mouse again leaves the mirror body as it was');
     const pointer = { x: width / 2, y: height / 2 };
     async function lookBy(dx, dy, steps = 10) {
       const from = await inspect();

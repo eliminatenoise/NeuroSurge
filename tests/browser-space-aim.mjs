@@ -1,6 +1,7 @@
 // Run with Node and Playwright. NS_PLAYWRIGHT_MODULE and NS_CHROMIUM select local installations.
 // NS_ANGLE=vulkan selects an installed Vulkan driver. NS_RAW=1 exercises the normal raw-mesh fallback.
 import assert from 'node:assert/strict';
+import {captureMouse} from './capture-mouse.mjs';
 import { once } from 'node:events';
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
@@ -175,14 +176,13 @@ try {
   await release();
 
   const lockedStart = await openOutside();
-  // First click captures the pointer without activating the object at the click position.
-  await page.mouse.click(...visibleMirrorTorso);
-  await page.waitForFunction(() => document.pointerLockElement?.id === 'ns-canvas', null, { timeout: 5000 });
+  // Start captured look from the pause menu with the pointer over the mirror body.
+  await captureMouse(page, ...visibleMirrorTorso);
   const locked = await settled();
   assert.equal(locked.input.at, 'crosshair');
   assert.equal(locked.input.front, lockedStart.input.front, 'the capture leaves the crosshair where the look was');
   assert.deepEqual(locked.look, lockedStart.look);
-  assert.equal(locked.carry, null, 'the capturing click activates nothing');
+  assert.equal(locked.carry, null, 'choosing Capture mouse does not take hold of the body');
   const onBrain = await lookAtBrain(visibleMirrorTorso);
   assert.ok(onBrain.look[1] >= locked.look[1], 'the look went up to the brain, or was on it');
   const crosshairBrain = await hold('brain', 'brain');

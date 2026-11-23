@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-24-body-update-70",
+  "version": "experimental-2026-11-24-body-70-free-look",
   "experimental": true,
-  "source": "Body update 70: no limb jumps when the trunk bends or turns at any frame rate, the right arm you have chosen stays at its place through a trunk movement and keeps what your keys did, A brings the folded right arm across the chest; with the shared Full and Lite editions and the player-controlled camera",
+  "source": "Full and Lite start with a free pointer. Drag on empty space to look or choose Capture mouse from the Escape menu. Both editions share a motor strip and mirror body, and include the current trunk and limb movement.",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -47,13 +47,13 @@
     },
     {
       "path": "PLAYER-GUIDE-TECHNICAL.md",
-      "bytes": 2191,
-      "sha256": "a1ab4c96138417d54045776cc18e8bcfcbed18da7954d88ffb2b44d44f9f0056"
+      "bytes": 2469,
+      "sha256": "c7096518c47f83b407323ca114119f8c52b212693e3e9d8619018fc3a6bc8325"
     },
     {
       "path": "PLAYER-GUIDE.md",
-      "bytes": 3909,
-      "sha256": "21fadb426e9c5f0404a98fb14762f6a6a15a176e9bc9a958e13b6e818ca04309"
+      "bytes": 4062,
+      "sha256": "9a51a96189ccb5b5ce7c7c9ada8ebd5845b66ff93bbef142842e85ae9ea1ec74"
     },
     {
       "path": "PREVIEW-NOTES.html",
@@ -67,18 +67,18 @@
     },
     {
       "path": "README.md",
-      "bytes": 2807,
-      "sha256": "b8958b150f1cff852411256e9f6b333700369ab9217b4be0122cc2dbbfd43fba"
+      "bytes": 2809,
+      "sha256": "d3cce83c8cb05969d66b45083c52ed07cdbbc0d589eb66bcc9bead99148c3ebb"
     },
     {
       "path": "START.html",
-      "bytes": 4513,
-      "sha256": "ae5bd214ee4274903a012437936abd7914760c0597f7c08d9c03b94ac0be67d7"
+      "bytes": 4518,
+      "sha256": "ef64ebb32dff99786cb236dd36e6d3c53c04f518e29637de746c833df97af01b"
     },
     {
       "path": "index.html",
-      "bytes": 3686,
-      "sha256": "7c73b1b9d480aa9182a2ca3f6b45696effba00e859d7420a5004cc8771be32b4"
+      "bytes": 3689,
+      "sha256": "27a74539347db26c220e00022ff5c94ac37d3ac2ea66c3a7e9b711835a8a92c8"
     },
     {
       "path": "inputs/FULLBODY-MESH-MANIFEST.json",
@@ -232,13 +232,13 @@
     },
     {
       "path": "lite/simple.html",
-      "bytes": 3399,
-      "sha256": "322f7ef78fdf51a37476ff429276910223f7d22e7976a7e40e8a59678729a4fa"
+      "bytes": 3401,
+      "sha256": "55407bac5fb4b84a323f7492fe2b334c732be3020dacee9cb3983d46e9f1d7af"
     },
     {
       "path": "lite/technical.html",
-      "bytes": 2530,
-      "sha256": "a6d0d1557d0795ac5caaeed7108f0a6f043e71ecc0284923a160b3657834a039"
+      "bytes": 2532,
+      "sha256": "0c0d6f2c08d8b9467ba60b5325234eddbf4df5aee43aa7b4224495cce6456bc3"
     },
     {
       "path": "media/game-view.webp",
@@ -3987,8 +3987,8 @@
     },
     {
       "path": "scene/src/ns-app.mjs",
-      "bytes": 1168002,
-      "sha256": "59d08136092a020042f249ac7516b293d7eded8231601be65ac0ceed48bef46e"
+      "bytes": 1168290,
+      "sha256": "2d9255ba580568e5f08e5b24de1addfca3cce43a5cfe37249f43f3b4e9cdf2b7"
     },
     {
       "path": "scene/src/ns-area-halo.mjs",
@@ -4117,8 +4117,8 @@
     },
     {
       "path": "scene/src/ns-controls.mjs",
-      "bytes": 102391,
-      "sha256": "607fa3a7bdc4056ecd1158eb63f2684e63c3d0e2256726f6375f91be49b6a2f5"
+      "bytes": 102987,
+      "sha256": "a8f0404281216340895dc35529f3e5ea4c9531c4a7c7bed6548b27651d5ec90a"
     },
     {
       "path": "scene/src/ns-dance.mjs",
@@ -4322,8 +4322,8 @@
     },
     {
       "path": "scene/src/ns-text.mjs",
-      "bytes": 153989,
-      "sha256": "510b78bfbf14d08f627b6671f1b1376d20b889e93512c2bb71c448ed7f485130"
+      "bytes": 153866,
+      "sha256": "f64765f5fef795e72a2f06d85a199803cb53b59319c30712e79b940fcb4f0b07"
     },
     {
       "path": "scene/src/ns-vessels.mjs",
@@ -4442,8 +4442,8 @@
     },
     {
       "path": "tests/browser-arm-collar.mjs",
-      "bytes": 5470,
-      "sha256": "b5fbb154e1d825d0f559b32db60b4bb714e51c22e4e5eadbea9f74a4c70e3b23"
+      "bytes": 5425,
+      "sha256": "5eeeb0056b9f4f2d5780e8ad90a4a651638dbb5c97bdca96ff3b3eb552293e2f"
     },
     {
       "path": "tests/browser-brain-compass.mjs",
@@ -4452,28 +4452,28 @@
     },
     {
       "path": "tests/browser-brain-eyes.mjs",
-      "bytes": 8625,
-      "sha256": "8ed1693193f53ce4adb60636e232c0940f6692a0e2c72fdb0443a358135dc426"
+      "bytes": 8509,
+      "sha256": "1407f66f63a46c7545e211a3ad5d94ed066467f4f0ee7753145a9ecf1d4dcce1"
     },
     {
       "path": "tests/browser-camera-resize.mjs",
-      "bytes": 6723,
-      "sha256": "7c9f5832e623e8afa2e34206cc403e4e99617561b80beaece62b6a7f1d0e5093"
+      "bytes": 6670,
+      "sha256": "5d750fc0294acbbde5a4bf9c46d7cd28c508458612546ffbf5df4bc2e8de772e"
     },
     {
       "path": "tests/browser-emap.mjs",
-      "bytes": 13594,
-      "sha256": "56b24c83230711f1856b7e6bd11a8d134fc3490ed58f4d6075c6886d56185219"
+      "bytes": 13610,
+      "sha256": "2651aacb764140ddd725acc77036ee514e09c5420a35f2cab65e97554a1aff11"
     },
     {
       "path": "tests/browser-keyboard-aim.mjs",
-      "bytes": 31555,
-      "sha256": "fb9b8fb83722c53e67f1ee2b3274c7dc3de02b9de6abd0880e6400f919322652"
+      "bytes": 31417,
+      "sha256": "0cfd8c0bc857f9f0630197ff1df7be4c1f4c32a86039c1c6055200fa223bc3de"
     },
     {
       "path": "tests/browser-limb-controls.mjs",
-      "bytes": 13193,
-      "sha256": "bcd8bff4744f45e251c5e3aca5d0f26986dd261955a4ef3e7d2dbb391e91df04"
+      "bytes": 13053,
+      "sha256": "5ce36ca1bfd9db9d606b1df76ea5166b354eff2a3aff24d7d973d33143d4e325"
     },
     {
       "path": "tests/browser-limb-touch.mjs",
@@ -4487,8 +4487,8 @@
     },
     {
       "path": "tests/browser-muscle-shades.mjs",
-      "bytes": 16252,
-      "sha256": "e42c307089bfdadae1be5f60ba762f29136c459bbed40f49b13efa30e3ca9915"
+      "bytes": 16236,
+      "sha256": "f049f29ca1a1f6e11fac753afdf4779adc3dd0f3e340e151c1dd5ce1d3ea6abf"
     },
     {
       "path": "tests/browser-outside-compass.mjs",
@@ -4497,8 +4497,8 @@
     },
     {
       "path": "tests/browser-play-settings.mjs",
-      "bytes": 13772,
-      "sha256": "4adab3ade55b3672ce69bd282c81d7f78e1de40614b4b0100271823ed692c145"
+      "bytes": 14002,
+      "sha256": "e724a36821ca342b6f0b7fa9868216f268d4f58c7be3969eb1c7fee322e518ac"
     },
     {
       "path": "tests/browser-player-focus.mjs",
@@ -4507,13 +4507,13 @@
     },
     {
       "path": "tests/browser-punch-in.mjs",
-      "bytes": 14575,
-      "sha256": "e0eb23f9eaaeecb3fa3e185480c6c95252fed1c3a655dc364fcc2fea55650e7a"
+      "bytes": 14542,
+      "sha256": "618979376b71eb403234f13a66bb9fc3f3e975abdef0e72eeef6fff8a5b27aa9"
     },
     {
       "path": "tests/browser-space-aim.mjs",
-      "bytes": 10547,
-      "sha256": "b52f554b46d213d068f2a6396381b65221f711e00287b913a3051f125399dbdd"
+      "bytes": 10498,
+      "sha256": "f1b1bcfb821b6102f0a9f3964a5a32553e60229c7a4d129583b91065e40fb052"
     },
     {
       "path": "tests/browser-startup.mjs",
@@ -4537,8 +4537,13 @@
     },
     {
       "path": "tests/capture-boundary.test.mjs",
-      "bytes": 25478,
-      "sha256": "8e196cfd013efac7aaac49e51bb136697432dba02a99e749126275aaab52edb0"
+      "bytes": 26649,
+      "sha256": "1746c08a5fcda8615a2d29c423a8af0e6eda4bcef20ce2fcc2b1bd26e0202e24"
+    },
+    {
+      "path": "tests/capture-mouse.mjs",
+      "bytes": 435,
+      "sha256": "a16b38d61d0f6f9674d10486d763bbef1a4a26dd6307d05b8f8d5c52ac0155c4"
     },
     {
       "path": "tests/carry-release.test.mjs",
@@ -4592,8 +4597,8 @@
     },
     {
       "path": "tests/emap.test.mjs",
-      "bytes": 44610,
-      "sha256": "1585fc1cb5fb249e0d633743e79a63eb5f8aa186e7794a141e67af2457e69c67"
+      "bytes": 44611,
+      "sha256": "12b350f81601550726d4c93c6cb0a6ad7c8f0d0c0ed3480a4e2d7eb5be71a438"
     },
     {
       "path": "tests/eye-gaze.test.mjs",
@@ -4739,6 +4744,11 @@
       "path": "tests/look-fixes-r26.test.mjs",
       "bytes": 20337,
       "sha256": "988ea038a3724b097ca0c2556d80de0d7d8a56a49a3aebdc7d128b3b180d5f36"
+    },
+    {
+      "path": "tests/look-mode.test.mjs",
+      "bytes": 1690,
+      "sha256": "2aba1f62f525cd145bcbbc7a1cf225e4e5b1fb1492e1285ad328372c749fa62a"
     },
     {
       "path": "tests/look-range.test.mjs",
@@ -4947,8 +4957,8 @@
     },
     {
       "path": "tests/words2.test.mjs",
-      "bytes": 16194,
-      "sha256": "90a00968141781f6f16c94575daf8aea2c302054c552b36539efe722f83fadcc"
+      "bytes": 16322,
+      "sha256": "30eec2bb94546e39675ecf2d9739c6b80ac7e55b09d587119eb6497bf641123a"
     },
     {
       "path": "tools/build-assembly-parts.mjs",

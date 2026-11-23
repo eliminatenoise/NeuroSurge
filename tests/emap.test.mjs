@@ -468,7 +468,7 @@ test('M is on every list of keys: the Esc page\'s rows, the keyboard picture, th
   // (22 November 2026: M is not on the five-second card, the owner's own four chunks; it is on the capture line and the
   // Esc page)
   assert.ok(!CONTROLS_CARD_CHUNKS.some(c => c.keys && c.keys.flat().includes('M')));
-  assert.match(SHELL.captureHint, /M: electrical map · Esc: controls$/);
+  assert.match(SHELL.freeLookHint, /M: electrical map · Esc: controls$/);
 });
 
 test('the legend\'s words: a title and three short lines, the route of the area under the look, honest and plain', () => {

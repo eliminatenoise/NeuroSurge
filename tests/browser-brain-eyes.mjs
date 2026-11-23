@@ -1,6 +1,7 @@
 // Exercise the displayed eyes through the normal game and genuine mouse/key events.
 // NS_RAW=1 refuses the pack index. NS_REDUCED=1 uses a reduced-motion browser context.
 import assert from 'node:assert/strict';
+import {captureMouse} from './capture-mouse.mjs';
 import { once } from 'node:events';
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
@@ -97,8 +98,7 @@ try {
   // change of more than 0.1 rad in the camera's pitch. What it protects is kept: E changes the observing camera (now its
   // place, by more than half a metre) and nothing else (the look and both eyes stay as they were).
   const moved3 = (a, b) => Math.hypot(...a.position.map((v, i) => v - b.position[i]));
-  await page.mouse.click(800, 450);
-  await page.waitForFunction(() => document.pointerLockElement?.id === 'ns-canvas');
+  await captureMouse(page, 800, 450);
   const first = await sample('eye view');
   await switchView('third');
   const outside = await sample('outside view, same look');
@@ -133,8 +133,7 @@ try {
   const reset = await sample('reset');
   assert.deepEqual(reset.look, returned.look, 'Reset body leaves the view where the player set it');
   assert.deepEqual(reset.eyes, returned.eyes, 'after Reset body the eyes look where the view looks');
-  await page.mouse.click(800, 450);
-  await page.waitForFunction(() => document.pointerLockElement?.id === 'ns-canvas');
+  await captureMouse(page, 800, 450);
   await page.mouse.move(800, 335);
   await page.waitForFunction(pitch => window.__nsQA.inspect().controls.pitch > pitch + 0.1, reset.look[1], { polling: 60 });
   const back = await sample('looked back to the start look');

@@ -5233,7 +5233,7 @@ export const SHELL_MODES = Object.freeze(['loading', 'intro', 'playing', 'paused
  * nothing ever pauses. */
 export function createShellState({ autoPlay = false } = {}) {
   return {
-    mode: 'loading', autoPlay: autoPlay === true, locked: false, lockFailed: false, unlockedPlay: false,
+    mode: 'loading', autoPlay: autoPlay === true, locked: false, lockFailed: false, unlockedPlay: true,
     notice: null, error: null, contextLost: false, contextLostAtMs: null, everPlayed: false,
     introHideAtMs: null, introShown: false, unlockPausedAtMs: null
   };
@@ -5273,22 +5273,22 @@ export function shellReduce(s, ev) {
       if (s.mode === 'playing') return { ...s, mode: 'paused', unlockPausedAtMs: null };
       if (s.mode === 'paused') {
         if (s.unlockPausedAtMs !== null && at !== null && at - s.unlockPausedAtMs < ESC_UNLOCK_GUARD_MS) return s;
-        return toPlaying({});
+        return toPlaying({ unlockedPlay: !s.locked });
       }
       return s;
     case 'fatal':
       return { ...s, mode: 'error', error: typeof ev.message === 'string' && ev.message ? ev.message : 'unknown error', errorHint: typeof ev.hint === 'string' ? ev.hint : null, notice: null };
     case 'play':
-      return overlay ? toPlaying({}) : s;
+      return overlay ? toPlaying({ unlockedPlay: false }) : s;
     case 'locked':
       if (s.mode === 'error' || s.mode === 'loading') return s.locked ? s : { ...s, locked: true };
       return toPlaying({ locked: true, lockFailed: false, unlockedPlay: false });
     case 'unlocked':
       if (!s.locked) return s;
-      if (s.mode === 'playing' && !s.autoPlay) return { ...s, locked: false, mode: 'paused', unlockPausedAtMs: at };
-      return { ...s, locked: false };
+      if (s.mode === 'playing' && !s.autoPlay) return { ...s, locked: false, unlockedPlay: true, mode: 'paused', unlockPausedAtMs: at };
+      return { ...s, locked: false, unlockedPlay: true };
     case 'lockError':
-      return { ...s, lockFailed: true, notice: overlay ? SHELL_TEXT.lockRefused : s.notice };
+      return { ...s, lockFailed: true, unlockedPlay: !s.locked, notice: overlay ? SHELL_TEXT.lockRefused : s.notice };
     case 'lockUnavailable':
     case 'playUnlocked':
       return overlay ? toPlaying({ unlockedPlay: true, lockFailed: ev.type === 'lockUnavailable' ? true : s.lockFailed }) : s;
@@ -5314,12 +5314,11 @@ export function instructionsState(s) {
   return { visible, mode: visible ? s.mode : null, autoHideAt: s && s.mode === 'intro' ? s.introHideAtMs : null, introMs: INTRO_MS, introShown: Boolean(s && s.introShown) };
 }
 
-/** Toast text while playing: '' when the mouse is captured, else the capture hint (with drag-to-look), the refusal
- * notice, or the no-capture notice. */
+/** Keep the free pointer controls visible while playing with an uncaptured mouse. */
 export function shellToastText(s, { dragLook = true } = {}) {
   if (!s || s.mode !== 'playing' || s.locked) return '';
   if (s.lockFailed) return SHELL_TEXT.lockRefused;
-  return dragLook ? SHELL_TEXT.captureHint : SHELL_TEXT.lookOff;
+  return dragLook ? SHELL_TEXT.freeLookHint : SHELL_TEXT.lookOff;
 }
 
 /** 21 November 2026 (EMAP, section 192): when and how fast the electrical map's model is built (ns-emap buildEmapSteps;
@@ -6093,12 +6092,12 @@ export function createShell({ doc, root, text = SHELL_TEXT, settings = SETTINGS_
   const actions = el('div', 'ns-shell-actions', card);
   const play = button('ns-shell-play', actions, text.play, 'play');
   play.disabled = true;
+  const capture = button('ns-shell-secondary', actions, text.captureMouse, 'capture-mouse');
+  capture.hidden = true;
   const resetBody = button('ns-shell-secondary ns-shell-reset', actions, text.resetBody, 'reset-body');
   resetBody.hidden = true;
   const resetBrain = button('ns-shell-secondary', actions, text.resetBrain, 'reset-brain');
   resetBrain.hidden = true;
-  const unlocked = button('ns-shell-secondary', actions, text.playUnlocked, 'play-unlocked');
-  unlocked.hidden = true;
   const reload = button('ns-shell-secondary', actions, text.reload, 'reload');
   reload.hidden = true;
   // R558 (issue hunt): a notice (for example "Body reset") appears BELOW the buttons, so it never pushes them down
@@ -6235,7 +6234,7 @@ export function createShell({ doc, root, text = SHELL_TEXT, settings = SETTINGS_
   const contextText = el('span', 'ns-shell-context-text', context, text.contextLost);
   const contextReload = button('ns-shell-secondary', context, text.reload, 'reload');
   contextReload.hidden = true;
-  const toast = el('div', 'ns-shell-toast', root, text.captureHint);
+  const toast = el('div', 'ns-shell-toast', root, text.freeLookHint);
   toast.setAttribute('role', 'status');
   toast.hidden = true;
   let toastSpotKey = ''; // R558: placeToast
@@ -6297,7 +6296,7 @@ export function createShell({ doc, root, text = SHELL_TEXT, settings = SETTINGS_
     const act = closest(e.target, '[data-ns-action]');
     const kind = act ? act.getAttribute('data-ns-action') : null;
     if (kind === 'reload') { call(onReload); return; }
-    if (kind === 'play-unlocked') { if (!unlocked.hidden) call(onPlayUnlocked); return; }
+    if (kind === 'capture-mouse') { if (!capture.hidden) call(onPlay); return; }
     if (kind === 'reset-body') { if (!resetBody.hidden) call(onResetBody); return; }
     if (kind === 'reset-brain') { if (!resetBrain.hidden) call(onResetBrain); return; }
     if (kind === 'guide-toggle') { call(onGuide, 'toggle'); return; }
@@ -6305,14 +6304,9 @@ export function createShell({ doc, root, text = SHELL_TEXT, settings = SETTINGS_
     if (kind === 'detail-toggle') { if (detailToggle && !detailRow.hidden) setFullWords(!fullWords); return; }
     if (closest(e.target, '[data-ns-noplay]')) return;
     if (play.disabled) return;
-    if (kind === 'play' && e.detail === 0 && typeof onPlayUnlocked === 'function') {
-      // Native keyboard and assistive activation leave the pointer free, just like Escape.
-      call(onPlayUnlocked);
-      return;
-    }
-    if (mode === 'intro' || kind === 'play') { call(onPlay); return; }
+    if (mode === 'intro' || kind === 'play') { call(onPlayUnlocked ?? onPlay); return; }
     // Esc page: only the backdrop (outside the card) resumes; reading or selecting text on the card does not.
-    if (mode === 'paused' && !closest(e.target, '[data-ns-card]')) call(onPlay);
+    if (mode === 'paused' && !closest(e.target, '[data-ns-card]')) call(onPlayUnlocked ?? onPlay);
   });
   on(contextReload, 'click', () => call(onReload));
   on(sens, 'input', () => {
@@ -6387,7 +6381,7 @@ export function createShell({ doc, root, text = SHELL_TEXT, settings = SETTINGS_
     show(detailRow, mode === 'paused' && canShorten);
     if (keyboard) show(keyboard, mode !== 'error');
     show(grid, mode !== 'error');
-    show(unlocked, Boolean(s.lockFailed) && mode === 'paused');
+    show(capture, !play.disabled && typeof onPlay === 'function' && typeof onPlayUnlocked === 'function');
     show(reload, mode === 'error');
     // R4-integrator (R4-load W8): while the body still streams in (introHideAtMs null) the 2 s timer has not started:
     // the note says so and the timer bar waits (CSS animates it only with data-intro-timer="running").
@@ -6613,11 +6607,9 @@ export function legendStopsFromColors(colors, n = LEGEND_STOPS.length) {
  *  - ready resolves { ok: true, frames: 1 } only after the first frame has actually been rendered; { ok: false, error }
  *    on a failure or stop before that.
  *  - shellRoot (optional element): game shell (createShell). The instructions and controls show for INTRO_MS (2 s)
- *    and then hide by themselves; a click on them starts at once and requests pointer capture (that click never
- *    activates anything). Esc (or losing the pointer capture) shows the Esc page; Esc again resumes. While an overlay
- *    shows the simulation is frozen: no input is consumed and no simulated time passes. While playing without capture
- *    a toast says 'click the scene to capture the mouse' and drag-to-look works (ns-controls bindDom). Without
- *    shellRoot the scene plays at once (pre-A4 behaviour).
+ *    and then hide by themselves. Play and Resume leave the pointer free for drag-to-look. Capture mouse explicitly
+ *    requests browser pointer lock. Escape releases it and opens the pause menu. While an overlay is open, the
+ *    simulation freezes. Without shellRoot the scene plays at once.
  *  - storage (optional Storage-like): persisted look sensitivity / invert-Y / face view (try/catch guarded).
  *  - Resizes are debounced (resizeDebounce, RESIZE_DEBOUNCE) and every reframe seeds the gaze silently.
  *  - optionalModules: { colors, bodyMap, body } (or a function returning a promise of it) instead of
@@ -7358,9 +7350,8 @@ export function start(params = {}) {
   const flushWaiters = () => { for (const w of frameWaiters.splice(0)) w(); };
   const lockedNow = () => doc.pointerLockElement === canvas;
   const exitLock = () => {
-    if (lockedNow() && typeof doc.exitPointerLock === 'function') {
-      try { doc.exitPointerLock(); } catch { /* already released */ }
-    }
+    if (!lockedNow() || typeof doc.exitPointerLock !== 'function') return false;
+    try { doc.exitPointerLock(); return true; } catch { return false; }
   };
   const sceneFn = name => (scene && typeof scene[name] === 'function' ? scene[name] : null);
   const callScene = (name, ...args) => {
@@ -7695,20 +7686,33 @@ export function start(params = {}) {
     if (shell) shell.render(after);
   }
 
-  /** Start / resume from the overlay click (a user gesture): leave the overlay at once and request pointer capture;
-   * the click itself never activates. A refusal only shows the drag-to-look notice. */
+  let captureRequest = null;
+  function failCapture(request) {
+    if (captureRequest !== request) return;
+    captureRequest = null;
+    if (shellIsPlaying(shellState) && !shellState.unlockedPlay && !shellState.locked)
+      dispatch({ type: 'lockError' });
+  }
+
+  /** Capture mouse is the game's only action that requests pointer lock. */
   function requestPlay() {
     if (phase !== 'running' || failed || stopped) return;
-    if (!(shellState.mode === 'intro' || shellState.mode === 'paused')) return;
+    if (shellState.contextLost || !(shellState.mode === 'intro' || shellState.mode === 'paused')) return;
     if (lockedNow()) { dispatch({ type: 'locked' }); return; }
-    if (typeof canvas.requestPointerLock !== 'function') { dispatch({ type: 'lockUnavailable' }); return; }
+    // Event-only browsers cannot distinguish errors for overlapping requests.
+    if (captureRequest?.waitsForEvent || typeof canvas.requestPointerLock !== 'function') {
+      dispatch({ type: 'lockUnavailable' });
+      return;
+    }
     dispatch({ type: 'play' });
+    const request = { waitsForEvent: false };
+    captureRequest = request;
     try {
       const pending = canvas.requestPointerLock();
-      // Newer browsers return a promise that rejects when the lock is refused (pointerlockerror covers the rest).
-      if (pending && typeof pending.then === 'function') pending.then(undefined, () => dispatch({ type: 'lockError' }));
+      if (pending && typeof pending.then === 'function') pending.then(undefined, () => failCapture(request));
+      else request.waitsForEvent = true;
     } catch {
-      dispatch({ type: 'lockError' });
+      failCapture(request);
     }
   }
 
@@ -7729,6 +7733,10 @@ export function start(params = {}) {
   }
   function observePointerLock(atMs) {
     const locked = lockedNow(), wasLocked = shellState.locked;
+    if (locked) captureRequest = null;
+    const lateLock = !wasLocked && (shellState.unlockedPlay || !shellIsPlaying(shellState) || shellState.contextLost);
+    if (locked && lateLock && exitLock()) return;
+    if (locked && wasLocked && shellState.mode === 'paused') return;
     // Only a real transition changes the press evidence. Duplicate pointerlockchange notifications cannot re-arm it.
     if (locked !== wasLocked) {
       if (locked) {
@@ -7764,8 +7772,8 @@ export function start(params = {}) {
     nativeEscape.releasedUnlock = false;
     if (releasedUnlock) {
       // An actual intervening keyup proves this is a subsequent press. Hide the overlay without requesting capture;
-      // normal click-to-capture/security behavior is unchanged. Never prevent or trap the browser's Escape action.
-      dispatch({ type: 'play' });
+      // Escape resumes free look. The capture button is the only pointer-lock request.
+      dispatch({ type: 'playUnlocked' });
     } else onEscape(atMs);
   }
   function nativeEscapeUp(e) {
@@ -8063,7 +8071,9 @@ export function start(params = {}) {
     if (guide && guide.tutorial === true && !guide.hidden && NG.currentGoal(guide) !== null) guideAsyncEvents.push({ type: 'skip' });
   }, true);
   listen(doc, 'pointerlockchange', () => observePointerLock(clockMs()));
-  listen(doc, 'pointerlockerror', () => dispatch({ type: 'lockError' }));
+  listen(doc, 'pointerlockerror', () => {
+    if (captureRequest?.waitsForEvent) failCapture(captureRequest);
+  });
   // Capture sees the release even when focus moved onto an overlay control; no default action is prevented.
   listen(view, 'keydown', nativeEscapeDown, true);
   listen(view, 'keyup', nativeEscapeUp, true);
@@ -8554,7 +8564,9 @@ export function start(params = {}) {
       // A1 wiring: lock refusals switch the toast to the drag-to-look notice; look options go to the reducer.
       // A free-mouse press on either unblocked compass is an arrow press. A mirror arrow behind the glass still
       // belongs to the brain: resolveArrowHit keeps that blocker regardless of visual transparency.
-      const bindOptions = { onLockError: () => dispatch({ type: 'lockError' }), onDetail: () => toggleInfoDetail(), onEmap: () => toggleEmap(), onBeforeSafetyRelease: enforceInputCapacity, arrowAt: (x, y) => shellIsPlaying(shellState) && !lockedNow() && usableArrowHitAt(x, y) !== null,
+      const bindOptions = { onDetail: () => toggleInfoDetail(), onEmap: () => toggleEmap(), onBeforeSafetyRelease: enforceInputCapacity,
+        allowPointerCapture: () => false, acceptPointerLock: () => shellState.locked,
+        arrowAt: (x, y) => shellIsPlaying(shellState) && !lockedNow() && usableArrowHitAt(x, y) !== null,
         // R558 (R31; lead decision for Messages 2 and 12): what a new press would drag, at the pointer (free mouse) or at
         // the crosshair (x, y null: captured). The same pick as the Space grasp (itemAt: what is seen of your own limbs, the
         // brain and the mirror body; an arrow under the point is an arrow press), and while Space holds an item (held, or
@@ -14203,7 +14215,7 @@ export function start(params = {}) {
     snapshot() { requireLoop(); return snapshot(); },
     screenshotReady,
     /** Leave the intro / Esc page and play without pointer capture (headless QA). */
-    play() { requireLoop(); dispatch({ type: 'play' }); return plainCopy(shellState); },
+    play() { requireLoop(); dispatch({ type: 'playUnlocked' }); return plainCopy(shellState); },
     /** Show the Esc page as if the pointer capture had been lost. */
     showPause() { requireLoop(); dispatch({ type: 'pause' }); return plainCopy(shellState); },
     /** Press Esc (toggle the instructions / Esc page). Returns the shell state. */
