@@ -51,7 +51,10 @@ try {
   }
   const started = performance.now();
   await page.goto(`http://${host}/START.html`);
-  await page.getByRole('link', { name: 'Play the experimental preview' }).click();
+  // 24 November 2026 (DESIGN-DECISIONS section 204): GitHub main's start page offers two editions, "Play Full" and "Play
+  // Lite" (until then one link, "Play the experimental preview"). This test opens the full edition, the game it checks.
+  // As before it runs in a publish tree, whose START.html is main's (NS_TEST_ROOT).
+  await page.getByRole('link', { name: 'Play Full', exact: true }).click();
   await page.waitForFunction(() => window.__nsQA?.inspect()?.shell?.mode === 'playing');
   report.readyMs = Math.round(performance.now() - started);
   await page.locator('.ns-keys.ns-ctl').waitFor({state:'detached'});

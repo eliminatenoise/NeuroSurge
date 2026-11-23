@@ -1,6 +1,7 @@
 // Run with Node and Playwright. NS_RAW=1 refuses the mesh-pack index.
 // NS_REDUCED=1 runs both views with the system reduced-motion preference.
 import assert from 'node:assert/strict';
+import {captureMouse} from './capture-mouse.mjs';
 import { once } from 'node:events';
 import { createServer } from 'node:http';
 import { resolve } from 'node:path';
@@ -43,7 +44,7 @@ try {
     assets.refused++;
     return route.abort();
   });
-  await page.goto('http://' + host + '/', { waitUntil: 'domcontentloaded' });
+  await page.goto('http://' + host + '/scene/example/preview.html', { waitUntil: 'domcontentloaded' });
   await page.waitForURL('**/scene/example/preview.html');
   await page.waitForFunction(() => document.querySelector('#ns-app')?.dataset.nsPhase === 'playing');
   report.graphics = await page.evaluate(async () => {
@@ -140,8 +141,7 @@ try {
   }
 
   await page.waitForFunction(() => window.readPunchFrames().last?.triangles > 10000);
-  await page.mouse.click(800, 450);
-  await page.waitForFunction(() => document.pointerLockElement?.id === 'ns-canvas');
+  await captureMouse(page, 800, 450);
   await waitForPulseEnd();
   // 21 November 2026 (browser hunt of update 62, H6; restated): from the start look (on no area) the first arrow key
   // goes to the nearest area on its own side of the crosshair; the throat area at the lower-LEFT end of the strip, which

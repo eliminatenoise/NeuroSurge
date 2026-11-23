@@ -97,7 +97,7 @@ try {
     assert.equal(await zoom.evaluate(select => select.selectedOptions[0].textContent.trim()), '200%');
   }
   const start = performance.now();
-  await page.goto(`http://${host}/`, {waitUntil: 'domcontentloaded'});
+  await page.goto(`http://${host}/scene/example/preview.html`, {waitUntil: 'domcontentloaded'});
   await page.waitForFunction(() => ['playing', 'error'].includes(document.querySelector('#ns-app')?.dataset.nsPhase));
   report.readyMs = Math.round(performance.now() - start);
   await advance((await read()).frames);

@@ -2,6 +2,7 @@
 // Set NS_RAW=1 for raw OBJ loads, and NS_WIDTH / NS_HEIGHT for other CSS viewport sizes.
 // NS_BROWSER_CDP attaches to an isolated, disposable headful Chromium for a real browser zoom test.
 import assert from 'node:assert/strict';
+import {captureMouse} from './capture-mouse.mjs';
 import { once } from 'node:events';
 import { writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
@@ -92,7 +93,7 @@ try {
     assert.equal(report.zoomSetting, '200%');
   }
   const start = performance.now();
-  await page.goto(`http://${host}/`, { waitUntil: 'domcontentloaded' });
+  await page.goto(`http://${host}/scene/example/preview.html`, { waitUntil: 'domcontentloaded' });
   await page.waitForURL('**/scene/example/preview.html');
   await page.locator('.ns-ctl').waitFor();
   report.startup = await page.locator('.ns-ctl').evaluate(card => {
@@ -233,8 +234,11 @@ try {
   await page.keyboard.press('Escape');
   await resume.waitFor();
   await resume.click();
-  await page.waitForFunction(() => document.pointerLockElement?.id === 'ns-canvas');
+  await page.waitForFunction(() => window.__nsQA.inspect().shell.mode === 'playing');
   report.clickResume = await inspect();
+  assert.equal(report.clickResume.locked, null, 'mouse Resume keeps the mouse free');
+  await captureMouse(page, 800, 450);
+  assert.equal((await inspect()).locked, 'ns-canvas');
   assert.equal(report.clickResume.camera, report.before.camera);
   assert.equal(report.clickResume.step, report.freshAim.step);
 

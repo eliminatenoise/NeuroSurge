@@ -129,6 +129,7 @@ def assembly():
         name: checked_file(name, row)
         for name, row in source.items()
         if name not in omitted
+        and name != "DESIGN-DECISIONS.md"
         and not name.startswith(("tests/", "tools/", "scene/src/camera/tests/"))
     }
 

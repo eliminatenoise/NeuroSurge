@@ -42,7 +42,7 @@ class ListenerBucket {
   }
 }
 
-function adapter({ locked = true, kind = 'brain', requestLock = false, beforeSafetyLock = null, allowPointerCapture = null, arrowAt = null } = {}) {
+function adapter({ locked = true, kind = 'brain', requestLock = false, beforeSafetyLock = null, allowPointerCapture = null, acceptPointerLock = null, arrowAt = null } = {}) {
   const controls = api.createControls();
   let state = controls.initialState();
   const view = new ListenerBucket(), doc = new ListenerBucket(), canvas = new ListenerBucket();
@@ -54,7 +54,7 @@ function adapter({ locked = true, kind = 'brain', requestLock = false, beforeSaf
   const calls = { beforeSafety: 0, lock: [], error: 0, view: [], request: 0 };
   if (requestLock) canvas.requestPointerLock = () => { calls.request += 1; };
   const unbind = api.bindDom(canvas, controls, () => state, next => { state = next; }, {
-    dragTargetAt: () => ['brain', 'mirror', 'limb'].includes(kind) ? kind : null, allowPointerCapture, arrowAt,
+    dragTargetAt: () => ['brain', 'mirror', 'limb'].includes(kind) ? kind : null, allowPointerCapture, acceptPointerLock, arrowAt,
     onBeforeSafetyRelease: () => { calls.beforeSafety += 1; if (beforeSafetyLock !== null) beforeSafetyLock(doc, canvas); },
     onLockChange: value => { calls.lock.push(value); },
     onLockError: () => { calls.error += 1; },
@@ -411,6 +411,21 @@ check('free-pointer play makes no automatic capture request from a look drag, Sp
     arrow = false;
     f.down();
     assert.equal(f.calls.request, 1);
+  });
+});
+
+check('a refused late grant and its release create no game lock events', () => {
+  let accepted = false;
+  using({ locked: false, acceptPointerLock: () => accepted }, f => {
+    f.lock(true);
+    assert.equal(f.unbind.status().locked, false);
+    f.lock(false);
+    assert.deepEqual(f.calls.lock, []);
+
+    accepted = true;
+    f.lock(true);
+    f.lock(false);
+    assert.deepEqual(f.calls.lock, [true, false]);
   });
 });
 

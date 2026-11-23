@@ -1,6 +1,7 @@
 // Run with Node and Playwright. NS_PLAYWRIGHT_MODULE and NS_CHROMIUM select local installations.
 // NS_ANGLE=vulkan selects an installed Vulkan driver. NS_RAW=1 exercises the normal raw-mesh fallback.
 import assert from 'node:assert/strict';
+import {captureMouse} from './capture-mouse.mjs';
 import { once } from 'node:events';
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
@@ -18,7 +19,15 @@ const raw = process.env.NS_RAW === '1';
 const args = ['--disable-background-networking'];
 if (process.env.NS_ANGLE) args.push(`--use-angle=${process.env.NS_ANGLE}`);
 const width = 1600, height = 900;
-const visibleMirrorTorso = [803, 357];
+// 24 November 2026 (DESIGN-DECISIONS section 204): the player-controlled camera from GitHub main ("From outside, moving
+// the mouse takes the camera around the body at a steady distance") looks from outside along the player's own look, so
+// the outside view's picture is another one: the mirror body stands in the middle of it, in front of the brain, and the
+// crosshair opens on the mirror body's trunk (until then the camera looked down more steeply, the crosshair opened on
+// the brain, and the mirror body's torso was at 803, 357). The places are now found in the picture, not fixed: a point
+// of the mirror body with the brain behind it (pointAtMirror), and for the captured pointer a look on the brain alone
+// (lookAtBrain). What the test protects is unchanged: Space holds what the pointer is on, Shift + Space the brain behind
+// it, and the crosshair's target once the pointer is captured.
+let visibleMirrorTorso = null;
 let browser;
 
 try {
@@ -44,7 +53,7 @@ try {
       frames: s.frames, healthy: s.phase === 'running' && s.features.bodyRig && !s.placeholder && !s.qa,
       lock: document.pointerLockElement?.id ?? null, input: s.controlTargets, gaze: s.state.gaze.regionId,
       look: [s.controls.yaw, s.controls.pitch], carry: s.state.objectCarry.target,
-      centre: s.state.objectCarry.mirror?.centreWorldM ?? null,
+      centre: s.state.objectCarry.mirror?.centreWorldM ?? null, mirrorBox: s.scene.mirror?.onScreen?.box ?? null,
     };
   });
   const settled = async () => {
@@ -59,7 +68,7 @@ try {
   };
   async function openOutside() {
     const before = { ...assets };
-    await page.goto(`http://${host}/`, { waitUntil: 'domcontentloaded' });
+    await page.goto(`http://${host}/scene/example/preview.html`, { waitUntil: 'domcontentloaded' });
     await page.waitForURL('**/scene/example/preview.html');
     await page.waitForFunction(() => document.querySelector('#ns-app')?.dataset.nsPhase === 'playing', null, { timeout: 45000 });
     assert.ok((await state()).healthy);
@@ -70,7 +79,10 @@ try {
     }, null, { polling: 40, timeout: 5000 });
     const start = await settled();
     assert.equal(start.lock, null);
-    assert.match(start.input.front, /^brain:/);
+    // (the crosshair's place from outside: on the mirror body or the brain, whichever the look meets first)
+    assert.match(start.input.front, /^(?:brain|mirror):/);
+    const [x0, y0, x1, y1] = start.mirrorBox || [];
+    assert.ok([x0, y0, x1, y1].every(Number.isFinite) && x1 > 0 && x0 < width && y1 > 0 && y0 < height, `the mirror body is in the outside picture: ${JSON.stringify(start.mirrorBox)}`);
     if (raw) {
       assert.ok(assets.refusedPackIndexes > before.refusedPackIndexes && assets.rawMeshes > before.rawMeshes);
       assert.equal(assets.meshPacks, before.meshPacks);
@@ -97,8 +109,32 @@ try {
     assert.equal(after.carry, null);
     return after;
   }
+  /** A pointer place on the mirror body's surface with the brain behind it, inside its projected box (pointer free). */
+  async function pointAtMirror(box) {
+    const [x0, y0, x1, y1] = box;
+    for (const row of [0.3, 0.2, 0.4, 0.5, 0.65]) for (const col of [0.5, 0.42, 0.58]) {
+      const x = Math.round(x0 + col * (x1 - x0)), y = Math.round(y0 + row * (y1 - y0));
+      if (x <= 0 || x >= width || y <= 0 || y >= height) continue;
+      await page.mouse.move(x, y);
+      const s = await settled();
+      if (s.input.at === 'pointer' && /^mirror:/.test(s.input.front || '') && /^brain:/.test(s.input.behind || '') && !s.input.arrow) return [x, y];
+    }
+    assert.fail('no point of the mirror body with the brain behind it inside its projected box');
+  }
+  /** With the pointer captured: turns the look up in steps until the crosshair is on the brain (no other thing in front). */
+  async function lookAtBrain(from) {
+    let [x, y] = from;
+    for (let i = 0; i < 24; i++) {
+      const s = await settled();
+      if (/^brain:/.test(s.input.front || '') && !s.input.arrow) return s;
+      y -= 12;
+      await page.mouse.move(x, y);
+    }
+    assert.fail('the captured look finds the brain above the mirror body');
+  }
 
   const initial = await openOutside();
+  visibleMirrorTorso = await pointAtMirror(initial.mirrorBox);
   await page.mouse.move(...visibleMirrorTorso);
   const pointed = await settled();
   assert.equal(pointed.input.at, 'pointer');
@@ -110,7 +146,9 @@ try {
 
   const mirror = await hold('mirror body', 'mirror');
   assert.equal(mirror.input.at, 'crosshair');
-  assert.match(mirror.input.front, /^brain:/);
+  // (24 November 2026: the crosshair stays on what the look was on when the outside view opened; with main's camera that
+  // is the mirror body's trunk, until then it was the brain)
+  assert.equal(mirror.input.front, initial.input.front, 'auto-capture leaves the crosshair where the look was');
   assert.deepEqual(mirror.look, initial.look, 'auto-capture must keep the camera direction');
   if (process.env.NS_SPACE_SCREENSHOTS) await page.screenshot({ path: `${process.env.NS_SPACE_SCREENSHOTS}-hold.png` });
   await page.keyboard.down('w');
@@ -138,20 +176,22 @@ try {
   await release();
 
   const lockedStart = await openOutside();
-  // First click captures the pointer without activating the object at the click position.
-  await page.mouse.click(...visibleMirrorTorso);
-  await page.waitForFunction(() => document.pointerLockElement?.id === 'ns-canvas', null, { timeout: 5000 });
+  // Start captured look from the pause menu with the pointer over the mirror body.
+  await captureMouse(page, ...visibleMirrorTorso);
   const locked = await settled();
   assert.equal(locked.input.at, 'crosshair');
-  assert.match(locked.input.front, /^brain:/);
+  assert.equal(locked.input.front, lockedStart.input.front, 'the capture leaves the crosshair where the look was');
   assert.deepEqual(locked.look, lockedStart.look);
+  assert.equal(locked.carry, null, 'choosing Capture mouse does not take hold of the body');
+  const onBrain = await lookAtBrain(visibleMirrorTorso);
+  assert.ok(onBrain.look[1] >= locked.look[1], 'the look went up to the brain, or was on it');
   const crosshairBrain = await hold('brain', 'brain');
   await release();
 
   assert.deepEqual(errors, []);
   console.log(JSON.stringify({
     chromium: browser.version(), raw, assets, pointed, mirrorPrompt, mirror, dropped, moved, reached,
-    shiftPrompt, throughMirror, locked, crosshairBrain
+    shiftPrompt, throughMirror, locked, onBrain, crosshairBrain, visibleMirrorTorso
   }));
 } finally {
   if (browser) await browser.close();

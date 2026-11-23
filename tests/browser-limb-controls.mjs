@@ -1,6 +1,7 @@
 // Runs the normal preview in Chromium. The Node, Playwright and Chromium settings
 // match browser-keyboard-aim.mjs. NS_RAW=1 exercises the normal raw mesh fallback.
 import assert from 'node:assert/strict';
+import {captureMouse} from './capture-mouse.mjs';
 import { once } from 'node:events';
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
@@ -121,7 +122,7 @@ try {
     return moved;
   }
 
-  await page.goto(`http://${host}/`, { waitUntil: 'domcontentloaded' });
+  await page.goto(`http://${host}/scene/example/preview.html`, { waitUntil: 'domcontentloaded' });
   await waitMode('playing');
   assert.equal(await choice.count(), 1);
   assert.match(await choice.innerText(), /^1\s*Left arm$/);
@@ -160,26 +161,44 @@ try {
   // hand is now well out of it, and 4 starts a real turn.)
   await page.keyboard.press('1');
   await page.waitForFunction(() => window.__nsQA.inspect().limbs.limb === 'leftArm', null, poll);
-  await page.mouse.click(viewport.width / 2, viewport.height / 2);
-  await page.waitForFunction(() => document.pointerLockElement?.id === 'ns-canvas', null, poll);
+  await captureMouse(page, viewport.width / 2, viewport.height / 2);
   await page.mouse.move(viewport.width / 2 + 90, viewport.height / 2 - 130);
   await page.waitForFunction(yaw => Math.abs(window.__nsQA.inspect().camera.pose.yaw - yaw) > 0.15, right.camera.yaw, poll);
   await advance((await inspect()).frames);
   const lookedAway = await inspect();
   assert.ok(!inLimbBand(lookedAway.rightInPicture), `the look away leaves the right hand outside the band: ${JSON.stringify(lookedAway.rightInPicture)}`);
+  // 24 November 2026 (DESIGN-DECISIONS section 204): the player-controlled camera from GitHub main ("The game leaves the
+  // view where you set it until you move it again"; ns-app limbView is never started with it). Until then 4 here turned
+  // the view toward the right hand, and this test read that turn ("the view is turning to the right hand") and then
+  // Reset body during it, which put the look back to the start look. Now choosing the right arm leaves the view where the
+  // player put it, and so does Reset body; it still puts the body and the limb choice back.
   await page.keyboard.press('4');
-  await advance((await inspect()).frames, 1);
+  await page.waitForFunction(() => window.__nsQA.inspect().limbs.limb === 'rightArm', null, poll);
+  await page.waitForTimeout(950); // (one framing turn of the earlier camera took at most 900 ms)
   const turning = await inspect();
-  if (reducedMotion !== 'reduce') assert.equal(turning.turning, true, 'the view is turning to the right hand when the body is reset');
+  assert.equal(turning.turning, false, 'choosing a limb never turns the player\'s view');
+  assert.deepEqual([turning.camera.yaw, turning.camera.pitch], [lookedAway.camera.yaw, lookedAway.camera.pitch], 'choosing the right arm leaves the view where the player put it');
+  await resetBody();
+  const resetAway = await inspect();
+  assert.equal(resetAway.healthy && resetAway.camera.firstPerson, true);
+  assert.equal(await choice.count(), 1);
+  assert.match(await choice.innerText(), /^1\s*Left arm$/, 'Reset body restores the visible and accessible limb choice');
+  assert.deepEqual([resetAway.camera.yaw, resetAway.camera.pitch], [lookedAway.camera.yaw, lookedAway.camera.pitch], 'Reset body leaves the view where the player put it');
+  assert.deepEqual(resetAway.right, start.right, 'Reset body puts the right arm back');
+  assert.equal(resetAway.reach, start.reach);
+  // The player looks back to the start look (the pointer captured again, the same move back), and Reset body there puts
+  // everything where it was at the start, the left hand too (with the left arm chosen the look up and down also moves
+  // it: main's joint aim, ns-app updateJointAim).
+  await captureMouse(page, viewport.width / 2 + 90, viewport.height / 2 - 130);
+  await page.mouse.move(viewport.width / 2, viewport.height / 2);
+  await page.waitForFunction(yaw => Math.abs(window.__nsQA.inspect().camera.pose.yaw - yaw) < 1e-6, start.camera.yaw, poll);
   await resetBody();
   const reset = await inspect();
   assert.equal(reset.healthy && reset.camera.firstPerson, true);
-  assert.equal(await choice.count(), 1);
-  assert.match(await choice.innerText(), /^1\s*Left arm$/, 'Reset body restores the visible and accessible limb choice');
-  assert.deepEqual([reset.camera.yaw, reset.camera.pitch], [start.camera.yaw, start.camera.pitch]);
+  assert.deepEqual([reset.camera.yaw, reset.camera.pitch], [start.camera.yaw, start.camera.pitch], 'the same pointer move back gives the start look');
   assert.deepEqual(reset.right, start.right);
   assert.equal(reset.reach, start.reach);
-  assert.deepEqual(reset.leftEnd, start.leftEnd);
+  assert.deepEqual(reset.leftEnd, start.leftEnd, 'Reset body at the start look puts the left hand where it started');
   const leftAfterReset = await moveLeftArm(reset);
   assert.equal(leftAfterReset.camera.firstPerson, true);
   // 20 November 2026: restated for the current rule (above). Under the rule of 19 November afternoon the view followed
@@ -199,7 +218,7 @@ try {
   assert.deepEqual(errors, []);
   console.log(JSON.stringify({
     chromium: browser.version(), raw, reducedMotion, assets, errors,
-    start, leftAtStart, right, rightMoved, lookedAway, turning, reset, leftAfterReset
+    start, leftAtStart, right, rightMoved, lookedAway, turning, resetAway, reset, leftAfterReset
   }));
 } finally {
   if (browser) await browser.close();

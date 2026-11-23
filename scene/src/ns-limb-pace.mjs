@@ -88,8 +88,26 @@ export const LIMB_PACE = Object.freeze({ on: true, bendMost: 1.25, rhoFar: 2, cr
  *   back      D afterwards first turns the upper arm back the same way, to where A's turn began, and only then swings
  *             the folded arm out to the side as before (section 195): A then D comes back, not out with a turned arm.
  * The legs have no such joint (and their A and D are not slowed). on false: as before.
+ *   open      (23 November 2026, round r32, LIMBS5; a check of update 69: "the hand stops at the chin, short of the
+ *             middle, and holding A longer does nothing": measured, the turn reached its end, -70 degrees, with the hand
+ *             115 mm past the right shoulder (the body's middle is about 170) and 68 mm above it, and the frames after it
+ *             found no move: the swing that should take over raised the upper arm, the elbow then went faster than the
+ *             pace allows, or the hand into the face's keep-out) once the turn has no range left (or its move is more than
+ *             offDeg off the keys' way), A goes on by OPENING the elbow, by the angle that moves the hand the keys' step,
+ *             while that move goes the keys' way, at most openMostDeg from where the opening began: the forearm, turned
+ *             inward, lies further across the chest and lower (measured on the game's body after S and the turn: 10
+ *             degrees open, the hand 157 mm across and 52 mm above the shoulder; 30 degrees, 257 and 26; in the browser after
+ *             1 s of A the hand lies over the chest at the other shoulder). openMostDeg 30 is the least that brings the
+ *             hand within 30 mm of the shoulder's height (tried 35 first: 280 mm across, the hand at the other shoulder). The elbow point does not move (only the forearm turns at it). D first closes it back to where the
+ *             opening began, then turns the upper arm back as before. 0 = no opening (update 69).
+ *             (Tried and dropped, on the game's body offline: offDeg 60 -> 30, which the check suggested: the turn's first
+ *             frames already climb 42 degrees, so A did not turn the upper arm at all; a cap on the rise during the turn
+ *             (riseMostMm): it stopped the turn 82 mm outside the shoulder, and the opening there raised the hand
+ *             further; the turn and the opening solved together to keep the hand level: the elbow was already at its
+ *             end and the solve stalled at 4 mm a frame. The rise WHILE the forearm turns over (up to about 80 mm above
+ *             the shoulder, the hand passing the chin) is the folded arm's own and is left.)
  */
-export const LIMB_ACROSS = Object.freeze({ on: true, offDeg: 60, back: true });
+export const LIMB_ACROSS = Object.freeze({ on: true, offDeg: 60, back: true, openMostDeg: 30 });
 
 /** LIMB_ACROSS: the turn (degrees, signed) of the upper arm about its length that moves the end the keys' own way `way`
  * this frame (world m), from `perDeg` (world m: the end's move for +1 degree of the turn, measured), the turn now `rot`
@@ -108,6 +126,52 @@ export function spinStepDeg(perDeg, way, { rot = 0, lo = -Infinity, hi = Infinit
   if (Number.isFinite(stop)) to = sg > 0 ? Math.min(to, Math.max(rot, stop)) : Math.max(to, Math.min(rot, stop));
   const d = to - rot;
   return Math.abs(d) > 1e-6 && Math.sign(d) === sg ? d : 0;
+}
+
+/**
+ * LIMB_ACROSS: this frame's step of A (D: back) on a folded limb with a `spin` joint. q: the limb's angles now (degrees by
+ * joint); chain: ns-grasp LIMB_CHAIN[limb]; across: A (toward the body's other half) rather than D; way: the keys' own move
+ * of the end this frame (m, on the sphere about the root); wayLevel: the same step straight along the body's left or right
+ * (m; the opening's way: with the hand already across, the sphere's way toward the left points back and down); endAt(q)
+ * -> the end (m) for the limb's angles q; limits: by joint; spinRec / openRec: A's turn
+ * and A's opening so far ({ from, last }, or null: none, or something else has moved that joint since). D undoes the
+ * opening first, then the turn. Returns null (not this frame's way) or { id (the joint), d (degrees), from (where A's turn
+ * or opening began), phase ('spin' | 'open'), back, way (the way this step was taken for) }; phase 'end' (id null, d 0):
+ * A's own turn and opening are both at their end, so A moves the arm no further. Pure apart from endAt.
+ */
+export function acrossStep({ q, chain, across, way, wayLevel = null, endAt, limits, spinRec = null, openRec = null }, o = LIMB_ACROSS) {
+  if (!o || o.on === false || !chain || !chain.spin || !way || typeof endAt !== 'function') return null;
+  const id = chain.spin.joint, rot = q[id], bid = chain.bend, el = q[bid], sg = chain.bendSign || 1;
+  if (!Number.isFinite(rot)) return null;
+  const spinR = spinRec && Math.abs(spinRec.last - rot) < 0.05 ? spinRec : null;
+  const canOpen = Number.isFinite(o.openMostDeg) && o.openMostDeg > 0 && Number.isFinite(el) && limits && limits[bid];
+  const openR = canOpen && openRec && Math.abs(openRec.last - el) < 0.05 ? openRec : null;
+  if (!across && !(o.back && (spinR || openR))) return null;
+  const e0 = endAt(q);
+  // (the end's move for +1 degree of joint j, probed the way the step will go: dir -1 probes 1 degree down and turns it
+  // round; near a range's end a probe past it moves the end less than a degree's worth and the step came out 5 times
+  // too long)
+  const per = (j, v, dir = 1) => { const e1 = endAt({ ...q, [j]: v + dir }); return [(e1[0] - e0[0]) * dir, (e1[1] - e0[1]) * dir, (e1[2] - e0[2]) * dir]; };
+  // D: the opening is closed back first, to where it began
+  const wo = Array.isArray(wayLevel) ? wayLevel : way;
+  if (!across && openR) {
+    const lim = limits[bid], d = spinStepDeg(per(bid, el, sg), wo, { rot: el, lo: lim[0], hi: lim[1], stop: openR.from }, o);
+    return d ? { id: bid, d, from: openR.from, phase: 'open', back: true, way: wo } : null;
+  }
+  const lim = limits[id];
+  if (!lim) return null;
+  const d = spinStepDeg(per(id, rot), way, { rot, lo: lim[0], hi: lim[1], stop: across ? null : spinR.from }, o);
+  if (d) return { id, d, from: spinR ? spinR.from : rot, phase: 'spin', back: !across, way };
+  if (!across || !canOpen) return null;
+  // A at the turn's end: the elbow opens (only opening, at most openMostDeg from where it began)
+  const from = openR ? openR.from : el, bl = limits[bid];
+  const lo = sg > 0 ? Math.max(bl[0], from - o.openMostDeg) : el, hi = sg > 0 ? el : Math.min(bl[1], from + o.openMostDeg);
+  const d2 = spinStepDeg(per(bid, el, -sg), wo, { rot: el, lo, hi }, o);
+  if (d2) return { id: bid, d: d2, from, phase: 'open', back: false, way: wo };
+  // (A's own turn and opening both made and at their end: the arm lies across; A moves it no further this way, and no
+  // other way either: the swing that would take over raised the upper arm and the hand to the face, 100 mm above the
+  // shoulder, measured on the game's body)
+  return spinR && openR ? { id: null, d: 0, from, phase: 'end', back: false, way: wo } : null;
 }
 
 /** LIMB_PACE: the values for a limb ('rightArm', 'rightLeg', 'leftLeg'): the legs' own (LIMB_PACE.leg) over the arm's.
@@ -462,13 +526,89 @@ export function pushBackStep(rec, { place = {}, moving = () => false, away = 0, 
  * contact of a leg with the trunk, two keys at once falling back to one, the keep-out of the head's column in the eye
  * view, and a look carrying a limb beyond its reach (the shadow then waits where it is).
  */
-export const KEY_SHADOW = Object.freeze({ on: true, waitMm: 40 });
+/* 23 November 2026, round r32 (LIMBS5; a check of update 69, case T5: keys on a pushed leg, another limb chosen in between,
+ * then S on the leg again, ended 7.1 mm off their control). Measured: the other limb is not the cause (W then S on the
+ * same leg, 7.1; S alone after the trunk is back, 6.4; S after the way back has ended, 2.2; S during the trunk, 0.0). The
+ * pushed leg's way back runs on at rest (its last part at PUSH_BACK restDegS) and S came during it: the shadow took S
+ * and the leg came home to the shadow's place, but the keys were still held, and the view's hold went on along the line
+ * of the keys it had kept while the leg stood at its pushed pose (h.keyU, h.keyLen: the place kept up to 2 cm ahead of
+ * the end), not the shadow's:
+ *   lineAtHome  when the chosen limb's way back ends while a key is held, the hold takes over the shadow's line of the
+ *               keys (keyShadowLine), so the keys go on as they would have with no trunk movement. (T5 7.1 -> 0.0 mm, S
+ *               after the trunk 6.4 -> 0.0.) false: the hold keeps its own line (update 69). */
+/* 23 November 2026, round r32, LIMBS5 pass 3 (a second independent check of this package: "A key held on the chosen right
+ * arm during a trunk movement now ends the arm 110-145 mm further from where the same keys end with the trunk still than
+ * update 69 does": bend + A 63.6 -> 209.1 mm, turn right + A 272 -> 381, turn left + W 160 -> 287, though W alone moves
+ * that arm 3 mm; the owner, Message 206: "no permanent movements", only the player's own placing stays). Traced frame by
+ * frame: the shadow of the held right arm (ns-app armShadow) ends exactly where the control ends (208.5 mm from the arm
+ * in both), but the view's hold keeps its own place in the room, and that place is where the keys put it with the trunk
+ * bent or turned (on keyed frames the trunk's carry even moved it with the arm, the keys' cut refusing to hold the arm
+ * against the carry). Update 69 never honoured that place (the arm waited beyond its reach and rode the trunk back,
+ * 63.6 mm off); pass 2 (HOLD_BODY trunkNow) made the arm go to it as the trunk came back, so it ended further off:
+ *   placeHome  once the keys or the look have moved the held right arm's shadow during a trunk movement, the hold's
+ *              place goes home to the shadow's end with the trunk's return: its offset from that end is cut in step
+ *              with the trunk's distance from rest (as HOLD_BODY holdArmBack takes the right arm let go back: the share
+ *              of the way still to go never grows again, counted from the last frame the player's keys or look moved
+ *              it), at most homeMps (1.2 m/s, the hold's own rejoin pace, LIMB_KEYS rejoinMps) a frame, and goes on at
+ *              rest at that pace until it is within homeDoneMm. The keys and the look still move the arm frame by frame
+ *              as now; the shadow keeps being played them until the place is home. (keyShadowHomeStep.)
+ * placeHome false: the hold keeps the place the keys gave it (pass 2).
+ * 23 November 2026, round r32, LIMBS5 pass 4 (a third independent check: "moving the look during a forward bend leaves
+ * the chosen right arm 12, 17 and 26 mm off at 40, 30 and 20 fps (update 69: 2 to 3 mm)"; the look alone had started
+ * placeHome, and the shadow's look carry fell short by one frame of the look below 60 frames a second):
+ *   homeOnLook  false: placeHome starts only once the player's KEYS were played on the shadow (sh.keysPlayed, set by
+ *               keyShadowStep on every frame of the keys, whether the shadow could follow them or not: keys it refuses
+ *               moved the real place all the same). A look alone is carried by the view's hold itself, as on update 69.
+ *               true: the look's carry too starts it (pass 3). (keyShadowHomeDue.)
+ *   replayLast  the held right arm's shadow stands at the arm's places from BEFORE the step of the last frame the trunk was
+ *               at rest (pass 2, ns-app armRestGoal), so that frame's look and keys are played on it as it is made, and its
+ *               place in the picture is taken with the look those places were made with. Pass 3 took it with the look of
+ *               the frame after, so a look turned on that last frame at rest never carried the shadow: at 40, 30 and 20
+ *               frames a second the look's first frame (the look 17 to 500 ms) fell there, and the shadow ended 13, 17 and
+ *               26 mm short of where the same look ends with the trunk still. false: as pass 3.
+ *   carryKeyed  on a frame of the keys on which the look turned too, the shadow is first carried by the look and the keys
+ *               then move it from there, as the view's hold does with its place (ns-app holdTarget: carried, then moved by
+ *               the keys). The shadow took only the keys on such frames: A held during a forward bend while the look
+ *               turned (case KAL, the look 0.3 rad over 17 to 500 ms) ended 172 to 187 mm off where the same keys and look
+ *               end with the trunk still (update 69: 112 to 174). false: as pass 3. */
+export const KEY_SHADOW = Object.freeze({ on: true, waitMm: 40, lineAtHome: true, placeHome: true, homeOnLook: false, replayLast: true, carryKeyed: true, homeMps: 1.2, homeDoneMm: 0.5, homeMaxDt: 0.1 });
+/** KEY_SHADOW placeHome (LIMBS5 pass 4): whether the held right arm's place goes home to the shadow `sh`'s end: the keys
+ * were played on the shadow (sh.keysPlayed), or with homeOnLook any move of it (sh.everMoved). Pure. */
+export function keyShadowHomeDue(sh, o = KEY_SHADOW) {
+  return Boolean(o.on && o.placeHome && sh && (sh.keysPlayed === true || (o.homeOnLook && sh.everMoved === true)));
+}
+/**
+ * KEY_SHADOW placeHome: one frame of the held right arm's place going home to its shadow's end. state: { share, awayRef }
+ * from the frame before (null: none yet); place, home: the hold's place and the shadow's end (world m); away: the trunk's
+ * distance from rest (degrees, ns-app holdTrunkAway); atRest; input: the player's keys or look moved the place (and the
+ * shadow) this frame: nothing is cut and the count starts again (share 1, awayRef = away); dt (s). The place's offset from
+ * home is cut by share' / share with share' = min(share, away / awayRef) (0 at rest), its move at most homeMps x dt.
+ * Returns { at (the place: `place` itself when unchanged), state, done (at rest and within homeDoneMm) }. Pure.
+ */
+export function keyShadowHomeStep(state, { place, home, away = 0, atRest = false, input = false, dt = 0 } = {}, o = KEY_SHADOW) {
+  const a = Number.isFinite(away) ? Math.max(0, away) : 0;
+  if (!Array.isArray(place) || !Array.isArray(home)) return { at: place, state: state || { share: 1, awayRef: a }, done: false };
+  if (input || !state) return { at: place, state: { share: 1, awayRef: a }, done: false };
+  const share = atRest ? 0 : Math.max(0, Math.min(state.share, state.awayRef > 1e-9 ? a / state.awayRef : 0));
+  const k = state.share > 1e-9 ? share / state.share : 0;
+  const off = sub(place, home), goal = [home[0] + off[0] * k, home[1] + off[1] * k, home[2] + off[2] * k];
+  const mv = sub(goal, place), n = len(mv), most = o.homeMps * Math.min(Math.max(Number.isFinite(dt) ? dt : 0, 0), o.homeMaxDt);
+  const at = n <= 1e-9 ? place : n > most ? [place[0] + mv[0] * most / n, place[1] + mv[1] * most / n, place[2] + mv[2] * most / n] : goal;
+  return { at, state: { share, awayRef: state.awayRef }, done: atRest && len(sub(at, home)) <= o.homeDoneMm / 1000 };
+}
+/** KEY_SHADOW lineAtHome: the shadow's line of the keys in the world: { keyU (unit), keyLen (m) } from its body-frame
+ * keyU (unit) and keyLen (m), with toWorld(mm) -> m (the body's placing in the world); null when it has none. Pure. */
+export function keyShadowLine(sh, toWorld) {
+  if (!sh || !Array.isArray(sh.keyU) || !(sh.keyLen > 0) || typeof toWorld !== 'function') return null;
+  const o = toWorld([0, 0, 0]), e = toWorld(sh.keyU.map(v => v * 1000)), u = sub(e, o), n = len(u);
+  return n > 1e-6 ? { keyU: [u[0] / n, u[1] / n, u[2] / n], keyLen: sh.keyLen } : null;
+}
 
 const shDot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 /** KEY_SHADOW: a new shadow of `limb` standing at the joint places `q` (degrees by joint: the limb's own; the rest of the
  * body is env.base at each step). Pure. */
 export function keyShadowNew(limb, q) {
-  return { limb, q: { ...q }, keyU: null, keyLen: 0, lastErr: 0, memo: {}, stuck: null, keyed: false, spinA: null, moved: false, place: null };
+  return { limb, q: { ...q }, keyU: null, keyLen: 0, lastErr: 0, memo: {}, stuck: null, keyed: false, spinA: null, openA: null, moved: false, place: null, keysPlayed: false };
 }
 /** KEY_SHADOW: the shadow's points (m, body frame): { root, bend, end }. env: as keyShadowStep. Pure. */
 export function keyShadowPoints(sh, env) {
@@ -487,6 +627,7 @@ export function keyShadowPoints(sh, env) {
 export function keyShadowStep(sh0, ax, az, dt, env) {
   const sh = { ...sh0, q: { ...sh0.q }, moved: false };
   if (!ax && !az) { if (sh.keyed) { sh.keyU = null; sh.keyLen = 0; sh.keyed = false; } return sh; }
+  sh.keysPlayed = true; // (LIMBS5 pass 4, KEY_SHADOW homeOnLook false: placeHome is due from now on)
   const limb = sh.limb, c = env.chain, pace = paceFor(limb), right = [-1, 0, 0];
   const full = q => ({ ...env.base, ...q });
   const ptsOf = q => { const sg = env.asDrawn(full(q)); return { sg, root: env.limbPoint(env.rig, sg, limb, 'root').map(v => v / 1000), bend: env.limbPoint(env.rig, sg, limb, 'bend').map(v => v / 1000), end: env.limbPoint(env.rig, sg, limb, 'end').map(v => v / 1000) }; };
@@ -494,26 +635,30 @@ export function keyShadowStep(sh0, ax, az, dt, env) {
   const P0 = ptsOf(sh.q), root = P0.root, end = P0.end, pts = { root, bend: P0.bend, end };
   const keepOut = typeof env.keepOut === 'function' ? p => env.keepOut(full(sh.q), p) : null;
   const folded = LIMB_PACE.on && ax !== 0 && az === 0 && limbFolded(pts, pace);
-  let joints = null;
-  // (LIMB_ACROSS: A on a folded limb with a `spin` joint turns it first; D turns A's turn back first)
+  let joints = null, acrossEnd = false;
+  // (LIMB_ACROSS: A on a folded limb with a `spin` joint turns it first, then opens the elbow (open); D undoes the opening,
+  // then the turn: acrossStep)
   if (folded && c.spin && LIMB_ACROSS.on) {
-    const id = c.spin.joint, rot = sh.q[id], across = c.side === 'right' ? ax < 0 : ax > 0;
-    const rec = sh.spinA && Math.abs(sh.spinA.last - rot) < 0.05 ? sh.spinA : null;
-    if (Number.isFinite(rot) && (across || (LIMB_ACROSS.back && rec)) && env.limits[id]) {
-      const way = sub(env.keyMove(end, root, right, ax, 0, sp), end), e1 = ptsOf({ ...sh.q, [id]: rot + 1 }).end;
-      const d = spinStepDeg(sub(e1, end), way, { rot, lo: env.limits[id][0], hi: env.limits[id][1], stop: across ? null : rec.from });
-      if (d) {
-        const q = env.project ? env.project(full({ ...sh.q, [id]: rot + d })) : full({ ...sh.q, [id]: rot + d }), js = {};
-        for (const j of [...c.joints, id]) js[j] = q[j];
-        const P1 = ptsOf({ ...sh.q, ...js }), fol = env.keyFollow(end, P1.end, way);
-        const ok = fol.take && fol.share > 0.999 && limbPaceShare(pts, { root, bend: P1.bend, end: P1.end }, sp, pace) > 0.999 && Math.abs(js[id] - rot) > 1e-3
-          && !(keepOut && keepOut(P1.end) > keepOut(end) + 1e-3);
-        if (ok) { joints = js; sh.spinA = !across && Math.abs(js[id] - rec.from) < 0.05 ? null : { from: rec ? rec.from : rot, last: js[id] }; }
+    const across = c.side === 'right' ? ax < 0 : ax > 0;
+    const way0 = sub(env.keyMove(end, root, right, ax, 0, sp), end);
+    const st = acrossStep({ q: sh.q, chain: c, across, way: way0, wayLevel: [right[0] * ax * sp, right[1] * ax * sp, right[2] * ax * sp], endAt: q => ptsOf(q).end, limits: env.limits, spinRec: sh.spinA, openRec: sh.openA });
+    if (st && st.phase === 'end') acrossEnd = true;
+    else if (st) {
+      const id = st.id, v0 = sh.q[id];
+      const q = env.project ? env.project(full({ ...sh.q, [id]: v0 + st.d })) : full({ ...sh.q, [id]: v0 + st.d }), js = {};
+      for (const j of [...c.joints, c.spin.joint]) js[j] = q[j];
+      const P1 = ptsOf({ ...sh.q, ...js }), fol = env.keyFollow(end, P1.end, st.way);
+      const ok = fol.take && fol.share > 0.999 && limbPaceShare(pts, { root, bend: P1.bend, end: P1.end }, sp, pace) > 0.999 && Math.abs(js[id] - v0) > 1e-3
+        && !(keepOut && keepOut(P1.end) > keepOut(end) + 1e-3);
+      if (ok) {
+        joints = js;
+        const rec = st.back && Math.abs(js[id] - st.from) < 0.05 ? null : { from: st.from, last: js[id] };
+        if (st.phase === 'open') sh.openA = rec; else sh.spinA = rec;
       }
     }
   }
-  let T = null;
-  if (!joints) {
+  let T = acrossEnd ? end.slice() : null;
+  if (!joints && !acrossEnd) {
     const from = sh.keyU ? [root[0] + sh.keyU[0] * sh.keyLen, root[1] + sh.keyU[1] * sh.keyLen, root[2] + sh.keyU[2] * sh.keyLen] : end;
     const swingOf = p => (folded ? limbSwingMove(pts, p, right, ax, sp, pace) : null);
     const classic = p => env.keyMove(p, root, right, ax, az, sp);
@@ -560,7 +705,11 @@ export function keyShadowStep(sh0, ax, az, dt, env) {
       } else T = end.slice();
     }
   }
-  if (joints) { Object.assign(sh.q, joints); sh.moved = true; if (sh.spinA && c.spin && Number.isFinite(sh.q[c.spin.joint])) sh.spinA = { ...sh.spinA, last: sh.q[c.spin.joint] }; }
+  if (joints) {
+    Object.assign(sh.q, joints); sh.moved = true;
+    if (sh.spinA && c.spin && Number.isFinite(sh.q[c.spin.joint])) sh.spinA = { ...sh.spinA, last: sh.q[c.spin.joint] };
+    if (sh.openA && Number.isFinite(sh.q[c.bend])) sh.openA = { ...sh.openA, last: sh.q[c.bend] };
+  }
   // (the keys' place: a direction from the root and a length, neither wound up beyond the end's own: as the hold keeps it)
   const end2 = sh.moved ? ptsOf(sh.q).end : end;
   const tp = T || end2, v = sub(tp, root), len0 = len(v);
@@ -589,4 +738,168 @@ export function keyShadowCarry(sh0, target, env, o = KEY_SHADOW) {
   let big = 0; for (const id of Object.keys(r.joints)) big = Math.max(big, Math.abs(r.joints[id] - sh.q[id]));
   if (big >= HOLD_LIGHT.minDeg) { Object.assign(sh.q, r.joints); sh.moved = true; }
   return sh;
+}
+/**
+ * KEY_SHADOW carryKeyed (23 November 2026, round r32, LIMBS5 pass 4): a frame of the keys (ax, az, dt s) on which the
+ * look turned too, played on the shadow as the view's hold plays it on a body limb at rest (ns-app holdTarget and
+ * stepLimbHoldCore): the place is where the look carries it (`target`, m, body frame), moved from there by the keys
+ * (env.keyMove; a key that takes the end deeper into the trunk moves nothing), and solved to as on a frame of the look:
+ * no keys' cut, no swing, no turn of the upper arm (the hold asks those only on frames of the keys alone); one solve
+ * step while the shadow is following closely, else two. The keys' line starts again from that place (a direction from
+ * the root and a length within leadM of the end's own way out), as the hold's does. Returns a new shadow (moved: whether
+ * this frame moved it; keysPlayed). Pure apart from env's functions.
+ */
+export function keyShadowCarryKeys(sh0, target, ax, az, dt, env) {
+  const sh = { ...sh0, q: { ...sh0.q }, moved: false, keysPlayed: true, keyed: true, stuck: null };
+  if (!target || !(ax || az)) return sh;
+  const full = q => ({ ...env.base, ...q });
+  const P0 = keyShadowPoints(sh, env), root = P0.root, end = P0.end, lead = env.leadM;
+  const sp = env.speedMps * Math.min(Math.max(dt, 0), env.maxDt || 0.1);
+  let T = env.keyMove(target, root, [-1, 0, 0], ax, az, sp);
+  if (typeof env.keepOut === 'function' && env.keepOut(full(sh.q), T) > env.keepOut(full(sh.q), target) + 5e-4) T = target.slice();
+  const gap = len(sub(T, end));
+  if (gap > 0.0015) {
+    const r = env.solveLimb({ rig: env.rig, segmentsFor: env.asDrawn, targets: full(sh.q), limb: sh.limb, targetMm: T.map(v => v * 1000), limits: env.limits, opts: sh.lastErr < 12 && gap < 0.06 ? env.opts.follow : env.opts.track, project: env.project, memo: sh.memo });
+    if (r) {
+      sh.lastErr = r.errorMm;
+      const inner = r.folded === true && r.errorMm > lead * 1000 + 2;
+      let big = 0; for (const id of Object.keys(r.joints)) big = Math.max(big, Math.abs(r.joints[id] - sh.q[id]));
+      if (!inner && big >= HOLD_LIGHT.minDeg) { Object.assign(sh.q, r.joints); sh.moved = true; }
+    }
+  }
+  // (the keys' line from the carried place: as the hold keeps it on such a frame)
+  const end2 = sh.moved ? keyShadowPoints(sh, env).end : end, v = sub(T, root), len0 = len(v);
+  if (len0 > 1e-4) {
+    let u = [v[0] / len0, v[1] / len0, v[2] / len0], L = len0;
+    const e = sub(end2, root), en = len(e);
+    if (en > 1e-4) {
+      const eh = [e[0] / en, e[1] / en, e[2] / en], th = Math.acos(Math.max(-1, Math.min(1, shDot(u, eh)))), most = lead / Math.max(0.05, L);
+      if (ax !== 0 && th > most) { const k = most / th, sn = Math.sin(th) || 1, a = Math.sin((1 - k) * th) / sn, b = Math.sin(k * th) / sn; u = [eh[0] * a + u[0] * b, eh[1] * a + u[1] * b, eh[2] * a + u[2] * b]; const un = len(u) || 1; u = [u[0] / un, u[1] / un, u[2] / un]; }
+      const out = shDot(e, u); L = Math.max(out - lead, Math.min(out + lead, L));
+    }
+    sh.keyU = u; sh.keyLen = L;
+  }
+  return sh;
+}
+
+/**
+ * TRUNK_RIDE (23 November 2026, round r32, LIMBS5; a check of update 69: "With 'Bend trunk forward' your left hand moves
+ * 68 mm in ONE frame (0 without the bend)", and with the bend pressed again during its return the right arm 57.3 mm; the
+ * owner: nothing may jump or flash). Measured at 60 frames a second on update 69: there is no one-frame switch. The trunk's
+ * contraction is the jerk spring of every movement from the brain (ns-actions JOINT_LATCH: omega 21, zeta 0.26, the
+ * owner's "fierce contraction with acceleration and inertia"): the drawn trunk bend goes 0 to 35 degrees in six frames,
+ * is thrown back to 27.7 and slams in again. Both shoulders go 9, 24, 34, 37, 37, 14 mm a frame. A limb the view does
+ * not hold rides on the chest as one piece, so its end swings round on the lever of the arm: the left hand (another limb
+ * chosen) 16, 44, 60, 68, 67, 26 mm a frame, its place beside the shoulder unchanged; the right arm likewise 64 mm with the
+ * left arm chosen (the game starts so) and 57 mm in the second press. In the eye view the left hand fell from 43 to 12 %
+ * of the picture's height in five frames. The chosen limb, held in the room, moves 2 to 4 mm a frame.
+ * Now an arm the view does not hold FOLLOWS the place the trunk carries it to, as a hanging arm with weight trails a
+ * jerked trunk: each frame its end goes toward that place by at most
+ *   max(speedMps x the frame's time (15 mm at 60 frames a second), rootShare x how far the trunk moved its shoulder this
+ *   frame + how far its own movement (a movement from the brain, a way back, a push) moved it this frame),
+ * so the hand is never faster than 15 mm a frame, or than the trunk moves the shoulder it hangs from together with its
+ * own movement where that is more; the rest of the swing comes after, at 15 mm a frame (about 0.1 m behind at most,
+ * caught up in about ten frames). (Tried first: the step plus the own movement on top, max(15, shoulder) + own: during
+ * the right arm's way back, HOLD_BODY holdArmBack, the catching up and the way back added to 19 to 23 mm a frame.) Only while the trunk's
+ * own movement (a contraction, its return) is under way, or the end is still behind (the look's own bend of the trunk is
+ * left as it was). A gap over snapMm (a reset of the body) is not followed: the end goes there at once. The place the
+ * arm is kept at is never changed by this: only where it is drawn on the way.
+ * 23 November 2026, round r32, LIMBS5 pass 2 (the independent check of the first pass, its blocker: "at the frame rates
+ * the game really runs at while the body moves (30 fps, 25 fps, or uneven 17-45 ms frames), a trunk turn now throws a
+ * hand 32-36 cm in one frame, against 20-25 cm on update 69"; and "the hands are 236-276 mm behind at frame 5-6 ... and
+ * caught up only after 41-49 frames"). In a trunk TURN the hand is carried about three times as far as its shoulder
+ * (the hand is far from the spine the chest turns about; in a bend about 1.8 times), so a hand kept to its shoulder's
+ * step falls far behind: at 30 frames a second 186 mm after two frames, and the snap (snapMm 300, meant for a reset of
+ * the body) then put it at its place in ONE frame: 323 to 361 mm. Measured on update 69's rigid ride replayed through
+ * the rule offline (work notes, sim1), largest one-frame step of the left hand / largest lag / last frame behind:
+ *   rule                       60 fps turn       30 fps turn    uneven 17-45 ms   25 fps   20 fps   bend 60 fps
+ *   rigid (update 69)          104 / 0           196            206               244      298      68
+ *   first pass (snap 300)       33 / 280 / f69   331 (snap)     339 (snap)        326      339      37 / 117 / f10
+ *   now                         42 / 232 / f14    87 / 220       97 / 231         101      122      37 / 105 / f9
+ * Now: no snap at all. The end goes, each frame, at least max(speedMps x the frame's time, the shoulder's step and its own
+ * movement as before, catchS: the share 1 - exp(-dt / catchS) of how far behind it is), so a long lag closes like a
+ * weight on a spring, in about the same TIME at any frame rate; and it is never more than maxLagMm behind: above that it
+ * moves just enough to stay at that lag (it speeds up, it never jumps the rest). speedMps 0.9 -> 1.5: on a trunk's
+ * return the hand's place goes about 20 mm a frame, and at 15 mm a frame the hand trailed up to 70 mm all the way back.
+ * doneMm 0.5 -> 2: the last 2 mm are taken at once (the right arm's solve stops a few frames sooner; nothing to see).
+ * Tried and dropped: only the largest lag (maxLagMm 100 to 150 and nothing else; the 60 fps turn's step went back up to
+ * 93 to 103 mm, close to the rigid 104); a follower with its own speed (a critically damped spring, smoothTime 0.06 to
+ * 0.1 s; it built up speed and its steps reached the rigid ones, 102 to 107 mm at 60 frames a second). The reset of the
+ * body and the display's rescue clear the follow's records outright (ns-app rideClear; the left hand's record goes with
+ * the free hand's state), a teleport on purpose, not a distance test. snapMm: kept only for the old rule (catchS 0).
+ *   on false: the arms ride the trunk as one piece (update 69). catchS 0 (and maxLagMm 0): the first pass's rule.
+ * 23 November 2026, round r32, LIMBS5 pass 3 (the second check, case K3xT: the right arm chosen, "Turn trunk to the right"
+ * pressed twice, then "Turn trunk to the left" at frame 12: "the lag sits at 243-249 mm for three frames. Above maxLagMm
+ * (250 mm) the hand has to move as fast as its place does ... there is no smoothing left in this case": the left hand's
+ * steps 31, 54, 95, 163, 107 mm against update 69's 97, 151, 181, 186). maxLagMm 250 -> 400: replayed offline on update
+ * 69's own frames of that case (work notes, sim3-rev), the largest step 173 -> 96 mm, the lag up to 400 mm for about two
+ * frames. No other case measured comes near 250 mm (turns 182 to 228 mm at every frame rate), so they are unchanged. Tried:
+ * a soft zone (half the excess taken from 250 to 400 or 500 mm): 120 to 130 mm.
+ * A rule of this game's display (an arm with weight), not a measured movement.
+ */
+export const TRUNK_RIDE = Object.freeze({ on: true, speedMps: 1.5, rootShare: 1, catchS: 0.1, maxLagMm: 400, doneMm: 2, snapMm: 300, maxDt: 0.1, reachM: 1.3 });
+
+/** TRUNK_RIDE reachM (LIMBS5 pass 2, the check's cost): the most a trunk movement of stepDeg degrees in one frame (the
+ * largest change of any of its angles) can carry a hand (m): reachM, a generous distance from the lowest joint of the spine
+ * to the hand, on that arc. A frame whose bound is within the follow's least step (speedMps x dt) cannot leave a caught-up
+ * hand behind, so the right arm's follow takes no pose of the body on it (the trunk's slow return). Pure. */
+export function rideCarryBoundM(stepDeg, o = TRUNK_RIDE) {
+  return Math.abs(Number.isFinite(stepDeg) ? stepDeg : Infinity) * Math.PI / 180 * o.reachM;
+}
+
+/** TRUNK_RIDE: one frame of a riding end. prev: where it was drawn last frame, ride: where the trunk and its own movement
+ * put it now (m); rootStepM: how far the trunk moved its root (shoulder) this frame; ownStepM: how far its own movement
+ * moved it; dt: the frame's time (s). Returns { at (where to draw it), lagM (how far behind it stays), capM (this frame's
+ * step), done (no lag left: at is ride) }. Never more than maxLagMm behind, and no snap (catchS > 0). Pure. */
+export function rideFollow(prev, ride, { rootStepM = 0, ownStepM = 0, dt = 1 / 60 } = {}, o = TRUNK_RIDE) {
+  const t = Math.min(Math.max(Number.isFinite(dt) ? dt : 0, 0), o.maxDt);
+  let cap = Math.max(o.speedMps * t, o.rootShare * (Number.isFinite(rootStepM) ? rootStepM : 0) + (Number.isFinite(ownStepM) ? ownStepM : 0));
+  if (!Array.isArray(prev) || !prev.every(Number.isFinite)) return { at: ride.slice(), lagM: 0, capM: cap, done: true };
+  const d = sub(ride, prev), n = len(d);
+  const springs = o.catchS > 0;
+  if (springs) cap = Math.max(cap, n * (1 - Math.exp(-t / o.catchS)));
+  if (springs && o.maxLagMm > 0 && n - cap > o.maxLagMm / 1000) cap = n - o.maxLagMm / 1000; // (speeds up; never the whole gap at once)
+  if (n <= cap || n <= o.doneMm / 1000 || (!springs && n > o.snapMm / 1000)) return { at: ride.slice(), lagM: 0, capM: Math.min(cap, n), done: true };
+  const k = cap / n;
+  return { at: [prev[0] + d[0] * k, prev[1] + d[1] * k, prev[2] + d[2] * k], lagM: n - cap, capM: cap, done: false };
+}
+/** TRUNK_RIDE: the trunk's own offsets as a key (the activity's trunk bend, side bend and turn; the look's bend is not
+ * among them): the follow runs on a frame on which this key changed, or while an end is behind. Pure. */
+export function trunkRideKey(offsets) {
+  if (!offsets) return '';
+  const v = k => (Number.isFinite(offsets[k]) ? Math.round(offsets[k] * 1000) / 1000 : 0);
+  return `${v('trunk_flex')}|${v('trunk_side')}|${v('trunk_rot')}`;
+}
+/**
+ * TRUNK_RIDE: one frame of a body limb riding the trunk (ns-app: the right arm when the view does not hold it), drawn
+ * only. rec: the last frame's record { lag, q (the limb's own angles then), at, root (m, world: its end as drawn and its
+ * root) }, or null (then env.last() gives the same of the last pose drawn); T: this frame's drawn angles (all joints).
+ * env: { rig, limb, ids (the limb's own joints that move its end), segmentsFor(angles) -> segments, limbPoint,
+ * toWorld(mm) -> m, toBody(m) -> mm, solveLimb, limits, project, opts (the solve's), memo, dt, last(), ownOff (LIMBS5 pass
+ * 2: this frame's change of its own angles is not counted as its own movement: the first frame after the view let it
+ * go, whose angles jump from the hold's to the activity's; the check of the first pass: a right arm let go during a bend
+ * jumped 58 to 64 mm in that frame) }. The end goes
+ * toward where T puts it by rideFollow's step; while it is behind, the limb's solved joints (env.solveLimb, from T) draw
+ * it there. Returns { T (the angles to draw: T itself when the end is not behind), rec }. Pure apart from env's.
+ */
+export function rideLimbStep(rec, T, env, o = TRUNK_RIDE) {
+  const q = {}; for (const id of env.ids) if (Number.isFinite(T[id])) q[id] = T[id];
+  const P = (sg, w) => env.toWorld(env.limbPoint(env.rig, sg, env.limb, w));
+  const segs = env.segmentsFor(T), rideW = P(segs, 'end'), rootW = P(segs, 'root');
+  const was = rec || env.last();
+  const prevQ = was && was.q ? was.q : q;
+  // (its own movement this frame: its own angles changed, the trunk as now)
+  const ownMoved = !env.ownOff && env.ids.some(id => Math.abs((Number.isFinite(q[id]) ? q[id] : 0) - (Number.isFinite(prevQ[id]) ? prevQ[id] : 0)) > 1e-6);
+  const rootStepM = was && Array.isArray(was.root) ? len(sub(rootW, was.root)) : 0, at0 = was ? was.at : null;
+  // (LIMBS5 pass 2, the check's cost: the own movement's pose only when the step without it leaves the end behind)
+  let f = rideFollow(at0, rideW, { rootStepM, ownStepM: 0, dt: env.dt }, o);
+  if (!f.done && ownMoved) f = rideFollow(at0, rideW, { rootStepM, ownStepM: len(sub(rideW, P(env.segmentsFor({ ...T, ...prevQ }), 'end'))), dt: env.dt }, o);
+  if (f.done) return { T, rec: { lag: false, q, at: rideW, root: rootW } };
+  // (the solve goes on from the joints it drew last frame, so it has only this frame's step to make, not the whole lag;
+  // LIMBS5 pass 2: tried one step instead of two while the last answer ended within 3 to 10 mm of its target, for the
+  // check's cost: the drawn steps then went unevenly, 50, 37, 16, 24 mm instead of 40, 38, 26, 24 in a turn; not kept)
+  const warm = rec && rec.lag && rec.solved ? rec.solved : null;
+  const r = env.solveLimb({ rig: env.rig, segmentsFor: env.segmentsFor, targets: warm ? { ...T, ...warm } : T, limb: env.limb, targetMm: env.toBody(f.at), limits: env.limits, opts: env.opts, project: env.project, memo: env.memo, startSegments: warm ? null : segs });
+  if (!r || !Array.isArray(r.endMm)) return { T, rec: { lag: false, q, at: rideW, root: rootW } };
+  return { T: { ...T, ...r.joints }, rec: { lag: true, q, at: env.toWorld(r.endMm), root: rootW, solved: { ...r.joints } } };
 }

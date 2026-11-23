@@ -4,13 +4,15 @@
 
 ## Input and movement
 
+- Start and **Resume** use a free pointer. Drag on empty space to turn the view. **Capture mouse** in the Escape menu enables browser pointer lock, so each mouse movement turns the view. Escape releases it. If the browser declines capture, drag on empty space to keep playing.
+
 - The central aiming mark picks a motor area. Aim to trigger a movement or click to repeat it. Left and Right Arrow step across motor areas.
 - During play, 1 selects the left arm, 2 the left leg, 3 the right leg and 4 the right arm. W, A, S and D move that limb. In the eye view, a small deliberate pitch change commands shoulder or hip movement within the current joint limits. The aiming cue stays 25% from the top of the screen. The actual wrist or ankle can move away from the cue when the camera moves or the joint reaches its limit.
 - Space grips or carries the targeted object. Drag an object to turn it or a limb to move its joint. Shift selects the item behind the default target.
 - E switches modes. The eye view rotates about a fixed position. The outside view orbits a fixed point at a constant distance. Each mode has a fixed field of view for the current window size. The camera does not follow the simulated body.
 - R changes the information shown. M toggles the detailed electrical map. The normal view has a separate, lower-opacity electrical effect on the cortex and motor strip, with an off switch in Escape settings.
 - Press Escape and open **View tutorial** to review its steps or resume or restart the sequence. Markers identify game regions or joints in view.
-- After limb selection, a vertical look in the eye view starts a measurement. Within 0.35 seconds of game time after that look, the virtual wrist or ankle must move at least 2.5 cm from its position relative to the shoulder or hip just before the look. Move the pointer in capture mode or press **Escape** twice and drag empty space with a free pointer. Dragging keeps the pointer free. Click **Resume** in the controls to capture it. Press **E** to return from the outside view.
+- After limb selection, a vertical look in the eye view starts a measurement. Within 0.35 seconds of game time after that look, the virtual wrist or ankle must move at least 2.5 cm from its position relative to the shoulder or hip just before the look. Drag on empty space, or move the captured pointer. Press **E** to return from the outside view.
 
 ## Command box and camera
 

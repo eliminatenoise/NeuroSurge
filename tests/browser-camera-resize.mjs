@@ -1,6 +1,7 @@
 // Run with Node and Playwright. NS_PLAYWRIGHT_MODULE and NS_CHROMIUM can select a local installation.
 // NS_ANGLE=vulkan selects an installed Vulkan driver on Linux. The game runs normally on loopback.
 import assert from 'node:assert/strict';
+import {captureMouse} from './capture-mouse.mjs';
 import { once } from 'node:events';
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
@@ -66,7 +67,7 @@ try {
     return camera();
   }
 
-  await page.goto(`http://${host}/`, { waitUntil: 'domcontentloaded' });
+  await page.goto(`http://${host}/scene/example/preview.html`, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => document.querySelector('#ns-app')?.dataset.nsPhase === 'playing');
   assert.ok(await page.evaluate(() => {
     const state = window.__nsQA.inspect();
@@ -75,8 +76,7 @@ try {
   await pause();
   await quality.selectOption('low');
   await resume();
-  await canvas.click({ position: { x: viewport.width / 2, y: viewport.height / 2 } });
-  await page.waitForFunction(() => document.pointerLockElement?.id === 'ns-canvas');
+  await captureMouse(page, viewport.width / 2, viewport.height / 2);
   await page.keyboard.press('ArrowRight');
   await advance(4);
   await page.keyboard.press('ArrowLeft');

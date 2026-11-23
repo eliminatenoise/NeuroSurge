@@ -4,10 +4,12 @@
 
 ## Move a body part from the brain
 
-1. Open either edition in a desktop browser with a keyboard and mouse or trackpad. If the browser takes control of your pointer, move the mouse or trackpad to turn your view. Press Escape to pause, then press it again to resume with a free pointer. Drag on an empty part of the picture to look around.
+1. Open either edition in a desktop browser with a keyboard and mouse or trackpad. Press and hold on an empty part of the picture, then drag to look around. Let go to stop turning.
 2. Look at a coloured piece of the brain. The coloured pieces show the **motor strip**, a region of the brain that helps control movement. A label near the middle of the screen names the part the game will move. For example, a shoulder area moves the shoulder. Click on the area to repeat the move. Press **Left Arrow** or **Right Arrow** to aim at the next area in that direction.
 3. Watch your body and the mirror body. Both make the same movement. The mirror body gives you another view of it. Press **E** to change between the eye view and the outside view. In the eye view, moving the mouse turns the camera from one fixed place. From outside, moving the mouse takes the camera around the body at a steady distance. The game leaves the view where you set it until you move it again.
 4. Press **Escape** to open the controls. Open **View tutorial** to follow the steps. The tutorial can mark a visible motor area and the part of the body it controls. You can resume or restart the tutorial in the same menu.
+
+The **Resume** button keeps the pointer free. To turn the view with every mouse movement, choose **Capture mouse** in the controls. Press **Escape** to release it and open the controls again. If capture is unavailable, drag on an empty part of the picture to keep playing.
 
 ## Move one limb yourself
 
@@ -15,7 +17,7 @@ During play, press **1** for the left arm, **2** for the left leg, **3** for the
 
 From the view out of your body, look a little up or down to raise or lower the selected arm at the shoulder or the selected leg at the hip. You can do this without looking straight up or at the floor. After you select a limb, the aiming mark for this control sits about a quarter of the way down from the top of the screen. The mark stays there. The drawn wrist or ankle follows the joint, so it can move away from the mark when the limb reaches the end of its movement or the camera looks elsewhere.
 
-The tutorial lets you practise this after selecting a limb. Move the mouse or trackpad up or down. To play with a free pointer, press **Escape** twice, then drag on an empty part of the picture to look. Dragging keeps the pointer free. Open the controls and click **Resume** when you want to capture it. The game measures from where the virtual wrist or ankle was just before that look. It advances the step when that point moves at least 2.5 cm relative to the shoulder or hip. It gives the virtual body up to 0.35 seconds of game time after the look to move. If you are looking from outside the body, press **E** to return to the eye view first.
+After selecting a limb, try this in the tutorial. Drag up or down on an empty part of the picture. If you chose **Capture mouse**, move the mouse up or down. The game measures from where the virtual wrist or ankle was just before that look. It advances the step when that point moves at least 2.5 cm relative to the shoulder or hip. It gives the virtual body up to 0.35 seconds of game time after the look to move. If you are looking from outside the body, press **E** to return to the eye view first.
 
 Press and drag on a limb to move the joint you pressed on. Press **Space** to grip. Aim at the brain or mirror body and hold Space to carry it, then release to put it down. You can drag the brain or mirror body to turn it. Hold **Shift** on the initial press to reach the item behind the one you would usually select.
 
