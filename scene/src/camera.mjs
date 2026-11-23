@@ -1,5 +1,5 @@
 // Opt-in control. No camera, worker, or model asset is opened during construction.
-import {createLimbTake, createTakeTimeline, createVideoTakeWindow, TAKE_LIMIT_MS} from './camera/limb-take.mjs';
+import {createLimbTake, createTakeTimeline, createVideoTakeWindow, pictureOffsetMs, TAKE_LIMIT_MS} from './camera/limb-take.mjs';
 import {createCameraPreview} from './camera/preview.mjs';
 import {calibratedPose, kneeJoints, trackedLimbs, trackingChoices as choices} from './camera/limb-pose.mjs';
 import {captureSource, readKeyframes, MAX_LOCAL_VIDEO_BYTES} from './joint/media.mjs';
@@ -610,15 +610,7 @@ export function createCameraCapture({ onPose, onArmPose, returnFocus = () => {},
       return;
     }
     const startTime = stills[0].t;
-    function offsetMs(time) {
-      const offset = (time - startTime) * 1000;
-      // Decimal seconds can land on either side of a whole millisecond.
-      // Correct the rounding error without quantizing fractional times.
-      const roundoff = Math.min(1e-6, Math.max(time, TAKE_LIMIT_MS / 1000) * Number.EPSILON * 1000);
-      const wholeMs = Math.round(offset);
-      return wholeMs > 0 && Math.abs(offset - wholeMs) <= roundoff ? wholeMs : offset;
-    }
-    const duration = offsetMs(stills.at(-1).t);
+    const duration = pictureOffsetMs(stills.at(-1).t, startTime);
     if (duration > TAKE_LIMIT_MS) {
       show('Use picture times no more than eight seconds apart from first to last.', false);
       return;
@@ -637,7 +629,7 @@ export function createCameraCapture({ onPose, onArmPose, returnFocus = () => {},
       onStatus(message) { if (current === session) show(message, true); },
       onFrame(frame) {
         if (current !== session) return;
-        const time = offsetMs(frame.t);
+        const time = pictureOffsetMs(frame.t, startTime);
         const pose = calibratedPose(session.knees, session.limb, frame.pose, time);
         timeline.observe(pose, time, false, frame.wrists, frame.armGeometry);
         show('Read ' + frame.id + ' of ' + stills.length + ' pictures.', true);
@@ -680,6 +672,15 @@ export function createCameraCapture({ onPose, onArmPose, returnFocus = () => {},
     get hasTake() { return !!take?.hasTake; },
     get savedTakeName() { return take?.latest?.name; },
     get latestTake() { return take?.latest; },
+    saveTake(movement, source) {
+      if (disposed || current || !Object.hasOwn(choices, movement.limb)) return false;
+      if (!take) {
+        show(beforeStart(), false);
+        panel.hidden = true;
+      }
+      take.save(movement, choices[movement.limb].name, source);
+      return true;
+    },
     replayTake(target, label, interval) {
       if (disposed || document.hidden || !take || current) return;
       if (sourceMode !== 'camera' || panel.hidden) {

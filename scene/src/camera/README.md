@@ -1,5 +1,7 @@
 # Move your arms and knees with one camera
 
+In the connected Movement mirror, select **Save take** to keep recent tracked movement from the active camera, a video, or timed pictures. Open the Command box and enter **replay my take**. The standalone recorder below offers its own capture and replay controls.
+
 The standalone recorder also accepts saved footage. Open it with **C**, set **Source** to **Recorded video**, choose limbs and a local file, and select **Play video**. The recorder uses presentation times for pose updates and releases tracking on pause or seek. **Save video take** keeps up to eight seconds of recent movement on that same clock. Seek, limb and file changes clear the unsaved window. The latest saved take and named takes use the same F controls for both sources. Follow the [Simple player guide](../../../PLAYER-GUIDE.md#follow-a-video-file) or [Technical player guide](../../../PLAYER-GUIDE-TECHNICAL.md#follow-recorded-video).
 
 **Timed pictures** reads local images at user-assigned times. Track them in order, then save a picture take to replay from F. Positions between two tracked poses are calculated only during replay. Saved sample times and positions still come from the individual images. Follow the [picture take instructions](../../../PLAYER-GUIDE.md#make-a-take-from-timed-pictures).

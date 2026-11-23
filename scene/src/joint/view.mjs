@@ -1,7 +1,7 @@
 import {BONES,WRIST,TRACKED_POINTS,trackedPoint,observation,endpoint,observeTarget,parseGoal,virtualFrame,checkGoal,virtualUnits} from './landmark.mjs';
 import {captureSource,readKeyframes} from './media.mjs';
 import {calibratedPose, poseForSelection, trackedLimbs, trackingChoices} from '../camera/limb-pose.mjs';
-import {poseForFollow} from '../camera/limb-take.mjs';
+import {createVideoTakeWindow, pictureOffsetMs, poseForFollow} from '../camera/limb-take.mjs';
 
 import {bindTouch, isTouchQuestion, touchPanel} from './touch.mjs';
 
@@ -11,6 +11,7 @@ const markup=`
 <canvas width="640" height="480" aria-label="Frontal field with the tracked skeleton and the forecast for the selected point"></canvas>
 <p class="joint-key"><span>● Observed or simulated</span><span>◎ Forecast +120 ms</span></p>
 <p data-frame>Waiting for movement.</p><p data-camera-follow role="status" hidden></p><p data-forecast></p><p data-score></p><p data-goal role="status"></p>
+<p data-take-status role="status" hidden></p><button data-take-command type="button" hidden>Open Command box</button>
 </div><div class="joint-inputs"><fieldset><legend>C · Follow movement</legend>
 <label>Source <select data-source><option value="camera">Live camera</option><option value="clip">Recorded video</option><option value="stills">Timestamped stills</option></select></label>
 <p data-hint>Face the camera with your shoulders, elbows and wrists in view.</p>
@@ -21,7 +22,8 @@ const markup=`
 <p id="joint-follow-help" hidden>Choose what moves the avatar. Choose Forecast only to keep manual control. For live camera, show a clear bend in each knee you want the body to follow.</p>
 <label>Point to forecast <select data-side><option value="auto">Either visible wrist</option></select></label>
 <p id="joint-forecast-help" hidden>The forecast can use a different point, including a hip or ankle. It shows where that point may appear in the image 0.12 seconds later.</p>
-<button data-start type="button">Start camera</button> <button data-stop type="button" disabled>Stop</button>
+<p id="joint-take-help" hidden>Save up to eight seconds of tracked movement for the limbs the avatar follows. The movement readings stay in this tab.</p>
+<button data-start type="button">Start camera</button> <button data-save-take type="button" aria-describedby="joint-take-help" hidden disabled>Save take</button> <button data-stop type="button" disabled>Stop</button>
 <video muted playsinline hidden></video><p data-status role="status">Camera off. Images stay on this device.</p>
 </fieldset><form><label for="joint-outcome"><strong>F · Command box</strong></label>
 <input id="joint-outcome" maxlength="240" value="Raise my left hand above my shoulder">
@@ -33,7 +35,7 @@ ${touchPanel}
 <p data-model>Checkpoint pending.</p>
 </div></div>`;
 const finitePair=p=>Array.isArray(p)&&p.length===2&&p.every(Number.isFinite);
-export function bindJointView({host,onPose=()=>{},embedded=false,readRig=null,onClose=()=>{}}) {
+export function bindJointView({host,onPose=()=>{},embedded=false,readRig=null,onClose=()=>{},onSaveTake=null,onOpenCommand=null}) {
   const node=document.createElement('section');
   node.className='joint-view'+(embedded?' joint-overlay':'');
   node.setAttribute('aria-label','Movement mirror'); node.innerHTML=markup;
@@ -44,6 +46,15 @@ export function bindJointView({host,onPose=()=>{},embedded=false,readRig=null,on
   const source=el('[data-source]'),pointControl=el('[data-side]'),followControl=el('[data-follow]'),goalField=el('#joint-outcome');
   const cameraFollow=el('[data-camera-follow]'), title=el('.joint-title h1');
   const startButton=el('[data-start]'), stopButton=el('[data-stop]'), sizeButton=el('[data-size]');
+  const saveTake = el('[data-save-take]');
+  const takeStatus = el('[data-take-status]');
+  const takeCommand = el('[data-take-command]');
+  const canSaveTake = embedded && Boolean(onSaveTake);
+  let takeWindow = null;
+  if (canSaveTake) {
+    saveTake.hidden = false;
+    el('#joint-take-help').hidden = false;
+  }
   const partList=new Intl.ListFormat('en');
   if (embedded) {
     title.tabIndex=-1;
@@ -69,8 +80,8 @@ export function bindJointView({host,onPose=()=>{},embedded=false,readRig=null,on
     const collapsed=embedded && value;
     const hidesFocus=collapsed && el('.joint-inputs').contains(document.activeElement);
     if (collapsed !== node.classList.contains('joint-compact')) {
-      if (collapsed) sizeButton.before(stopButton);
-      else startButton.after(stopButton);
+      if (collapsed) sizeButton.before(saveTake,stopButton);
+      else startButton.after(saveTake,stopButton);
     }
     node.classList.toggle('joint-compact',collapsed);
     sizeButton.textContent=value?'Controls':'Compact';
@@ -78,6 +89,43 @@ export function bindJointView({host,onPose=()=>{},embedded=false,readRig=null,on
     if (hidesFocus) title.focus({preventScroll:true});
   }
   el('[data-size]').onclick=()=>compact(!node.classList.contains('joint-compact'));
+
+  function clearTake() {
+    takeWindow = null;
+    saveTake.disabled = true;
+  }
+  function refreshTake() {
+    const disabled = !takeWindow?.hasSamples;
+    if (saveTake.disabled !== disabled) saveTake.disabled = disabled;
+  }
+  function advanceVideoTake() {
+    if (source.value === 'stills' || video.seeking || !takeWindow) return;
+    takeWindow.advance(video.currentTime * 1000);
+    refreshTake();
+  }
+  function updateTake(frame, pose, firstPictureTime) {
+    const limb = followControl.value;
+    if (!canSaveTake || !Object.hasOwn(trackingChoices, limb)) return;
+    // Picture times define the spacing for replay. A long video gap releases
+    // the avatar during replay instead of holding the previous movement.
+    const pictureTimes = firstPictureTime !== undefined;
+    const time = pictureTimes ? pictureOffsetMs(frame.t, firstPictureTime) : frame.t * 1000;
+    takeWindow ??= createVideoTakeWindow(limb, pictureTimes ? Infinity : 400, {pictureTimes});
+    takeWindow.observe(pose, time, frame.wrists, frame.armGeometry);
+    refreshTake();
+  }
+  saveTake.onclick = () => {
+    if (source.value === 'clip' && video.seeking) return;
+    advanceVideoTake();
+    const take = takeWindow?.finish();
+    const kind = {camera:'camera', clip:'video', stills:'pictures'}[source.value];
+    if (!take || !onSaveTake(take, kind)) return;
+    takeStatus.hidden = false;
+    takeStatus.textContent = 'Take saved. In the Command box, type “replay my take”.';
+    takeCommand.hidden = !onOpenCommand;
+  };
+  takeCommand.onclick = () => onOpenCommand?.();
+
   function paint() {
     const w=latest?.w??640,h=latest?.h??480;
     canvas.width=w;canvas.height=h;
@@ -138,6 +186,7 @@ export function bindJointView({host,onPose=()=>{},embedded=false,readRig=null,on
   function stop(keep=false) {
     media?.stop();media=null;clearTimeout(schedule);schedule=null;active=false;simSide=null;
     stopDictation();
+    clearTake();
     video.hidden=true;el('[data-stop]').disabled=true;
     cameraFollow.hidden=true;cameraFollow.textContent='';
     if(!keep){clearHistory();text('[data-goal]','');}
@@ -252,7 +301,7 @@ export function bindJointView({host,onPose=()=>{},embedded=false,readRig=null,on
       }
       const cameraKnees=kind==='camera' && embedded ? {} : null;
       let lastCameraPoseAt=null;
-      media=captureSource({kind,video,clip,stills,followKnees:embedded,waitForFinalFrame:true,
+      media=captureSource({kind,video,clip,stills,followKnees:embedded,captureWrists:canSaveTake,waitForFinalFrame:true,
         getBodyRevision:()=>kind==='clip' && video.paused ? null : bodyRevision,
         onFrame:f=>{
           let pose=f.pose;
@@ -266,6 +315,7 @@ export function bindJointView({host,onPose=()=>{},embedded=false,readRig=null,on
             const selected = embedded ? poseForFollow(pose, followControl.value) : pose;
             applyCapturePose(selected);
             showCameraFollow(selected,f.pose,kind);
+            updateTake(f, selected, stills?.[0].t);
           }
           add(f,{camera:'Live camera estimate',clip:'Recorded video estimate',stills:'Still-image estimate'}[kind],pointControl.value);
         },
@@ -274,6 +324,7 @@ export function bindJointView({host,onPose=()=>{},embedded=false,readRig=null,on
             calibratedPose(cameraKnees,'armsAndKnees',null,lastCameraPoseAt);
           }
           releaseCapturePose();
+          clearTake();
           clearHistory(reason);
           cameraMessage('Waiting for a fresh source image.');
         },onStatus:m=>{
@@ -367,6 +418,7 @@ export function bindJointView({host,onPose=()=>{},embedded=false,readRig=null,on
   source.addEventListener('change',changeSource);
   pointControl.addEventListener('change',()=>clearHistory('Point changed. Building a new window.', {keepImage:true}));
   followControl.addEventListener('change',()=>{
+    clearTake();
     if (!media || simSide) return;
     bodyRevision++;
     // Keep any active channels that are still selected. Newly selected limbs
@@ -384,6 +436,10 @@ export function bindJointView({host,onPose=()=>{},embedded=false,readRig=null,on
   }
   video.addEventListener('pause',releaseClipPose);
   video.addEventListener('ended',releaseClipPose);
+  video.addEventListener('timeupdate',advanceVideoTake);
+  el('[data-clip]').addEventListener('change',()=>{
+    if (source.value==='clip' && (media || latest)) changeSource();
+  });
   const stillFiles=el('[data-stills]'), stillTimes=el('[data-times]');
   let hadStillFiles=false;
   function invalidateStillRun() {
@@ -428,10 +484,15 @@ export function bindJointView({host,onPose=()=>{},embedded=false,readRig=null,on
       text('[data-brain-output]',p.map((x,i)=>'Unit '+(i+1)+' '+(x*100).toFixed(1)+'%').join(' · ')+' (invented inputs).');
     }catch(e){if(e.name!=='AbortError')text('[data-brain-output]',e.message);}finally{brain.disabled=false;}
   };
-  const close=()=>{touch.clear();stop();if(embedded){node.hidden=true;onClose();}};
+  function hideTakeMessage() {
+    takeStatus.hidden = true;
+    takeCommand.hidden = true;
+  }
+  const close=()=>{touch.clear();stop();hideTakeMessage();if(embedded){node.hidden=true;onClose();}};
   el('[data-close]').onclick=close;
   function leave(){
     stop();
+    hideTakeMessage();
     if (!node.hidden) compact(false);
   }
   function visibility(){if(document.hidden)leave();}

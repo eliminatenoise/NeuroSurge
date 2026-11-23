@@ -35,12 +35,16 @@ Press and drag on a limb to move the joint you pressed on. Press **Space** to gr
 
    In the Movement mirror, step back so your feet fit in the picture. When it asks for a clear bend, turn partway sideways and hold that knee bent briefly. Both live camera views start following a knee when two pictures in a row show a bend of at least 45 degrees. That is half a right angle in the picture. If the camera loses a knee for six tenths of a second, show its bend again when it returns. Visible arms can keep moving while a knee waits. The Movement mirror can still forecast where a visible point will move, using the places and times it saw that point in the pictures.
 
-4. Choose **Stop** in the Movement mirror or **Stop camera** in the recorder when you finish. Use **Close** or **Escape** to return from the Movement mirror. Your own mouse still controls the view of the game while the body follows the camera.
-5. To replay a movement, start video in the recorder. Choose **Record take** and **Finish take**. In the Command box, enter **replay my take** to move the simulated body through the saved poses. Takes stay in the current tab.
+4. Save any movement you want to keep before stopping capture. In the recorder, choose **Record take** and **Finish take**. In the Movement mirror, choose **Save take**. Open the Command box and enter **replay my take** to move the simulated body through the saved poses.
+5. Choose **Stop** in the Movement mirror or **Stop camera** in the recorder when you finish. Use **Close** or **Escape** to return from the Movement mirror. Your own mouse still controls the view of the game while the body follows the camera.
 
 In the Movement mirror, **Body follows** starts with both arms and knees. Choose one arm or knee, a pair, or both arms and knees. Choose **Forecast only** to keep the body under your game controls. A limb you turn off stops following at once. A limb you turn on waits for the next usable picture. If the panel is compact, open **Controls** to switch during playback.
 
 Use **Point to forecast** for a separate choice. The body can follow your right arm while the model forecasts where your left ankle will appear. A change to **Body follows** keeps the point forecast running. A change to **Point to forecast** starts a fresh forecast and keeps the selected limbs following. Pausing, seeking or finishing a video releases the tracked limbs. Timed pictures release them when the sequence ends. The last comparison stays on screen if one is available.
+
+Choose **Save take** once the mirror has tracked the limb you want. It keeps up to eight seconds of recent movement from the camera, video, or timed pictures. For a video you can pause and save movement from just before the current position. For timed pictures, wait until the mirror has read the images. Replay keeps the timing you supplied. The take keeps the estimated joint movements, their times and available arm marker positions in this tab. The camera image or file stays on your device.
+
+Choose **Open Command box** after saving, or return to the game and press **F**. The camera stops when the Command box opens. Type **replay my take** to play back the movement, or use **Named takes** to give it a name. Save before stopping the mirror. Changing the limbs, moving to a new time in a clip, or choosing a different source clears the movement waiting to be saved. A saved take stays available while you use the same tab. Changing the forecast point keeps the movement you can save.
 
 The Movement mirror uses the five most recent pictures to forecast where a point will be 0.12 seconds later. “Forecast from frame 5” means the fifth picture was the last one used for that prediction. The score uses the point found in the image closest to the target time, up to 0.04 seconds either side. It gives the difference in pixels, the small units that make up the picture.
 
@@ -65,7 +69,7 @@ When you seek, change limbs or open a new file, the game starts a fresh window f
 
 To save one limb, it needs to be tracked in at least two pictures. For **Both arms** or **Both knees**, each side needs two. For **Both arms and knees**, one limb appearing in two tracked pictures is enough. The take can include the other limbs when the tracker sees them.
 
-With the local model launcher, choose **Record a limb take** to open this recorder. The separate Movement mirror can open saved video and timed pictures.
+With the local model launcher, choose **Record a limb take** for the recorder controls above. You can also use **Save take** in the Movement mirror while following a saved video or after reading timed pictures.
 
 The tracker estimates joints in the picture. The virtual body moves from those estimates. The game simulates its electrical activity.
 

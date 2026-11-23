@@ -8141,6 +8141,8 @@ export function start(params = {}) {
       returnFocus() {if (gameReady() && shellIsPlaying(shellState)) canvas.focus({preventScroll:true});}});
     if (hasMovementMirror) {
       jointView = bindJointView({host:doc.body,onPose:applyTrackedPose,readRig:()=>readJointRig?.(),embedded:true,
+        onSaveTake:(take,source)=>motionCamera.saveTake(take,source),
+        onOpenCommand:chatOpen ? ()=>chatOpen.click() : null,
         onClose(){canvas.focus({preventScroll:true});}});
       if (takeRecorder) {
         takeRecorder.hidden = false;
@@ -8174,8 +8176,7 @@ export function start(params = {}) {
   if (takeRecorder?.hidden === false) {
     const cameraHelp = doc.getElementById?.('ns-camera-key-help');
     const recorderHelp = doc.getElementById?.('ns-take-recorder-help');
-    if (cameraHelp) cameraHelp.textContent = 'Press C for the Movement mirror. ' +
-      'To save a take from a camera, video or timed pictures, choose “Record a limb take” in the game toolbar.';
+    if (cameraHelp) cameraHelp.textContent = 'Press C for the Movement mirror. Choose Save take to keep the recent tracked movement, then use F to replay it.';
     if (recorderHelp) recorderHelp.textContent = takeRecorderInstruction;
   }
   const dialogControls = {

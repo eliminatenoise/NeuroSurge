@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createLimbTake, createTakeTimeline, createVideoTakeWindow} from '../limb-take.mjs';
+import {createLimbTake, createTakeTimeline, createVideoTakeWindow, pictureOffsetMs} from '../limb-take.mjs';
 
 const left = {bearing: [-0.3, 0.7, 0], upper: [-0.6, 0.2, 0], elbowDeg: 0};
 const right = {r_shoulder_abd: 0, r_shoulder_flex: 0, r_elbow_flex: 18.265};
@@ -165,6 +165,24 @@ test('a paired video take has two visible samples per limb in the current window
   assert.deepEqual(window.finish().counts, [2,3]);
   window.advance(8160);
   assert.equal(window.hasSamples, false);
+});
+
+test('the mirror picture window keeps both ends of an exact eight-second span', () => {
+  const window = createVideoTakeWindow('rightArm', Infinity, {pictureTimes: true});
+  const pose = {joints:right};
+  for (const at of [10.002, 18.002]) window.observe(pose, pictureOffsetMs(at, 10.002));
+  assert.deepEqual(window.finish().frames.map(frame => frame.time), [0, 8000]);
+  assert.equal(window.finish().duration, 8000);
+});
+
+test('the mirror picture window retains leading missing time within the saved interval', () => {
+  const window = createVideoTakeWindow('rightArm', Infinity, {pictureTimes: true});
+  const pose = {joints:right};
+  window.observe(null, 0);
+  window.observe(pose, 1000);
+  window.observe(pose, 2500);
+  assert.deepEqual(window.finish().frames.map(frame => frame.time), [1000, 2500]);
+  assert.equal(window.finish().duration, 2500);
 });
 
 test('timed pictures can include both ends of an eight-second sequence', () => {

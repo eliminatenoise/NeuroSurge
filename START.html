@@ -5,9 +5,9 @@
 <h1>Open NeuroSurge</h1>
 <p>Move a simulated body and explore its brain–muscle links in your browser. Your computer runs the 3D scene and simulation. You need JavaScript, WebGL, a keyboard and a mouse or trackpad.</p>
 <p><a class="open" href="scene/example/preview.html">Play Full</a> <a class="open" href="scene/example/preview.html?edition=lite">Play Lite</a> <a href="./">Game menu</a></p>
-<p><a class="open" href="https://github.com/eliminatenoise/NeuroSurge/releases/download/lite-selected-follow-2026-11-24/NeuroSurge-Lite.zip">Download Lite offline</a></p>
+<p><a class="open" href="https://github.com/eliminatenoise/NeuroSurge/releases/download/lite-mirror-replay-2026-11-24/NeuroSurge-Lite.zip">Download Lite offline</a></p>
 <p>Extract the ZIP and open the launcher for your computer in the <code>lite</code> folder with Node.js 18 or later installed. It starts a local copy of the game. Follow the <a href="lite/simple.html#local">launcher steps for Windows, macOS and Linux</a>.</p>
-<p>Game draft build <strong>experimental-2026-11-24-selected-follow</strong>. With your system’s reduced-motion setting on at launch, you’ll see stationary download progress as the game loads. The bones and muscles come from human atlases. The activity values are simulated and unitless. The browser game includes a camera-based pose tracker and examples from research models. Anatomy, movement, timing and performance still need work. <a href="PREVIEW-NOTES.html">Read the controls and current limits</a>.</p>
+<p>Game draft build <strong>experimental-2026-11-24-mirror-replay</strong>. With your system’s reduced-motion setting on at launch, you’ll see stationary download progress as the game loads. The bones and muscles come from human atlases. The activity values are simulated and unitless. The browser game includes a camera-based pose tracker and examples from research models. Anatomy, movement, timing and performance still need work. <a href="PREVIEW-NOTES.html">Read the controls and current limits</a>.</p>
 <h2>Save a shortcut to the online game</h2>
 <p>Download the file for your system and open the saved bookmark. Windows and macOS bookmarks open the browser without a terminal. If a download appears as text, extract the ZIP instead. Keep filename extensions and follow normal operating-system opening prompts.</p>
 <ul>
@@ -25,7 +25,7 @@
 <ol>
   <li>Keep the extracted game folder you are running. <a href="https://github.com/eliminatenoise/NeuroTranslation/raw/refs/heads/main/models/neurotranslate-0.0.zip">Download the NeuroTranslate 0.0 model ZIP</a> and extract it. Put the <code>neurotranslate-0.0</code> folder beside the game folder. It contains <code>joint_demo.py</code> and the model files.</li>
   <li>Use Python 3.10 or newer with NumPy installed. In the game folder, open the <strong>Play movement mirror</strong> launcher for your operating system, or run <code>python play-joint.py</code>.</li>
-  <li>Choose <strong>Play Full</strong> or <strong>Play Lite</strong>. Press <strong>F</strong> and enter “raise my right hand above my shoulder” to try a virtual movement goal. Press <strong>C</strong> to open the movement mirror. Choose <strong>Start camera</strong> to let it follow your video.</li>
+  <li>Choose <strong>Play Full</strong> or <strong>Play Lite</strong>. Press <strong>F</strong> and enter “raise my right hand above my shoulder” to try a virtual movement goal. Press <strong>C</strong> to open the Movement mirror. Choose <strong>Start camera</strong> to follow movement, then <strong>Save take</strong> to keep the recent tracked motion. Open the Command box and enter “replay my take”.</li>
 </ol>
 <p>For the fingertip touch forecast, open the <strong>Play fingertip touch</strong> launcher. Both launchers run on your computer. Open the local address printed in the terminal if your browser does not open automatically.</p>
 <p><a href="https://github.com/eliminatenoise/NeuroSurge">Canonical source on GitHub</a> · <a href="PLAYER-GUIDE.md">Player guide</a> · <a href="CREDITS-AND-LICENCES.md">Credits and licences</a></p>

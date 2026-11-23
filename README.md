@@ -1,6 +1,6 @@
 # NeuroSurge
 
-**[Play Full](https://eliminatenoise.github.io/NeuroSurge/scene/example/preview.html) · [Play Lite](https://eliminatenoise.github.io/NeuroSurge/scene/example/preview.html?edition=lite) · [Download Lite offline preview](https://github.com/eliminatenoise/NeuroSurge/releases/download/lite-selected-follow-2026-11-24/NeuroSurge-Lite.zip) · [Open the game menu](https://eliminatenoise.github.io/NeuroSurge/) · [Download launchers](https://eliminatenoise.github.io/NeuroSurge/START.html)**
+**[Play Full](https://eliminatenoise.github.io/NeuroSurge/scene/example/preview.html) · [Play Lite](https://eliminatenoise.github.io/NeuroSurge/scene/example/preview.html?edition=lite) · [Download Lite offline preview](https://github.com/eliminatenoise/NeuroSurge/releases/download/lite-mirror-replay-2026-11-24/NeuroSurge-Lite.zip) · [Open the game menu](https://eliminatenoise.github.io/NeuroSurge/) · [Download launchers](https://eliminatenoise.github.io/NeuroSurge/START.html)**
 
 **[Open the interactive project browser](https://eliminatenoise.github.io/NeuroTranslation/projects/?project=neurosurge)** · [Technical index](https://eliminatenoise.github.io/NeuroTranslation/projects/technical.html?project=neurosurge)
 
@@ -16,7 +16,7 @@ NeuroSurge is a 3D browser game. Aim at a coloured area of the motor strip, the 
 
 **C** opens camera controls. Choose **Start camera** to let the virtual body follow visible arms and knees. Video stays in your browser. Choose **Recorded video** to follow a file instead. From **Live camera**, you can save a short take of the estimated poses and play it back with the camera off.
 
-Open `START.html` in the locally running game and follow **Open the local NeuroTranslate model** for movement goals and forecasts.
+Open `START.html` in the locally running game and follow **Open the local NeuroTranslate model** for movement goals and forecasts. In that version, **Save take** in the Movement mirror keeps recent tracked movement for replay through **F**.
 
 ## Choose an edition
 

@@ -3,6 +3,15 @@
 import {trackingChoices} from './limb-pose.mjs';
 
 export const TAKE_LIMIT_MS = 8000;
+
+export function pictureOffsetMs(time, startTime) {
+  const offset = (time - startTime) * 1000;
+  // Correct decimal roundoff without quantizing fractional milliseconds.
+  const roundoff = Math.min(1e-6, Math.max(time, TAKE_LIMIT_MS / 1000) * Number.EPSILON * 1000);
+  const wholeMs = Math.round(offset);
+  return wholeMs > 0 && Math.abs(offset - wholeMs) <= roundoff ? wholeMs : offset;
+}
+
 const groupedLimbs = {
   bothArms: ['leftArm', 'rightArm'],
   bothKnees: ['leftLeg', 'rightLeg'],
@@ -105,15 +114,16 @@ export function createTakeTimeline(limb, start, {includeEnd = false} = {}) {
   return {start, observe, finish};
 }
 
-export function createVideoTakeWindow(limb, maxGapMs) {
+export function createVideoTakeWindow(limb, maxGapMs, {pictureTimes = false} = {}) {
   const sides = groupedLimbs[limb] || [limb];
   const counts = sides.map(() => 0);
   const samples = [];
-  let end = -1;
+  let end = -1, first = null;
+  const expired = at => pictureTimes ? at < end - TAKE_LIMIT_MS : at <= end - TAKE_LIMIT_MS;
   function advance(at) {
     if (!Number.isFinite(at) || at <= end) return;
     end = at;
-    while (samples.length && samples[0].at <= end - TAKE_LIMIT_MS) {
+    while (samples.length && expired(samples[0].at)) {
       const {seen} = samples.shift();
       for (let i = 0; i < counts.length; i++) counts[i] -= Number(seen[i]);
     }
@@ -121,7 +131,8 @@ export function createVideoTakeWindow(limb, maxGapMs) {
   return {
     advance,
     observe(pose, at, wrists, armGeometry) {
-      if (!Number.isFinite(at) || at < 0 || at <= end - TAKE_LIMIT_MS || at <= (samples.at(-1)?.at ?? -1)) return;
+      if (!Number.isFinite(at) || at < 0 || expired(at) || at <= (samples.at(-1)?.at ?? -1)) return;
+      first ??= at;
       const seen = sides.map(side => canUseLimb(pose, side));
       samples.push({pose, at, wrists, armGeometry, seen});
       for (let i = 0; i < counts.length; i++) counts[i] += Number(seen[i]);
@@ -130,8 +141,8 @@ export function createVideoTakeWindow(limb, maxGapMs) {
     get hasSamples() { return hasEnoughSamples(limb, counts); },
     finish() {
       if (!hasEnoughSamples(limb, counts)) return null;
-      const start = samples.find(sample => sample.seen.includes(true)).at;
-      const timeline = createTakeTimeline(limb, start);
+      const start = pictureTimes ? Math.max(first, end - TAKE_LIMIT_MS) : samples.find(sample => sample.seen.includes(true)).at;
+      const timeline = createTakeTimeline(limb, start, {includeEnd: pictureTimes});
       let previous;
       for (const {pose, at, wrists, armGeometry} of samples) {
         if (at < start) continue;
