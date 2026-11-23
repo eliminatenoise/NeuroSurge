@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createLimbTake, createTakeTimeline} from '../limb-take.mjs';
+import {createLimbTake, createTakeTimeline, createVideoTakeWindow} from '../limb-take.mjs';
 
 const left = {bearing: [-0.3, 0.7, 0], upper: [-0.6, 0.2, 0], elbowDeg: 0};
 const right = {r_shoulder_abd: 0, r_shoulder_flex: 0, r_elbow_flex: 18.265};
@@ -118,4 +118,51 @@ test('four-limb takes preserve partial visibility on the original frame clock', 
   assert.equal(sparse.finish(40), null);
   sparse.observe({joints:{knee_ext_R:-45}},130);
   assert.deepEqual(sparse.finish(150).counts, [0,0,0,2]);
+});
+
+test('the video take keeps only the recent source window and releases across missing frames', () => {
+  const window = createVideoTakeWindow('rightArm', 1200);
+  const pose = {joints:right};
+  window.observe(pose, 0);
+  window.observe(pose, 50);
+  window.observe(pose, 2000, {rightArm:[.1,.2]});
+  window.observe(pose, 2320, {rightArm:[.2,.3]});
+  window.observe(null, 2320);
+  window.observe(pose, 8010);
+  const take = window.finish();
+  assert.equal(window.hasSamples, true);
+  assert.equal(take.duration, 7960);
+  assert.deepEqual(take.frames.map(frame => [frame.time, frame.pose !== null]), [
+    [0,true],[1200,false],[1950,true],[2270,true],[3470,false],[7960,true]
+  ]);
+  assert.deepEqual(take.frames[2].wrists, {rightArm:[.1,.2]});
+
+  window.observe(null, 16020);
+  assert.equal(window.hasSamples, false);
+  assert.equal(window.finish(), null);
+  assert.equal(take.frames.length, 6);
+});
+
+test('the last frame stays when the playhead is eight seconds from an older frame', () => {
+  const window = createVideoTakeWindow('rightArm', 1200);
+  const pose = {joints:right};
+  for (const at of [1000, 1125, 9000]) window.observe(pose, at);
+  window.advance(9100);
+  assert.deepEqual(window.finish().frames.map(frame => frame.time), [0,1200,7875]);
+  window.advance(10500);
+  assert.equal(window.hasSamples, false);
+  assert.equal(window.finish(), null);
+});
+
+test('a paired video take has two visible samples per limb in the current window', () => {
+  const window = createVideoTakeWindow('bothArms', 1200);
+  for (const at of [10, 160, 220]) window.observe({joints:right}, at);
+  window.observe({leftArm:left}, 300);
+  assert.equal(window.hasSamples, false);
+  assert.equal(window.finish(), null);
+  window.observe({leftArm:left}, 360);
+  assert.equal(window.hasSamples, true);
+  assert.deepEqual(window.finish().counts, [2,3]);
+  window.advance(8160);
+  assert.equal(window.hasSamples, false);
 });

@@ -134,7 +134,7 @@ export function bindWristForecast(panel, getLatestTake, dismiss) {
           for (const value of values) tr.insertCell().textContent = value;
         }
         row('Forecast', trend.predictions.map(coordinate));
-        row(isExample ? 'Example path' : 'Camera path', observations.map(o => o.point ? coordinate(o.point) + ' · ' + o.kind : o.kind));
+        row(isExample ? 'Example path' : 'Tracked wrist path', observations.map(o => o.point ? coordinate(o.point) + ' · ' + o.kind : o.kind));
         for (const [fraction, label] of [[1, 'Trend error'], [.5, 'Half-speed error'], [0, 'Hold error']]) {
           row(label, observations.map((o, k) => {
             if (!o.point) return '—';
@@ -150,15 +150,17 @@ export function bindWristForecast(panel, getLatestTake, dismiss) {
   function select(example) {
     stop();
     isExample = example;
-    frames = wristFrames(example ? exampleTake() : getLatestTake());
+    const take = example ? exampleTake() : getLatestTake();
+    frames = wristFrames(take);
     const haveWrist = frames.some(f => sides.some(side => f[side]));
     offsetsOnly = haveWrist && !frames.some(f => f.armGeometry);
     controls.hidden = !haveWrist;
     q('[data-use-take]').hidden = !example;
     q('[data-example]').hidden = example;
     report.textContent = example ? 'Authored example · two synthetic wrist paths sampled every 50 ms, with a break on the left.' :
-      haveWrist ? 'Last camera take · tracked arm positions on the original frame clock. This take stays in this tab.' :
-      'No wrist samples in the last take. Press C, choose an arm or both arms, record a take and finish it. Or try the example below.';
+      haveWrist ? (take.source === 'video' ? 'Last video take' : 'Last camera take') +
+        ' · tracked arm positions at the original frame times. This take stays in this tab.' :
+      'No wrist samples in the last take. Use the recorder to save an arm take, or try the example below.';
     if (!haveWrist) return;
     slider.max = String(frames.length - 1);
     const mid = (frames[0].time + frames.at(-1).time) / 2;

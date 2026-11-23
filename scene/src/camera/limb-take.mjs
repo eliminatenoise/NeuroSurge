@@ -12,20 +12,31 @@ const jointKeys = {
   leftLeg: ['knee_ext_L']
 };
 
-// Keep only the game channels named here if the worker gains new outputs.
-function copyLimb(result, limb, pose) {
+function canUseLimb(result, limb) {
   if (!result) return false;
   if (limb === 'leftArm') {
     const arm = result.leftArm;
     const direction = v => Array.isArray(v) && v.length === 3 && v.every(Number.isFinite);
-    if (!arm || !direction(arm.bearing) || !direction(arm.upper) || !Number.isFinite(arm.elbowDeg)) return false;
+    return !!arm && direction(arm.bearing) && direction(arm.upper) && Number.isFinite(arm.elbowDeg);
+  }
+  return jointKeys[limb].every(key => Number.isFinite(result.joints?.[key]));
+}
+
+function hasEnoughSamples(limb, counts) {
+  const enough = count => count >= 2;
+  return limb === 'armsAndKnees' ? counts.some(enough) : counts.every(enough);
+}
+
+// Keep only the game channels named here if the worker gains new outputs.
+function copyLimb(result, limb, pose) {
+  if (!canUseLimb(result, limb)) return false;
+  if (limb === 'leftArm') {
+    const arm = result.leftArm;
     pose.leftArm = {bearing: [...arm.bearing], upper: [...arm.upper], elbowDeg: arm.elbowDeg};
     return true;
   }
-  const keys = jointKeys[limb];
-  for (const key of keys) if (!Number.isFinite(result.joints?.[key])) return false;
   const joints = pose.joints ??= {};
-  for (const key of keys) joints[key] = result.joints[key];
+  for (const key of jointKeys[limb]) joints[key] = result.joints[key];
   return true;
 }
 
@@ -78,12 +89,54 @@ export function createTakeTimeline(limb, start) {
     }
   }
   function finish(at) {
-    const enough = n => n >= 2;
-    const ready = limb === 'armsAndKnees' ? counts.some(enough) : counts.every(enough);
-    if (!ready) return null;
+    if (!hasEnoughSamples(limb, counts)) return null;
     return {limb, frames, count, counts, duration: Math.min(LIMIT_MS, at - start)};
   }
   return {start, observe, finish};
+}
+
+export function createVideoTakeWindow(limb, maxGapMs) {
+  const sides = groupedLimbs[limb] || [limb];
+  const counts = sides.map(() => 0);
+  const samples = [];
+  let end = -1;
+  function advance(at) {
+    if (!Number.isFinite(at) || at <= end) return;
+    end = at;
+    while (samples.length && samples[0].at <= end - LIMIT_MS) {
+      const {seen} = samples.shift();
+      for (let i = 0; i < counts.length; i++) counts[i] -= Number(seen[i]);
+    }
+  }
+  return {
+    advance,
+    observe(pose, at, wrists, armGeometry) {
+      if (!Number.isFinite(at) || at < 0 || at <= end - LIMIT_MS || at <= (samples.at(-1)?.at ?? -1)) return;
+      const seen = sides.map(side => canUseLimb(pose, side));
+      samples.push({pose, at, wrists, armGeometry, seen});
+      for (let i = 0; i < counts.length; i++) counts[i] += Number(seen[i]);
+      advance(at);
+    },
+    get hasSamples() { return hasEnoughSamples(limb, counts); },
+    finish() {
+      if (!hasEnoughSamples(limb, counts)) return null;
+      const start = samples.find(sample => sample.seen.includes(true)).at;
+      const timeline = createTakeTimeline(limb, start);
+      let previous;
+      for (const {pose, at, wrists, armGeometry} of samples) {
+        if (at < start) continue;
+        // A missing frame supplies no pose. Release the last pose across a
+        // long gap even if no decoded image arrived to report the loss.
+        if (previous?.pose && at - previous.at > maxGapMs) {
+          timeline.observe(null, previous.at + maxGapMs);
+        }
+        timeline.observe(pose, at, false, wrists, armGeometry);
+        previous = {pose, at};
+      }
+      if (previous.pose && end - previous.at > maxGapMs) timeline.observe(null, previous.at + maxGapMs);
+      return timeline.finish(end);
+    },
+  };
 }
 
 export function createLimbTake({panel, emit, onFinish, onReplay, returnFocus}) {
@@ -152,12 +205,13 @@ export function createLimbTake({panel, emit, onFinish, onReplay, returnFocus}) {
     onFinish();
   }
   function summary() {
+    const title = saved.source === 'video' ? 'Video take · ' + saved.name : saved.name;
     if (saved.limb === 'armsAndKnees') {
       const counts = ['left arm', 'right arm', 'left knee', 'right knee'].map((side, i) => saved.counts[i] + ' ' + side);
-      return saved.name + ' · ' + seconds(saved.duration) + ' · ' + saved.count + ' pose samples (' + counts.join(', ') + ').';
+      return title + ' · ' + seconds(saved.duration) + ' · ' + saved.count + ' pose samples (' + counts.join(', ') + ').';
     }
     const sides = saved.counts.length === 2 ? ' (' + saved.counts[0] + ' left, ' + saved.counts[1] + ' right)' : '';
-    return saved.name + ' · ' + seconds(saved.duration) + ' · ' + saved.count + ' pose samples' + sides + '.';
+    return title + ' · ' + seconds(saved.duration) + ' · ' + saved.count + ' pose samples' + sides + '.';
   }
   function stopReplay() {
     if (!playing) return;
@@ -214,6 +268,11 @@ export function createLimbTake({panel, emit, onFinish, onReplay, returnFocus}) {
   refresh();
   return {
     observe, interrupt, play,
+    saveVideo(take, displayName) {
+      saved = {...take, name: displayName, source: 'video'};
+      info.textContent = summary();
+      refresh();
+    },
     get recording() { return !!recording; },
     get hasTake() { return !!saved; },
     get latest() { return saved; },

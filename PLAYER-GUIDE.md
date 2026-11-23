@@ -45,7 +45,14 @@ A local model can also forecast a tracked point or answer a supported movement g
 2. Choose a file under **Local video**, then select **Play video**. Use a file up to about 537 MB. Your browser must be able to play it and tell the game when each new picture appears. The file stays on this device. The game shows the picture as it was saved, so a mirrored recording can reverse left and right.
 3. **Following** and a green line show which limbs the game can use. **Waiting for a bend** means the game can see the knee and needs a clearer starting bend. **No usable pose** means the joints in that picture could not be used. Try a part of the video where you can see more of the limb.
 4. Pause or move to another time with the video controls. The previous tracking clears. The game also clears a result that falls 1.2 seconds or more behind playback. Choose **Stop video** to stop early or press **F** to stop and open the Command box. You can play the selected file again after it ends or you choose Stop video.
-5. To save a take for the Command box, switch to **Live camera** and select **Start camera**. The recorder keeps any earlier live take while you play a file and shows the take controls again when you switch back. The local model launcher also offers saved video and timed pictures in the Movement mirror.
+5. Choose **Save video take** while the video plays, after pausing, after stopping or at the end. It keeps tracked movement from up to eight seconds before the current position in the video. The timing follows the source even if you played it slowly. Gaps in tracking still take up time.
+6. Press **F** and enter **replay my take**. To keep the take under a name, open **Named takes**, type a name and choose **Save last take**. For a take saved as **side reach**, enter **replay take named side reach**. Named takes and the latest take stay in this tab.
+
+When you seek, change limbs or open a new file, the game starts a fresh window for the next take. Your earlier take stays until you choose **Save video take** again or finish a live take. The game keeps the tracked joint movement in memory. The picture and sound remain in the original file.
+
+To save one limb, it needs to be tracked in at least two pictures. For **Both arms** or **Both knees**, each side needs two. For **Both arms and knees**, one limb appearing in two tracked pictures is enough. The take can include the other limbs when the tracker sees them.
+
+With the local model launcher, choose **Record a limb take** to open this recorder. The separate Movement mirror can open saved video and timed pictures.
 
 The tracker estimates joints in the picture. The virtual body moves from those estimates. The game simulates its electrical activity.
 

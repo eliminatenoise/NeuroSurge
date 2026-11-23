@@ -40,7 +40,7 @@ export function takeShape(take, side) {
       };
     const t = frame.time, prev = samples.at(-1)?.[0];
     if (!Number.isFinite(t) || (prev !== undefined && (t <= prev || t - prev > maxGapMs)))
-      return {issue: 'The camera samples are too far apart or out of order. Try a continuous reach.'};
+      return {issue: 'The tracked samples are too far apart or out of order. Try a continuous reach.'};
     samples.push([t, ...frame.wrists[side]]);
   }
   const span = samples.at(-1)[0] - samples[0][0];

@@ -46,7 +46,7 @@ export function showRoleForecast(panel, frames, index, lead, isExample) {
   readings.replaceChildren();
   canvas.hidden = true;
   if (result.issue) { report.textContent = result.issue; return; }
-  report.textContent = result.originalSamples + (isExample ? ' example samples' : ' camera samples') +
+  report.textContent = result.originalSamples + (isExample ? ' example samples' : ' tracked samples') +
     ' bracket the 15 input times. ' + result.interpolated + ' of those 15 positions use interpolation.';
   const visible = [];
   for (const side of sides) {
@@ -71,7 +71,7 @@ export function showRoleForecast(panel, frames, index, lead, isExample) {
       for (const v of values) tr.insertCell().textContent = v;
     }
     row('Model position', arm.predictions.map(coordinate));
-    row(isExample ? 'Example path' : 'Camera path', observed.map(o => o.point ? coordinate(o.point) + ' · ' + o.kind : o.kind));
+    row(isExample ? 'Example path' : 'Tracked wrist path', observed.map(o => o.point ? coordinate(o.point) + ' · ' + o.kind : o.kind));
     row('Model error', observed.map((o, i) => o.point ? distance(o.point, arm.predictions[i]) : '—'));
     row('Hold error', observed.map(o => o.point ? distance(o.point, arm.last) : '—'));
     section.append(table);

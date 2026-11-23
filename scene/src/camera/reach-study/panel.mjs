@@ -94,7 +94,7 @@ export function bindReachStudy(panel, getLatestTake, dismiss) {
     plot(q('[data-spatial]'), [{path: mm.map(project), color: amber}], i, axes);
     const metric = ranking.ranked.find(row => row.index === Number(listed.value));
     q('[data-shape-key]').textContent = 'Blue dashes show the ' +
-        (exampleMode ? 'example query' : 'camera wrist') +
+        (exampleMode ? 'example query' : 'tracked wrist') +
         '. Amber shows the study hand X/Y. Distance ' + score(metric.distance) + ' (unitless).';
     const p = r.path[i].map(v => fmt(v * 1000));
     q('[data-coordinates]').textContent = (i * 10) + ' ms · row ' + (r.k - 20 + i) +
@@ -102,7 +102,7 @@ export function bindReachStudy(panel, getLatestTake, dismiss) {
     q('[data-spikes]').textContent = label(r) + ', cue ' + r.cue + ' · ' +
         r.spikes.reduce((a, b) => a + b, 0) +
         ' recorded area 2 spikes across 37 contacts in the following 100 ms (rows ' + (r.k + 10) + '–' +
-        (r.k + 19) + '). These are macaque recordings. The camera measures movement only.';
+        (r.k + 19) + '). The electrode counts come from the macaque recordings. The wrist tracker estimates movement from pictures.';
   }
   function compare() {
     stop();

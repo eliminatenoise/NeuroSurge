@@ -340,7 +340,7 @@ export function bindActionChat({ dialog, trigger, canvas, canOpen, pause, resume
         message.textContent = named.size
           ? 'No saved take has that exact name. Check the list under Named takes.'
           : 'No saved take has that exact name. Return to the game. ' + takeRecorderInstruction +
-            ' Finish a take, then save it under Named takes.';
+            ' Save a take in the recorder, then name it under Named takes.';
         field.focus();
         return;
       }
@@ -473,7 +473,7 @@ export function bindActionChat({ dialog, trigger, canvas, canOpen, pause, resume
       const name = latest?.name;
       if (!name) {
         message.textContent = 'No finished take in this tab. Return to the game. ' + takeRecorderInstruction +
-          ' Choose Record take, then Finish take.';
+          ' In Live camera, choose Record take and Finish take. In Recorded video, choose Save video take.';
         field.focus();
         return;
       }

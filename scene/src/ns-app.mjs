@@ -7961,8 +7961,8 @@ export function start(params = {}) {
     }, true);
   }
   const takeRecorderInstruction = takeRecorder?.hidden === false
-    ? 'Choose “Record a limb take” in the game toolbar, then select Start camera.'
-    : 'Press C to open the recorder, then select Start camera.';
+    ? 'Choose “Record a limb take” in the game toolbar.'
+    : 'Press C to open the recorder.';
   if (takeRecorder?.hidden === false) {
     const cameraHelp = doc.getElementById?.('ns-camera-key-help');
     const recorderHelp = doc.getElementById?.('ns-take-recorder-help');

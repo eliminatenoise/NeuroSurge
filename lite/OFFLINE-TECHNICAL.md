@@ -2,7 +2,9 @@
 
 Extract the ZIP. In `lite/`, open `Play NeuroSurge Lite on Windows.cmd` on Windows, open `Play NeuroSurge Lite on macOS.command` on macOS, or run `sh "Play NeuroSurge Lite on Linux.sh"` on Linux. You can also run `node lite/launch.mjs` from the extracted folder. Node.js 18+ serves the shared game over loopback. Open the printed address with a desktop browser, WebGL, keyboard and pointer and choose **Play Lite**. **Ctrl+C** stops the server.
 
-The archive keeps the Lite packs, the shared engine, the remaining runtime assets and the asset licences. Original OBJ files covered by the pack index, Full transport files, tools and tests are available from the source repository. The pack index and body rig retain their SHA-256 hashes. The local model route uses `joint-game.json`. F runs virtual commands. C opens live capture or local video playback. Camera access starts with the separate Start camera action. Tracker output estimates visible movement; electrical activity is simulated.
+The archive keeps the Lite packs, the shared engine, the remaining runtime assets and the asset licences. Original OBJ files covered by the pack index, Full transport files, tools and tests are available from the source repository. The pack index and body rig retain their SHA-256 hashes. The local model route uses `joint-game.json`. F runs virtual commands. C opens live capture or local video playback. Camera access starts with the separate Start camera action. Tracker output estimates visible movement. Electrical activity is simulated.
+
+**Save video take** retains up to eight seconds of pose estimates in tab memory. Press F and enter **replay my take** to replay the retained motion.
 
 For forecasts, place the separate NeuroTranslate model beside the game and use a movement mirror launcher with Python 3.10+ and NumPy.
 

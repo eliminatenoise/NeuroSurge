@@ -64,8 +64,8 @@
       <p data-start-local-model><a href="../../START.html#local-model">Open the local NeuroTranslate model</a> for movement goals and fingertip touch forecasts.</p>
       <p>Type “show recorded brain activity” to compare finger cues from a human recording.</p>
       <p>Type “generate walk” or “generate run” to see the model draw a stride in 3D. Type “forecast heel movement” to predict right heel travel and force on a plate. Try “forecast my usual walk” or “forecast fast walking without running” to compare two walking instructions. Type “forecast my balance” for head and pelvis movement after a visual rotation. Type “forecast muscle and movement” to see a leg voltage forecast alongside a path for the pelvis. Try “forecast my wrist lift” or “forecast my pelvis path” to compare a model trained on two studies with one trained on your chosen task.</p>
-      <p>To record a movement for replay, first close the Command box. <span id="ns-take-recorder-help">Press C to open the recorder, then select Start camera.</span> Allow video when asked. Choose a limb, select <strong>Record take</strong>, then <strong>Finish take</strong>. Open the Command box and type “replay my take”. To keep a take, open <strong>Named takes</strong> below. Try “replay take named warm up”.</p>
-      <p>After recording, type “forecast my wrists” to estimate the next half second of a wrist path. Choose a lead arm to try the shoulder model. Type “match my arm reach” to compare the path with eight recorded macaque reaches.</p>
+      <p>To save a movement for replay, close the Command box. <span id="ns-take-recorder-help">Press C to open the recorder.</span> Choose a limb. In <strong>Live camera</strong>, select <strong>Start camera</strong>, allow video when asked, then use <strong>Record take</strong> and <strong>Finish take</strong>. In <strong>Recorded video</strong>, play a local file and choose <strong>Save video take</strong>. Press F and type “replay my take”. To keep it under a name, open <strong>Named takes</strong>, enter a name and choose <strong>Save last take</strong>.</p>
+      <p>After saving an arm take, type “forecast my wrists” to estimate the next half second of a wrist path. Choose a lead arm to try the shoulder model. Type “match my arm reach” to compare the path with eight recorded macaque reaches.</p>
     </details>
   </form>
   <details data-named-takes hidden>
@@ -136,7 +136,7 @@
     <p data-source role="status"></p>
     <button type="button" data-return>Back to game</button>
     <button type="button" data-example>Try a synthetic example</button>
-    <button type="button" data-use-take hidden>Use last camera take</button>
+    <button type="button" data-use-take hidden>Use last take</button>
     <div data-wrist-results hidden>
       <label>Time in take <output data-clock></output><input data-cutoff type="range" min="0" max="0" step="1" value="0"></label>
       <button type="button" data-play>Replay at half speed</button>
@@ -178,11 +178,11 @@
   </section>
   <section data-reach-study hidden>
     <h2 id="ns-study-title" tabindex="-1">Match an arm reach</h2>
-    <p id="ns-study-help">Compare the last camera take with eight recordings from macaque C, one week after the training session.</p>
+    <p id="ns-study-help">Compare the last tracked arm take with eight recordings from macaque C, one week after the training session.</p>
     <label>Arm in take <select data-side><option value="rightArm">Right</option><option value="leftArm">Left</option></select></label>
     <p role="status" data-match-status></p>
     <button type="button" data-example>Try a recorded example</button>
-    <button type="button" data-use-take hidden>Use last camera take</button>
+    <button type="button" data-use-take hidden>Use last take</button>
     <div data-study-result hidden>
       <label>Study reach <select data-case></select></label>
       <canvas width="480" height="192" data-shapes role="img" aria-label="Two projected paths from their common starting point"></canvas>
@@ -198,7 +198,7 @@
     <details><summary>How the paths are compared</summary>
       <p>Face the lens. Each visible wrist is measured from its own shoulder in image heights. Outward motion is positive horizontal on either arm, so the right arm is reflected from the raw camera image. Up is positive vertical. The mirrored camera preview is for viewing only.</p>
       <p>The optical hand marker has three study coordinates in shoulder-relative metres. We compare its X and Y to the two camera directions by convention. Camera depth is unknown. Matching keeps direction, subtracts each start and divides both axes by the largest distance from that start. We sample 30 equally spaced instants from start to finish and rank the root-mean-square point distances. Zero means identical normalized paths. The score has no units.</p>
-      <p>A camera query needs five visible samples over at least 200 ms, with no tracking loss between them or gap over 400 ms. It must move more than 2.5% of the image height. Matching excludes leading and trailing time without a visible wrist. Similarity describes the gesture. The electrode counts belong to the selected animal trial.</p>
+      <p>A tracked take needs five visible samples over at least 200 ms, with no tracking loss between them or gap over 400 ms. The wrist must move more than 2.5% of the image height. Matching excludes leading and trailing time without a visible wrist. Similarity describes the gesture. The electrode counts belong to the selected animal trial.</p>
       <p>Chowdhury, Glaser &amp; Miller · September 14, 2017 · CC0. <a href="https://doi.org/10.5061/dryad.nk98sf7q7" target="_blank" rel="noreferrer">Recording</a> · <a href="https://doi.org/10.7554/eLife.48198" target="_blank" rel="noreferrer">Study</a></p>
     </details>
     <button type="button" data-return>Back to game</button>
@@ -337,7 +337,7 @@
     </div>
     <details>
       <summary>Walking measurements used for training</summary>
-      <p>Adults walked barefoot at a slow metronome pace in a gait laboratory. Skin markers, right-leg muscle voltages and two force plates supplied the training measurements. The fit uses right-foot contacts with verified plate assignment. A camera take in this game supplies image-derived limb angles. It cannot supply the laboratory marker positions or muscle voltages used here.</p>
+      <p>Adults walked barefoot at a slow metronome pace in a gait laboratory. Skin markers, right-leg muscle voltages and two force plates supplied the training measurements. The fit uses right-foot contacts with verified plate assignment. The game estimates limb angles from pictures. The comparison uses the laboratory's marker positions and muscle voltages.</p>
       <p>On 203 examples from 25 people, with people held out by fold, the mean heel-position error was 1.37 mm and the mean absolute force error was 100 N. A model using just markers and timing achieved lower errors on both (1.25 mm and 90 N). These tests found no advantage from adding the muscle signals.</p>
       <p>Céline Schreiber and Florent Moissenet, Rehazenter, Luxembourg. <a href="https://doi.org/10.6084/m9.figshare.7734767.v8" target="_blank" rel="noopener">Walking measurements (v8)</a> · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a></p>
     </details>

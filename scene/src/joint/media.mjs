@@ -15,7 +15,7 @@ export function readKeyframes(files, times) {
   if (rows.some((r,i)=>i && r.t<=rows[i-1].t)) throw Error('Each still needs a distinct capture time.');
   return rows;
 }
-export function captureSource({kind,video,clip,stills,followKnees=false,getLimb,onFrame,onReset,onStatus,onError,onEnd}) {
+export function captureSource({kind,video,clip,stills,followKnees=false,getLimb,captureWrists=false,onFrame,onReset,onStatus,onError,onEnd}) {
   let closed=false, epoch=0, id=0, busy=false, clock=0, callback, stream, objectURL, worker, timer, silence, finish;
   const buffer=document.createElement('canvas'), ctx=buffer.getContext('2d',{alpha:false});
   const cancel=()=>new DOMException('Stopped','AbortError');
@@ -60,7 +60,7 @@ export function captureSource({kind,video,clip,stills,followKnees=false,getLimb,
       const frame=await createImageBitmap(buffer);
       if(closed || gen!==epoch) {frame.close();return;}
       const result=await callWorker({type:'frame',frame,timestamp:++clock,limb,selection:gen,
-        jointPoints:!getLimb,limbPaths:!!getLimb,independent:true},[frame]);
+        jointPoints:!getLimb,limbPaths:!!getLimb,independent:true,...(captureWrists ? {captureWrists:true} : {})},[frame]);
       if (closed || gen!==epoch) return;
       if (kind==='camera' && performance.now()-grabbed>350) {
         reset('Camera processing lag. Waiting for a current frame.');return;
@@ -70,7 +70,8 @@ export function captureSource({kind,video,clip,stills,followKnees=false,getLimb,
         silence=setTimeout(()=>{if(!closed)reset('Camera frame gap. Waiting for fresh observations.');},400);
       }
       onFrame({id:sequence,t,xy:result.xy,pose:result.result,w:buffer.width,h:buffer.height,bitmap:buffer,
-        ...(getLimb ? {limbPaths:result.limbPaths} : {})});
+        ...(getLimb ? {limbPaths:result.limbPaths} : {}),
+        ...(captureWrists ? {wrists:result.wrists,armGeometry:result.armGeometry} : {})});
     } finally {busy=false;}
   }
   function schedule() {

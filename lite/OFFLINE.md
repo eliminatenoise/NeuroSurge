@@ -9,6 +9,8 @@ NeuroSurge is a browser game. Move the virtual body and watch the mirror body re
 
 Use a desktop browser with WebGL, a keyboard and a mouse or trackpad. Press **F** for the Command box or **C** to open the recorder. Choose **Recorded video** under **Source** to play a file that stays on your device. For live capture, choose **Start camera** and grant permission. The camera estimates visible movement. The game simulates the electrical activity.
 
+After showing a movement from a file, choose **Save video take**. Press **F** and type **replay my take** to see the virtual body repeat the recent movement. The take keeps up to eight seconds of tracked joint movement in this browser tab.
+
 For a separate forecast from NeuroTranslate, extract the model beside the game folder and use the **Play movement mirror** launcher. That optional route uses Python 3.10 or later with NumPy. The game download supplies its own examples.
 
 The archive omits the Full edition's pack files, original meshes already covered by Lite's packs, and development checks. Licences, other game assets and the shared game are included. The file named `SHA256SUMS` lists a digital fingerprint for each included file. It can help you check that the files survived the download and extraction. The source repository provides the original meshes and build tools. The Technical guide explains how to make the ZIP from the source. That separate build uses Python to turn the player guides into pages with clickable links. [NeuroSurge source](https://github.com/eliminatenoise/NeuroSurge)
