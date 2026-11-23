@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-24-live-knees",
+  "version": "experimental-2026-11-24-forecast-timing",
   "source": "Full and Lite share motion commands, opt-in video tracking, a shoulder and hip tutorial and an optional local model. Escape can resume play with a free pointer. The recorder lets players choose limbs before starting video and shows which limbs are following, need a knee bend, or need a clearer view. The recorder follows new camera frames and releases tracking on a stall in browsers that report when a frame is displayed. The Lite download assembles the same game from this inventory with one set of packs and the assets it uses. The standalone recorder follows supported movement in a local video and releases tracking during pause or seek. Players can save up to eight seconds of tracked movement from a local video and replay the take through the Command box. Timed pictures can be tracked locally and replayed as a picture take. Animation between pictures does not add stored sample rows.",
   "experimental": true,
   "incomplete_acceptance": true,
@@ -54,13 +54,13 @@
     },
     {
       "path": "PLAYER-GUIDE-TECHNICAL.md",
-      "bytes": 8816,
-      "sha256": "8be0e9cbe28ae0ae74d8384d151f896693484cb3ecb11734f599995a6dc5f8b8"
+      "bytes": 9349,
+      "sha256": "dea08431954a9ce2914661846dab7c920df22a59cb1758e15616f5840be539cc"
     },
     {
       "path": "PLAYER-GUIDE.md",
-      "bytes": 12779,
-      "sha256": "6551cb7004fd6c0986639ac7b9e55b30d584437816331e84cc81de1432778785"
+      "bytes": 13500,
+      "sha256": "9e3f085f58a3c8070be9a267ac1beb9851b92eba82061303a4c6ea7f90ced9ff"
     },
     {
       "path": "PREVIEW-NOTES.html",
@@ -104,8 +104,8 @@
     },
     {
       "path": "README.md",
-      "bytes": 3403,
-      "sha256": "bca1643c3dd7f79f8a2594a653b8dcb8c7f0d3d97826af43b6ea954664ead980"
+      "bytes": 3408,
+      "sha256": "f6c7cc78216e39fafc1d010caf4faf5bf92cd8c2153badd4841b037afc28448c"
     },
     {
       "path": "START.html",
@@ -309,8 +309,8 @@
     },
     {
       "path": "lite/README.md",
-      "bytes": 1755,
-      "sha256": "0acb63a1cb9a9a8c4c69fe5a6ed80ab96459128327640ebb456a370b22bc7151"
+      "bytes": 1760,
+      "sha256": "44be74fa0ed8e08bed2e654fd0d0acf296f4ee1979f36760c510838601a5f5d1"
     },
     {
       "path": "lite/asset-pin.mjs",
@@ -379,13 +379,13 @@
     },
     {
       "path": "lite/simple.html",
-      "bytes": 3394,
-      "sha256": "f85ae7f1148099ef0e963b127dc2ccc032d2bd965cc5002eb826e1028d70478d"
+      "bytes": 3399,
+      "sha256": "322f7ef78fdf51a37476ff429276910223f7d22e7976a7e40e8a59678729a4fa"
     },
     {
       "path": "lite/technical.html",
-      "bytes": 2525,
-      "sha256": "aee6ffb26c87fabc864b18a25fedae0c84f65e440be231008dd240e18391e36c"
+      "bytes": 2530,
+      "sha256": "a6d0d1557d0795ac5caaeed7108f0a6f043e71ecc0284923a160b3657834a039"
     },
     {
       "path": "media/game-view.webp",
@@ -4919,13 +4919,13 @@
     },
     {
       "path": "scene/src/joint/landmark.mjs",
-      "bytes": 4882,
-      "sha256": "06c7c3cf980faec2c364b72a6b238e41b26e8ed1916add5e07d8231e2c2573be"
+      "bytes": 5898,
+      "sha256": "60c804d1db8357cfe1d263771e99101ad4af939a6d570eebf190aa18a650ea86"
     },
     {
       "path": "scene/src/joint/media.mjs",
-      "bytes": 7560,
-      "sha256": "97c399ea639ac0bb1d357fee8438aac77cae979a532e2438800ea1dba80a2c22"
+      "bytes": 7948,
+      "sha256": "09199d6981abc9c02fb115ebe520f813a521e53e5555ccc469cca3d83ab3bbfc"
     },
     {
       "path": "scene/src/joint/route.mjs",
@@ -4944,8 +4944,8 @@
     },
     {
       "path": "scene/src/joint/view.mjs",
-      "bytes": 24370,
-      "sha256": "a79cfae03ba64a0a78413f5a298e9f0987949476e4feb438b3b23a37b7638fa4"
+      "bytes": 25531,
+      "sha256": "fe8b1f6ef230531080d9191ef36ad723c699ddd2308c42be521f9a3e8aec45e6"
     },
     {
       "path": "scene/src/ns-action-chat.mjs",
@@ -5831,6 +5831,11 @@
       "path": "tests/joint-route.test.mjs",
       "bytes": 836,
       "sha256": "771b4670be7d461aacd89385ff195bbda253f5e1a194774c8a3d099d534cea4f"
+    },
+    {
+      "path": "tests/joint-timing.test.mjs",
+      "bytes": 5402,
+      "sha256": "11d1605b0a1c444d3a78ad91124babf3283976ddbb774c5ab68568c707b348d5"
     },
     {
       "path": "tests/joints.test.mjs",
