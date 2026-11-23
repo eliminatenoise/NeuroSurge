@@ -12,6 +12,14 @@ NeuroSurge is a 3D browser game. Aim at a coloured area of the motor strip, the 
 
 [![Open the game menu. The NeuroSurge motor strip, player and mirror body.](media/game-view.webp)](https://eliminatenoise.github.io/NeuroSurge/)
 
+## Movement controls
+
+**F** opens the Command box. Type **bend my right elbow** and choose **Move**. Where your browser supports on-device dictation, **Use voice** fills in the words for you to review.
+
+In this build, **C** opens the Movement mirror. Choose **Start camera** to let the virtual body follow visible arms and knees, or choose a local video or timed pictures. The included NeuroTranslate 0.0 model forecasts a tracked point in the browser. The images stay on your device. Choose **Save take**, then press **F** and enter **replay my take** to play it with the camera off.
+
+Use the regular game launcher for these controls. Open `START.html` and follow **Open the local NeuroTranslate model** for the separate fingertip touch study. [Checkpoint and source details](scene/src/joint/model/NOTICE.html)
+
 ## Choose an edition
 
 | Edition | Anatomy download | Controls and movement |

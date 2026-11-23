@@ -57,8 +57,9 @@ test('H15: the full instructions are cut hard, and each control is said once', (
   // what the browser test of the Esc page reads (tests/browser-player-focus.mjs) is still said
   const li = SHELL.instructions.find(t => t.includes('Press 1, 2, 3 or 4'));
   assert.match(li, /left arm, left leg, right leg or right arm/);
-  assert.match(li, /In the eye view the chosen limb goes with your view/);
-  assert.match(li, /Your view turns only when the hand or foot would leave the picture/);
+  assert.match(li, /In the eye view, look a little up or down to move it at the shoulder or hip/);
+  assert.match(li, /Use the pointer to keep the limb in view/);
+  assert.doesNotMatch(li, /Your view turns only|camera turns automatically/);
   const full = SHELL.instructions.join('\n');
   assert.match(full, /the head and neck turn, and past their reach the eyes turn further/);
   assert.match(full, /Rest your look on a motor area to move its body part\. Click to repeat the movement\./);

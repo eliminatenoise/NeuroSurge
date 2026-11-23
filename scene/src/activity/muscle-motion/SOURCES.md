@@ -1,0 +1,15 @@
+# Leg muscle voltage and the path of the pelvis
+
+Steven M. Peterson and Daniel P. Ferris recorded balance as people stood or walked while the scene in a headset rotated clockwise or counterclockwise. Surface electrodes picked up voltages from the tibialis anterior, soleus, medial gastrocnemius and peroneus longus on each leg. An optical marker tracked the sacrum at the back of the pelvis. The recording retains three motion axes (ML, SI, AP). Anatomical signs remain unresolved. [Study and methods](https://doi.org/10.1016/j.dib.2021.107635) · [OpenNeuro ds003739 v1.0.3](https://doi.org/10.18112/openneuro.ds003739.v1.0.3) · [CC0](https://creativecommons.org/publicdomain/zero/1.0/)
+
+The NeuroTranslate model takes 160 stored samples of sacrum movement and eight signed muscle voltages, sampled at 256 Hz. It also receives the posture and visual rotation direction. The last input falls 125 to just under 129 ms after the rotation begins. Two predictions cover the next 32 samples. One gives the root-mean-square voltage in microvolts for each muscle across the whole interval. The other gives all 32 sacrum positions in millimetres from its last observation. Voltage amplitude alone does not specify muscle force, shortening or a nerve pathway. The archived signal processing used offline information.
+
+The game runs the joint model locally on an invented example. Switching posture or direction leaves the example’s marker and voltage history fixed. Changing past leg voltage applies the same scale to all eight histories while preserving their timing and signs. The example has no known future and supplies no test of causal control. No participant traces are distributed with this study.
+
+## How close were the forecasts?
+
+The model learned from 5,179 rotations across 18 development participants. The joint model’s average errors across 1,759 recorded rotations from six people outside training were 9.50 µV and 1.96 mm. Separate muscle and movement models scored 9.45 µV and 1.94 mm on the same rotations. Training one model for both tasks gave no advantage on the two measures together. Each person counted equally, with standing and walking each given half their weight and the two directions weighted equally within each posture. Muscle error is mean absolute error across the eight RMS voltages. Path error is the mean three-dimensional distance to the measured marker across all 32 future samples. The walking recordings from these assessment participants were also used to evaluate an earlier, different outcome. The six people form a small assessment group.
+
+The joint-minus-specialist differences were +0.046 µV (two-sided 95% interval -0.065 to +0.206) and +0.025 mm (+0.003 to +0.049). To establish a joint advantage, both one-sided 97.5th-percentile upper bounds had to fall below zero. They were +0.206 µV and +0.049 mm across 5,000 paired resamples of whole people.
+
+NeuroTranslation dedicates its original inference code and parameters to the public domain to the extent of its rights. [CC0 1.0 Universal](../../../../LICENSE)

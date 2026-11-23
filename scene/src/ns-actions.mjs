@@ -2134,9 +2134,11 @@ export function createActivity({
       && (s.bodyVel === undefined || finiteMap(s.bodyVel, JOINT_IDS))
       && (s.bodyJerk === undefined || jerkMapOk(s.bodyJerk))
       && (s.armJerk === undefined || armJerkOk(s.armJerk))
+      && (s.isolatedRightForearm === undefined || typeof s.isolatedRightForearm === 'boolean')
       && ROTATION_STATES.includes(s.rotationState)
       && isPlainObject(s.rotation) && unit(s.rotation.value) && nonNegative(s.rotation.remaining) && rotOrNull(s.rotation.channel)
       && (s.rotation.speed === undefined || isFiniteNumber(s.rotation.speed))
+      && (s.rotation.axialAnchor === undefined || unit(s.rotation.axialAnchor))
       && (s.rotation.hold === undefined || s.rotation.hold === null || unit(s.rotation.hold))
       && (s.rotation.move === undefined || s.rotation.move === null || (Array.isArray(s.rotation.move) && s.rotation.move.length === 2 && unit(s.rotation.move[0]) && nonNegative(s.rotation.move[1])))
       && (s.armHumeral === undefined || s.armHumeral === null || isFiniteNumber(s.armHumeral))
@@ -2208,10 +2210,18 @@ export function createActivity({
       bodyPos: s.bodyPos === undefined ? restMap() : pick(s.bodyPos, JOINT_IDS),
       bodyVel: s.bodyVel === undefined ? zeroMap(JOINT_IDS) : pick(s.bodyVel, JOINT_IDS),
       bodyJerk: copyJerkMap(s.bodyJerk, 3),
+      ...(s.isolatedRightForearm && s.bodyJerk?.r_pronation ? { isolatedRightForearm: true } : {}),
       armJerk: copyJerkMap(s.armJerk, 2), // (a state without notes: nothing is contracting)
       rotationState: s.rotationState,
-      rotation: { value: s.rotation.value, speed: isFiniteNumber(s.rotation.speed) ? s.rotation.speed : 0, remaining: s.rotation.remaining, channel: s.rotation.channel, hold: isFiniteNumber(s.rotation.hold) ? s.rotation.hold : null,
-        move: Array.isArray(s.rotation.move) ? s.rotation.move.slice() : null },
+      rotation: {
+        value: s.rotation.value,
+        speed: isFiniteNumber(s.rotation.speed) ? s.rotation.speed : 0,
+        remaining: s.rotation.remaining,
+        channel: s.rotation.channel,
+        hold: isFiniteNumber(s.rotation.hold) ? s.rotation.hold : null,
+        move: Array.isArray(s.rotation.move) ? s.rotation.move.slice() : null,
+        ...(isFiniteNumber(s.rotation.axialAnchor) ? { axialAnchor: s.rotation.axialAnchor } : {})
+      },
       // R558 (Space dance): a state from before the dance starts with none (start angles, no history).
       armHumeral: isFiniteNumber(s.armHumeral) ? s.armHumeral : null,
       armTurnSeen: s.armTurnSeen ? { forearmDeg: s.armTurnSeen.forearmDeg, humeralDeg: s.armTurnSeen.humeralDeg } : null,
@@ -2279,9 +2289,10 @@ export function createActivity({
    *    stays true at the peak; it returns to its place with the rest.
    * A joint the action wants at its start angle ("Purse the lips" wants the upper lip down) goes there and back with
    * the rest. Returns true when the action names a joint. */
-  function contractBody(s, key) {
+  function contractBody(s, key, isolateForearm = false) {
     const ends = ENDS.get(key);
     if (!ends) return false;
+    if (hasOwn(ends, 'r_pronation')) s.isolatedRightForearm = isolateForearm;
     if (!s.bodyJerk) s.bodyJerk = {};
     const J = jointSpring, minSwing = Number.isFinite(J.minSwingDeg) ? J.minSwingDeg : 0;
     const nearShare = Number.isFinite(J.nearShare) ? J.nearShare : 0, rangeShare = Number.isFinite(J.minSwingRangeShare) ? J.minSwingRangeShare : 1;
@@ -2303,7 +2314,8 @@ export function createActivity({
       const atStop = still && lim ? (Math.abs(end - lim[0]) <= eps ? -1 : Math.abs(end - lim[1]) <= eps ? 1 : 0) : 0;
       const dir = dirRest !== 0 ? dirRest : Math.abs(left) > eps ? Math.sign(left) : atStop;
       s.bodyJerk[j] = [target + 0, moveS + 0, dir];
-      if (kickShare > 0 && dir !== 0 && Number.isFinite(s.bodyVel[j])) {
+      const isolatedAtRest = j === 'r_pronation' && isolateForearm && Math.abs(left) <= eps;
+      if (kickShare > 0 && dir !== 0 && Number.isFinite(s.bodyVel[j]) && !isolatedAtRest) {
         // (a small joint is not given a swing larger than most of its own range: a lip would rattle between its ends)
         const range = lim ? Math.abs(lim[1] - lim[0]) : Infinity;
         if (atStop !== 0) {
@@ -2430,9 +2442,15 @@ export function createActivity({
    * so the area, its muscles, the beam and the display are dark when the return begins. moveSeq / lastMove count it. */
   function commitMove(s, hit) {
     if (!hitMoves(hit)) return;
-    if (hit.bodyKey !== null && hit.bodyKey !== undefined) contractBody(s, hit.bodyKey);
+    if (hit.rotation) {
+      // A word command turns the radius around the stationary ulna. The reach
+      // solver uses the return posture for the contraction and the return.
+      if (hit.isolateForearm) s.rotation.axialAnchor = s.rotation.hold ?? rotValue(s.rotationState);
+      else delete s.rotation.axialAnchor;
+    }
+    if (hit.bodyKey !== null && hit.bodyKey !== undefined) contractBody(s, hit.bodyKey, hit.isolateForearm);
     if (hit.armAction !== null && hit.armAction !== undefined) contractArm(s, hit.armAction);
-    if (hit.rotation !== null && hit.rotation !== undefined) strikeTurn(s, hit.rotation);
+    if (hit.rotation && !hit.isolateForearm) strikeTurn(s, hit.rotation);
     if (s.pulseRemaining > 0 && s.pulseRegion === hit.regionId && s.pulseBody === hit.bodyKey && s.pulseAction === hit.armAction && s.pulseRotation === hit.rotation) {
       s.pulseRemaining = contractS;
       s.pulseMove = true;
@@ -2748,6 +2766,7 @@ export function createActivity({
   function applyDanceAngles(s, a) {
     const v = clamp((PRONATION_END_DEG - a.l_forearm) / (2 * PRONATION_END_DEG), 0, 1);
     s.rotation = { ...s.rotation, value: v, speed: 0, hold: v, move: null }; // (the dance owns the forearm: a strip turn under way ends)
+    delete s.rotation.axialAnchor;
     s.rotationState = v >= 0.5 ? 'supinated' : 'pronated';
     s.armHumeral = a.l_shoulder_rot + 0; // the explicit mode (until Reset body)
     for (const j of DANCE_BODY_JOINTS) {
@@ -2885,7 +2904,7 @@ export function createActivity({
           ? { regionId: r.id, actionId: null, armAction: null, bodyKey: null, rotation: null }
           : resolveGaze({ kind: 'region', regionId: r.id, actionId: ev.actionId === undefined ? null : ev.actionId }).hit;
         // (Message 206: a progressive press, a number key held, is an ordinary press: MOVE_HOLD)
-        if (hit !== null) startPulse(s, hit, 'click', at, collect);
+        if (hit !== null) startPulse(s, ev.isolateForearm === true ? { ...hit, isolateForearm: true } : hit, 'click', at, collect);
         return;
       }
       case 'muscleRelease':
@@ -2928,6 +2947,15 @@ export function createActivity({
         // contracts nothing ('moved').
         if (s.paused) return;
         if (!isPlainObject(ev.joints)) fail('activity_event', 'limbPose needs joints { jointId: degrees }');
+        // The tracked shoulder and elbow take the arm's position, just as a
+        // placed body joint below takes its position from that joint's spring.
+        // A contraction triggered under the camera must not replay on release.
+        if (ev.trackedLeftUpperArm === true) {
+          for (const id of ['shoulder_flexion', 'shoulder_extension', 'shoulder_abduction', 'shoulder_adduction', 'elbow_flexion', 'elbow_extension']) {
+            if (s.armJerk) delete s.armJerk[id];
+            s.drive[id] = 0;
+          }
+        }
         for (const [j, deg] of Object.entries(ev.joints)) {
           if (!JOINT_IDS.includes(j)) fail('activity_event', `limbPose joint ${JSON.stringify(j)} is not a body joint`);
           if (!isFiniteNumber(deg)) fail('activity_event', `limbPose joint ${j} needs finite degrees`);
@@ -3139,6 +3167,12 @@ export function createActivity({
       const eased = stepRotationEase(s.rotation.value, s.rotation.speed, goal, seg, rotationTau);
       s.rotation.value = eased.value;
       s.rotation.speed = eased.speed;
+      if (!turn && !(pulseOn && s.pulseRotation) && isFiniteNumber(s.rotation.axialAnchor) &&
+          Math.abs(eased.value - s.rotation.axialAnchor) < 0.0001 && Math.abs(eased.speed) < 0.001) {
+        s.rotation.value = s.rotation.axialAnchor;
+        s.rotation.speed = 0;
+        delete s.rotation.axialAnchor;
+      }
       // R558 (Space dance): history of every limb's turn, then the dance itself while Space is held.
       danceStep(s, seg);
     }

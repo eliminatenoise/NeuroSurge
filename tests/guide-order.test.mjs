@@ -49,6 +49,29 @@ check('the number-key goals need the moveKeys feature (the card must draw its nu
   assert.equal(app.GUIDE_FEATURES.moveKeys, true);
 });
 
+check('the joint practice follows limb selection only when that control is available', () => {
+  const features = { thirdPerson: true, jointAim: true };
+  const saved = { v: 2, tutorial: true, hidden: false, done: ['lookStrip', 'pressArea', 'chooseLimb'] };
+  const old = NG.guideFromStorage(saved, 0, { tutorial: true, features: { thirdPerson: true } });
+  assert.equal(NG.currentGoal(old), 'moveHand');
+  const guide = NG.guideFromStorage(saved, 0, { tutorial: true, features });
+  assert.equal(NG.currentGoal(guide), 'aimJoint');
+  assert.equal(NG.guideView(guide).step, 4);
+  assert.equal(NG.guideToStorage(guide).done.length, 3);
+  assert.equal(NG.restartGuide(guide).goals[3], 'aimJoint');
+
+  const outside = NG.guideStep(guide, [{ type: 'view', mode: 'third' }], 1);
+  assert.match(NG.guideView(outside, 1).text, /^Press E/);
+  assert.equal(NG.guideStep(outside, [{ type: 'jointAim', m: 0.05 }], 1), outside);
+  let current = NG.guideStep(outside, [{ type: 'view', mode: 'first' }], 2);
+  current = NG.guideStep(current, [{ type: 'move', axis: 'x' }, { type: 'jointAim', m: 0.024 }], 3);
+  assert.equal(NG.currentGoal(current), 'aimJoint');
+  const done = NG.guideStep(current, [{ type: 'jointAim', m: 0.025 }], 4);
+  assert.equal(NG.currentGoal(done), 'moveHand');
+  assert.deepEqual(NG.guideToStorage(done).done, [...saved.done, 'aimJoint']);
+  assert.equal(NG.currentGoal(NG.guideFromStorage(NG.guideToStorage(done), 0, { tutorial: true, features })), 'moveHand');
+});
+
 check('a number key that moves something completes numberKey; the look on the brain leaves watchBody open', () => {
   let g = NG.guideStep(fresh(), [armMoved], 1);
   assert.equal(NG.currentGoal(g), 'numberKey');

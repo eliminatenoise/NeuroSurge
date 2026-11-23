@@ -1,0 +1,9 @@
+# Generated walks and runs
+
+The NeuroTranslation model takes one action word and a clock. It predicts 18 pelvis-relative surface landmarks and the movement of the pelvis at 40 Hz. The player adds the pelvis displacement to each landmark, so all points share the starting pelvis as their origin. The grid spacing is 250 mm.
+
+The decoder, fitted weights and coordinate schema are the published model. The renderer uses the published orthographic camera and drawing code, with its three existing functions exported for this player. Only the generated layer is shown here. The player computes each trajectory on the device. [Model and Python reproduction](https://github.com/eliminatenoise/NeuroTranslation/tree/56adf90872a416838f44cc7d4c33428b2763e6ab/models/word-motion) · [Camera and drawing source](https://github.com/eliminatenoise/NeuroTranslation/blob/56adf90872a416838f44cc7d4c33428b2763e6ab/docs/word-motion/src/scene.js)
+
+The model was fitted to 31 walk and run recordings. On three eligible recordings from two held-out subject IDs, its mean body-point error was 89.82 mm. The average training trajectory for the requested action scored 89.88 mm. The difference was 0.06 mm. This experiment measures optical surface-marker motion. It does not measure nerves, muscles or forces. [Study results](https://github.com/eliminatenoise/NeuroTranslation/blob/56adf90872a416838f44cc7d4c33428b2763e6ab/models/word-motion/results.json)
+
+The data used in this project was obtained from mocap.cs.cmu.edu. The database was created with funding from NSF EIA-0196217. CMU prohibits direct resale of its data, including converted data. The model files here contain fitted parameters and code. CMU recordings in the game's separate replay catalogue retain their source terms. The original model and viewer contributions use CC0 1.0 to the extent the project holds the rights. [Original model and data notices](RIGHTS.md) · [CC0 text](LICENSE)

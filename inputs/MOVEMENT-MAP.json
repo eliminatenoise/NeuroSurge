@@ -3,7 +3,6 @@
   "map_version": "neurosurge-functional-map-r2-current-control-overlay",
   "created_at_utc": "2026-11-05T20:56:23.750356+00:00",
   "task_id": "neurosurge_functional_map_r1",
-  "origin_session": "01a1acf6-8ab5-7cb2-afeb-89a9cdbae839",
   "game_name": "NeuroSurge",
   "model_name": "NeuroTranslate 0.0",
   "limb": "human_left",
@@ -920,7 +919,6 @@
     "sha256": "2e4bd3c0e2947310065cd56aadf62d14734d9ead67e4ba44c5e69a614f6d62b1",
     "bytes": 26971
   },
-  "integration_owner": "01a1acf6-8ab5-7cb2-afeb-89a9cdbae839",
   "previous_immutable_map": {
     "path": "<neurosurge-project-root>/neurosurge-functional-map-r1/movement-map.json",
     "bytes": 37392,

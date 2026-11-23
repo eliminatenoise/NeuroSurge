@@ -64,6 +64,18 @@ export const SECURITY_HEADERS = Object.freeze({
   'Cache-Control': 'no-cache'
 });
 
+// Permit devices on the game and the standalone Movement mirror. Both still
+// request permission in the browser. The pose worker compiles its local WASM.
+const PLAYABLE_HEADERS = Object.freeze({
+  ...SECURITY_HEADERS,
+  'Content-Security-Policy': `${SECURITY_HEADERS['Content-Security-Policy']}; media-src 'self' blob:`,
+  'Permissions-Policy': 'camera=(self), microphone=(self), geolocation=(), usb=(), serial=()'
+});
+const POSE_WORKER_HEADERS = Object.freeze({
+  ...SECURITY_HEADERS,
+  'Content-Security-Policy': "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
+});
+
 /** 20 November 2026: validators, so that the browser may keep a copy and ask again with If-None-Match /
  * If-Modified-Since, and an unchanged file costs a "304 Not Modified" instead of the whole file. Cache-Control stays
  * no-cache (every use asks again, so an edited file is never stale), as before. Until now there were no validators, so a
@@ -159,8 +171,12 @@ export function createHandler({ root, allowedHosts = null, log = () => {} }) {
       }
       if (!st.isFile()) { send(res, 404, 'Not found'); return done(404); }
       const validators = { ETag: etagFor(st), 'Last-Modified': new Date(Math.floor(st.mtimeMs / 1000) * 1000).toUTCString() };
-      if (notModified(req.headers, st)) { res.writeHead(304, { ...SECURITY_HEADERS, ...validators }); res.end(); return done(304); }
-      res.writeHead(200, { ...SECURITY_HEADERS, 'Content-Type': contentTypeFor(real), 'Content-Length': st.size, ...validators });
+      let headers = SECURITY_HEADERS;
+      if (real === path.join(rootReal, 'scene', 'example', 'preview.html') ||
+          real === path.join(rootReal, 'movement-mirror.html')) headers = PLAYABLE_HEADERS;
+      if (real === path.join(rootReal, 'scene', 'src', 'camera', 'pose-worker.js')) headers = POSE_WORKER_HEADERS;
+      if (notModified(req.headers, st)) { res.writeHead(304, { ...headers, ...validators }); res.end(); return done(304); }
+      res.writeHead(200, { ...headers, 'Content-Type': contentTypeFor(real), 'Content-Length': st.size, ...validators });
       if (req.method === 'HEAD') { res.end(); return done(200); }
       await new Promise((resolve, reject) => {
         const stream = fs.createReadStream(real);

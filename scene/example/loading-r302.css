@@ -268,6 +268,11 @@
   color: #fff;
   font-size: 14px;
 }
+.ns-shell-context:has([data-ns-action="movement-mirror"]) {
+  width: min(92vw, 600px);
+  flex-wrap: wrap;
+  z-index: 3;
+}
 .ns-shell-context[hidden], .ns-shell-toast[hidden] { display: none; }
 .ns-shell-toast {
   position: absolute;

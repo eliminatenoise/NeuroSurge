@@ -1,0 +1,19 @@
+.joint-page,.joint-view{font:16px/1.45 system-ui,Arial,sans-serif;color:#163a39;background:#f6f6f0}
+.joint-page{margin:0;min-height:100vh}.joint-nav,.joint-view{max-width:68rem;margin:auto;padding:1rem clamp(.75rem,3vw,2.5rem);box-sizing:border-box}
+.joint-nav{display:flex;gap:1rem;flex-wrap:wrap;border-bottom:1px solid #becbc3}.joint-nav a{color:#1c514a}
+.joint-view [hidden],.joint-view[hidden]{display:none!important}.joint-view *{box-sizing:border-box}
+.joint-title{display:flex;align-items:center;justify-content:space-between}.joint-title h1{font-size:clamp(1.6rem,5vw,3.3rem);letter-spacing:-.045em;margin:0 0 .5rem}
+.joint-title small,.joint-inputs legend{font-weight:650}.joint-layout{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(16rem,1fr);gap:1.25rem}
+.joint-stage{min-width:0;align-self:start}.joint-stage canvas{width:100%;height:auto;display:block;background:#102a32;border-radius:.5rem}
+.joint-key{display:flex;gap:1em;flex-wrap:wrap;font-size:.8rem;font-weight:650}.joint-key span:last-child{color:#865207}
+.joint-view p{margin:.5rem 0}.joint-inputs form,.joint-inputs fieldset,.joint-inputs details{min-width:0;margin:.2rem 0 1rem;padding:.8rem;border:1px solid #b8c7ba;border-radius:.4rem}
+.joint-inputs label,.joint-inputs output{display:block;margin:.35rem 0}.joint-view input,.joint-view select,.joint-view button{font:inherit;max-width:100%;color:#153b34}
+.joint-view input,.joint-view select{padding:.35rem;border:1px solid #849e92;border-radius:.25rem}.joint-view input{width:100%}
+.joint-view button{background:#e7efe7;border:1px solid #87a396;border-radius:.35rem;padding:.35rem .6rem;margin:.2rem .1rem .1rem 0;cursor:pointer}
+.joint-view button:disabled{opacity:.55;cursor:default}.joint-view :focus-visible{outline:3px solid #cc771c;outline-offset:2px}
+.joint-inputs video{display:block;width:100%;max-height:12rem;background:#102a32}.joint-inputs [data-model],.joint-inputs [data-names]{font-size:.78rem;overflow-wrap:anywhere}
+.joint-overlay{position:fixed;z-index:19999;inset:2rem .75rem auto auto;width:min(48rem,96vw);max-height:88dvh;overflow:auto;box-shadow:0 .3rem 2rem #0009;border:1px solid #7c9988;border-radius:.5rem;pointer-events:auto}
+@media(max-width:660px){.joint-layout{grid-template-columns:minmax(0,1fr)}.joint-overlay{inset:.25rem .25rem auto auto;width:calc(100vw - .5rem);max-height:96dvh}.joint-inputs form,.joint-inputs fieldset,.joint-inputs details{padding:.55rem}.joint-stage canvas{max-height:48vh;object-fit:contain}}
+.joint-overlay.joint-compact{inset:.5rem .5rem auto auto;width:min(22rem,76vw);padding:.5rem .75rem;max-height:66dvh;font-size:.8rem}
+.joint-compact .joint-layout{display:block}.joint-compact .joint-inputs,.joint-compact .joint-title small,.joint-compact .joint-key{display:none}
+.joint-compact .joint-title h1{font-size:1.05rem;margin:0}.joint-compact canvas{max-height:20vh;object-fit:contain}.joint-compact .joint-stage p{margin:.3rem 0}

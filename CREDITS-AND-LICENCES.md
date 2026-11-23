@@ -1,14 +1,6 @@
-# NeuroSurge experimental preview C410: credits and licences
-
-This preview keeps all 490 OBJ files byte-identical to the selected local C410 source. Project-owned manifests have had local filesystem provenance prefixes replaced with public placeholders. The three corresponding runtime manifest hashes are updated so byte verification remains active. Recorded provenance hashes inside those manifests continue to identify the original local source files. Public distribution hashes are in `SHA256SUMS` and `release-manifest.json`.
-
-The C410 game uses geometry-based poses and muscle deformation, separate superficial muscle displays, mirror-body rendering and simulated activity colours. These display changes do not establish validated joint mechanics, muscle force or registered functional cortex. Facial files retain the source conversion/transform and share-alike notices. All notices below are retained from the prior public distribution; its round-5 release wording is historical. C410 is the selected experimental preview.
-
 # NeuroSurge: credits and licences
 
-NeuroSurge ships project code and data plus three kinds of third-party material, each under its own licence. The CC0
-dedication for the project's code does **not** extend to the third-party material. In particular, the BodyParts3D
-anatomy is never relabelled CC0, and the Z-Anatomy muscle meshes stay under their share-alike licence (CC BY-SA 4.0).
+NeuroSurge releases its own code under CC0. Third-party materials keep their original terms. BodyParts3D anatomy carries CC BY 4.0. Z-Anatomy muscle meshes carry CC BY-SA 4.0.
 
 | Material | Where in the distribution | Licence | Rights holder |
 | --- | --- | --- | --- |
@@ -26,9 +18,7 @@ anatomy is never relabelled CC0, and the Z-Anatomy muscle meshes stay under thei
 | Body rig data derived from the BodyParts3D and Z-Anatomy meshes (19 November; joint pivots, axes and which bone each muscle follows; no mesh geometry) | `packs/BODY-RIG.json` | CC BY 4.0 and, for the rows of Z-Anatomy muscles, CC BY-SA 4.0 (derived data, as its sources) | DBCLS; Z-Anatomy; derivation by NeuroSurge contributors |
 | Nerve-route points derived from the BodyParts3D and Z-Anatomy meshes and the vessel centre lines (21 November; the points of typical nerve courses, of the vertebral canal and one point in each muscle; no mesh geometry) | the generated block `WIRING_GENERATED` of `scene/src/ns-wiring-data.mjs` | CC BY 4.0 and, for the points laid on or in Z-Anatomy muscles, CC BY-SA 4.0 (derived data, as its sources); the rest of that module (tables, rules, code) is project code, CC0 1.0 | DBCLS; Z-Anatomy; derivation by NeuroSurge contributors |
 
-This is the round-5 public build of NeuroSurge (the round-2 build was the first public release). Exact hashes for
-every file are in `SHA256SUMS` and `release-manifest.json`. The full CC0 1.0 legal code is in the `LICENSE` file at
-the top of the NeuroSurge repository on GitHub.
+See `SHA256SUMS` and `release-manifest.json` for the exact files in this build. The repository’s `LICENSE` contains the full CC0 1.0 text.
 
 ## 1. BodyParts3D (anatomy)
 
@@ -123,12 +113,6 @@ the top of the NeuroSurge repository on GitHub.
 - The shipped packet file `packets/bodyparts3d-fullbody-r1/ATTRIBUTION-AND-LICENCES.txt` still describes the run-time
   changes as "whole-mesh rigid transforms". That wording is out of date; the statement above replaces it. The packet
   file is covered by the packet's `SHA256SUMS.txt` and was left byte-identical in this build.
-- For publication, the absolute local file paths recorded in the project's own provenance fields
-  (`inputs/MESH-MANIFEST.json`, `inputs/FULLBODY-MESH-MANIFEST.json`, `inputs/MOVEMENT-MAP.json` and
-  `packets/bodyparts3d-fullbody-r1/ACQUISITION-RECORD.json`) were replaced by the placeholders `<claude-dev-root>/`
-  and `<neurosurge-project-root>/`. Nothing else in those files changed. The sha256 values recorded inside these
-  provenance fields (for example `complements.sha256` and the acquisition record's `outputs.manifest.sha256`) describe
-  the original files before this path replacement; the shipped files' own hashes are in `SHA256SUMS`.
 
 **Disclaimer:** BodyParts3D is offered by its licensor as-is. As stated in CC BY 4.0, section 5, the licensor gives
 no warranties of any kind concerning the material and is not liable for its use.
@@ -147,12 +131,12 @@ The geometry is a single reference body: it is not the player, any measured pers
 
 ### 1.1 Packet `packets/pov-demo-assets/` (141 meshes)
 
-Acquired by the Root integration owner from the official archive. Contents: 50 left upper-limb muscles, 32 left
+From the official archive. The packet contains 50 left upper-limb muscles, 32 left
 upper-limb bones and 59 brain meshes (including the left and right precentral gyri, FJ1800 and FJ1801, used as motor
 landmarks).
 
 - Combined manifest shipped with the game: `inputs/MESH-MANIFEST.json` (142 entries covering this packet and the next).
-- Immutable source manifest (Root's frozen packet, not shipped): `pov-demo-assets/MESH-MANIFEST.json`, sha256
+- Source manifest for the original packet: `pov-demo-assets/MESH-MANIFEST.json`, sha256
   `719c40f6783af9056d0d0ff55bf1d8e365a3868f7899f423a0d6f9d74c4e5510`.
 - Source attribution file (not shipped; its BodyParts3D section is reproduced in this section):
   `pov-demo-assets/ATTRIBUTION-AND-LICENCES.txt`, sha256 `2a8fa39569da5fd594514b60343f40a8e4aeae3a30498856bd71f4d8ac4c4791`.
@@ -319,9 +303,7 @@ One muscle group is missing from the source file: the muscles around the ear (au
 
 R558 adds 111 mesh files for the large muscles the body packets lacked (the lower back, the belly, the inner thigh and
 the outer shin looked bare) and for every other muscle the game's motor map names that had no mesh: 93 BodyParts3D 4.0
-files and 18 Z-Anatomy derivatives. They were downloaded under the user's Messages 20 and 23 (free tools and freely
-licensed anatomy, pinned, credited, documented). Each muscle was looked up in BodyParts3D 4.0 first; Z-Anatomy was used
-only where BodyParts3D 4.0 has no file.
+files and 18 Z-Anatomy derivatives. A Z-Anatomy derivative supplies each muscle with no matching BodyParts3D 4.0 file.
 
 **BodyParts3D 4.0 files (93, `FJ*.obj`, CC BY 4.0).** Byte-exact members of the official archive
 `isa_BP3D_4.0_obj_99.zip`, fetched by HTTP range requests from the official host in two runs on 2026-11-11 (ZIP CRC32,
@@ -440,12 +422,14 @@ OpenStax *Anatomy and Physiology 2e* (CC BY 4.0); the ISNCSCI worksheet of the A
 the International Spinal Cord Society; and Wikipedia articles (CC BY-SA 4.0) read on 21 November 2026. The drawn routes
 are typical and simplified, laid by rule over this atlas. They are not traced from a scan.
 
-## 6. Not included
+## Camera and recording sources
 
-- No fonts (the game uses the system font), no images, no audio, no analytics, no trackers and no remote resources.
-- The reference images used by independent reviewers (section 1.1) are not included.
-- Files rejected during acquisition (section 1.3) are not included and are never loaded.
-- Development tests, test harnesses and acquisition evidence are not part of the player distribution.
+- NeuroSurge bundles Google’s MediaPipe Pose Landmarker Lite and Tasks Vision runtime under Apache 2.0. The camera estimates arm and knee poses in the browser. [Camera and test-image sources](scene/src/camera/README.md#sources-and-licences) · [Apache 2.0 licence and notices](scene/src/camera/vendor/LICENSE)
+- The Movement mirror’s browser forecast uses the released NeuroTranslate 0.0 landmark and next-unit parameters. [Original checkpoint, recording sources and licences](scene/src/joint/model/NOTICE.html)
+- The whole-body marker replays use Carnegie Mellon Graphics Lab trials 02_06, 13_11 and 132_23. Funding came from NSF EIA-0196217. CMU permits copying, modifying and redistributing the data, including in commercial products. Its terms prohibit direct resale of the data, including converted copies. [CMU terms](https://mocap.cs.cmu.edu/faqs.php)
+- Hand frames and descriptions from HoloAssist retain CDLA-Permissive-2.0. The source page describes how the recording was converted. [Hand data and credits](assets/hand-search/hand-source-credits.html)
+- The rat and wrist replays and model comparisons carry the source terms and derived-data credits listed with each recording. The cortex summaries retain CC BY-SA 4.0 and the archive’s participant-privacy terms. [Recording and forecast credits](ACTIVITY-MAP.md)
+- The game uses system fonts. The launch page includes a game image, and the test suite includes credited camera fixture images.
 
 ## Lite mesh decoder and game image
 

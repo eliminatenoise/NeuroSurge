@@ -240,8 +240,8 @@ const STEP_TABLE = [
   intro: [part('Drag on empty space to look around. Your body shows its bones and muscles.')] },
   // 19 November 2026 (the view holds the chosen limb, ns-app LIMB_KEYS.view; in the eye view only: holdCarries)
   { head: 'Your limbs.', parts: [part('One limb is always the chosen one: your left arm at the start. Press 1, 2, 3 or 4 to choose ' +
-    'your left arm, left leg, right leg or right arm. In the eye view the chosen limb goes with your view, and W, A, S and D ' +
-    'move its hand or foot. Your view turns only when the hand or foot would leave the picture.')],
+    'your left arm, left leg, right leg or right arm. In the eye view, look a little up or down to move it at the shoulder or hip. ' +
+    'W, A, S and D move its hand or foot. Use the pointer to keep the limb in view.')],
   intro: [part('Keys 1 to 4 choose a limb; in the eye view it goes with your view, and W, A, S and D move its hand or foot. Tap Space twice: all four limbs turn once. Tap twice and hold: they keep turning, slowly.')] },
   // R558 (Messages 2 and 56; 19 November 2026, the brain turned half a turn): what the band is, which way the brain faces
   // and that each half mainly moves the other side (HONESTY.crown and HONESTY.leftArmRightHalf say both in full).
@@ -1310,7 +1310,7 @@ export const VIEW = deepFreeze({
   firstPersonNotice: HUD.firstPerson,
   // R558 (ns-camera THIRD_PERSON.followHead): the mouse turns the head in both views; only the camera moves.
   armNote: 'Your head, neck and left hand follow the mouse just as they do in your own view. W, A, S, D and Space still work the same way.',
-  lookNote: 'Move the mouse to turn your head: the camera follows behind it.'
+  lookNote: 'Move the mouse or trackpad to turn your view around the body.'
 });
 
 /** The 3D compass arrows (D16, user R20): four arrows round the brain (top, bottom, left, right) and four smaller ones
@@ -1701,12 +1701,14 @@ export const GUIDE = deepFreeze({
     readInfo: "Press R to change how much information is shown."
   },
   tutorialGoals: {
+    aimJoint: "Look a little up or down to raise or lower the limb you selected. Watch its hand or foot.",
     moveHand: "Press W or S to reach, then A or D to swing the chosen limb sideways.",
     dragBrain: "Hold Space over the brain, move your view to carry it, then release Space.",
     orbit: "Drag the brain to turn it.",
     thirdPerson: "Press E to look at your body from behind, then press E again to return.",
   },
   partial: {
+    aimJointOutside: 'Press E to return to the eye view and practise raising or lowering the limb.',
     // (21 November 2026, hunt H22: W and S move along the limb, A and D swing it)
     moveHandNeedX: 'Good! Now try A or D to swing it left or right.',
     moveHandNeedZ: 'Good! Now try W or S to reach it out or draw it in.',
@@ -1750,12 +1752,14 @@ export const GUIDE = deepFreeze({
     holdPart: 'Hold down 1 or 2. Let go to stop',
     dragLimb: "Drag a visible arm or leg to change its pose",
     chooseLimb: "Press 2, 3 or 4 to select another limb",
+    aimJoint: "Look a little up or down to move the limb",
     readInfo: "Press R to change the information shown",
     nice: 'Nice!',
     finished: 'All done. Esc shows the controls.',
     // 19 November (the tutorial): how to pass a step, shown small beside the line (the key ns-app listens for)
     skip: 'Enter: skip',
     byText: {
+      'Press E to return to the eye view and practise raising or lowering the limb.': 'Press E to return to the eye view',
       "Press W or S to reach, then A or D to swing the chosen limb sideways.": "Press W or S to reach, then A or D to swing",
       "Hold Space over the brain, move your view to carry it, then release Space.": "Hold Space on the brain, carry it, then release",
       "Drag the brain to turn it.": "Drag the brain to turn it",
@@ -1778,7 +1782,7 @@ export const GUIDE = deepFreeze({
     simpleHeading: "Simple instructions",
     technicalHeading: "Technical notes",
     progress: "Follow the current instruction as you play. Enter skips that step. Resume keeps your progress, and Restart takes you to step one.",
-    technical: "Progress uses game events. The movement step needs input on both axes. A limb drag must reach 12 degrees. A brain carry counts on release after a turn of at least 0.12 radians or a key-driven carry of at least 0.2 game metres. Completed steps are saved on this device when local storage is available. The visual cues do not activate the areas they mark.",
+    technical: "Progress uses game events. The shoulder or hip step measures from the pose just before you look up or down. It checks that the wrist or ankle moves at least 2.5 cm relative to that joint. The game follows that motion for up to 0.35 seconds of game time after the look. The movement step needs input on both axes. A limb drag must reach 12 degrees. A brain carry counts on release after a turn of at least 0.12 radians or a key-driven carry of at least 0.2 game metres. Completed steps are saved on this device when local storage is available. The visual cues do not activate the areas they mark.",
     motor: "Motor area",
     limb: "Body part",
     shoulder: "Shoulder aim",
@@ -1788,8 +1792,8 @@ export const GUIDE = deepFreeze({
     restart: "Restart tutorial",
     limits: "The colours link motor areas to movements in this game. On the simplified map, a ring marks a motor area and a small square marks its related body part when both are visible.",
     jointHelp: "The shoulder or hip guide marks a fixed height one quarter of the way down the view. It is a screen reference for the wrist or ankle.",
-    directions: "F opens the movement directions.",
-    camera: "C opens the camera controls.",
+    directions: "F opens the Command box for typed movements and on-device dictation where available.",
+    camera: "Press C, then select Start camera to let the body follow visible arms and knees.",
   },
   escTitle: 'Tutorial',
   escHelp: 'The tutorial asks for one action at a time, at the top of the screen. It never stops the game. Enter skips a step.',

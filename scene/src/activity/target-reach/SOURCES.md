@@ -1,0 +1,5 @@
+# Target and movement
+
+Tim Sziburis, Susanne Blex, Tobias Glasmachers and Ioannis Iossifidis collected the Ruhr Hand Motion Catalog (2025). A participant carried a cylinder to a numbered target. The optical marker centre measures the cylinder in an unrotated laboratory coordinate frame. The other hand performed its trials separately. [Data](https://doi.org/10.17605/OSF.IO/J3QC8) · [Paper](https://doi.org/10.1038/s41597-025-05576-7)
+
+This panel uses five native optical measurements, a hand indicator and the spatial target. It computes the three later displacements with the first fitted seed of a separately trained model for each clock. When the goal is edited, only a hypothetical forecast appears. The supplied traces, fitted parameters and source-derived visualizations are distributed with [CC BY 4.0 attribution](https://creativecommons.org/licenses/by/4.0/). The project authors selected windows, averaged visible markers, derived displacements and fitted the models. The original software is CC0 1.0. The typed game commands are interface controls. No NEMO–Lowlands records are included.

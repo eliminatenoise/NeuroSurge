@@ -88,6 +88,8 @@ export const GUIDE_ALL_GOAL_IDS = Object.freeze(['leftArmArea', 'numberKey', 'ot
  *                step said "jerks again, harder" while a movement was held part way)
  *   chooseLimb   2, 3 or 4 (or a double click): another limb is chosen       { type: 'limbChoice', n } (n 2 to 4: 1, the left
  *                                                                          arm, is the one the game starts on)
+ *   aimJoint    look up or down in the eye view                           { type: 'jointAim', m } (the wrist or ankle moved
+ *                                                                         relative to its shoulder or hip)
  *   moveHand     W A S D: the chosen limb's hand or foot                   as before ('move' / 'key', both axes)
  *   dragLimb     press on a limb and drag it: sideways turns it, up and     { type: 'limbDrag', deg } (the limb was turned
  *                down bends and straightens it                             or bent by at least limbDragMinDeg in one drag)
@@ -106,13 +108,14 @@ export const GUIDE_ALL_GOAL_IDS = Object.freeze(['leftArmArea', 'numberKey', 'ot
 // (19 November 2026, later again: the owner's limb keys, "you can now switch between which of the four limbs you want
 // to control ... 1 ... 2 ... 3 ... 4": the choice of the limb and the keys that move it come right after the first
 // press, before the drags: 'chooseLimb' is new, 'moveHand' moved up.)
-export const TUTORIAL_GOAL_IDS = Object.freeze(['lookStrip', 'pressArea', 'chooseLimb', 'moveHand', 'dragLimb', 'dragBrain', 'orbit', 'thirdPerson', 'readInfo']);
+export const TUTORIAL_GOAL_IDS = Object.freeze(['lookStrip', 'pressArea', 'chooseLimb', 'aimJoint', 'moveHand', 'dragLimb', 'dragBrain', 'orbit', 'thirdPerson', 'readInfo']);
 /** Every goal id the guide knows: the older guide's twelve and the tutorial's own. */
 export const GUIDE_KNOWN_GOAL_IDS = Object.freeze([...new Set(['leftArmArea', 'numberKey', 'otherPart', 'watchBody', 'glow', 'moveHand', 'flipPalm', 'fist', 'dragBrain', 'orbit', 'thirdPerson', 'mirror', 'holdPart', ...TUTORIAL_GOAL_IDS])]);
-/** The tutorial's steps for a build: the nine, less a step whose feature the build lacks (pure). */
+/** The tutorial's steps for the controls available in this build. */
 export function tutorialGoalIds(features = null) {
   const f = features && typeof features === 'object' ? features : {};
-  return Object.freeze(TUTORIAL_GOAL_IDS.filter(id => id !== 'thirdPerson' || f.thirdPerson === true));
+  return Object.freeze(TUTORIAL_GOAL_IDS.filter(id =>
+    (id !== 'thirdPerson' || f.thirdPerson === true) && (id !== 'aimJoint' || f.jointAim === true)));
 }
 
 /** The feature goals and the build feature each one needs (ns-text ROUND5_FEATURES names; R558: moveKeys = the
@@ -147,7 +150,7 @@ export function guideGoalIds(features = null, goals = null) {
 // R558 (hunt 2): carryMinM 0.2: the held brain carried at least 20 cm by W/A/S/D also counts as moved (dragBrain).
 // 19 November (the tutorial): holdMinS 0.25: a number key held at least this long is a hold, not a tap (ns-actions
 // MOVE_HOLD.tapMs is 0.22 s). limbDragMinDeg 12: a limb dragged this far (turn plus bend) was really moved, not nudged.
-export const GUIDE_OPTIONS = Object.freeze({ fistMinS: 0.3, dragMinRad: 0.12, carryMinM: 0.2, flashS: 1.5, finishS: 8, glowWindowS: 1.5, thirdMinS: 1.0, holdMinS: 0.25, limbDragMinDeg: 12 });
+export const GUIDE_OPTIONS = Object.freeze({ fistMinS: 0.3, dragMinRad: 0.12, carryMinM: 0.2, flashS: 1.5, finishS: 8, glowWindowS: 1.5, thirdMinS: 1.0, holdMinS: 0.25, limbDragMinDeg: 12, jointAimMinM: 0.025 });
 
 /** localStorage key suggested for guideToStorage (separate from the settings key, so old settings stay valid). */
 export const GUIDE_STORAGE_KEY = 'neurosurge.guide.v1';
@@ -261,6 +264,7 @@ export function guideStep(state, events = [], now = 0, opts = GUIDE_OPTIONS) {
       // own switch-on does, as an 'activate' above. The event is ignored, as any unknown one.)
       case 'moveHold': if (isNum(ev.heldS) && ev.heldS >= (isNum(o.holdMinS) ? o.holdMinS : GUIDE_OPTIONS.holdMinS)) mark('holdPart'); break;
       case 'limbDrag': if (isNum(ev.deg) && ev.deg >= (isNum(o.limbDragMinDeg) ? o.limbDragMinDeg : GUIDE_OPTIONS.limbDragMinDeg)) mark('dragLimb'); break;
+      case 'jointAim': if ((s || state).view !== 'third' && isNum(ev.m) && ev.m >= o.jointAimMinM) mark('aimJoint'); break;
       // (another limb chosen: 2, 3 or 4, a double click, a click on the limb; choosing 1 again, the limb the game starts on, is not it)
       case 'limbChoice': if (isNum(ev.n) && ev.n >= 2 && ev.n <= 4) mark('chooseLimb'); break;
       case 'read': mark('readInfo'); break;
@@ -390,6 +394,7 @@ export function guideView(state, now = 0, opts = GUIDE_OPTIONS) {
   if ((id === 'numberKey' || id === 'watchBody') && s.numberStill === true) text = GUIDE.partial.numberKeyStill;
   // R5-text partial lines: in the view from behind; the brain in the way of the mirror arrows; the brain moved aside.
   if (id === 'thirdPerson' && s.view === 'third') text = GUIDE.partial.thirdPersonBack;
+  if (id === 'aimJoint' && s.view === 'third') text = GUIDE.partial.aimJointOutside;
   if (id === 'mirror' && s.mirrorBlocked === true) text = GUIDE.partial.mirrorBlocked;
   else if (id === 'mirror' && s.mirrorMoved === true) text = GUIDE.partial.mirrorNowArrows;
   const nice = isNum(s.flashUntil) && nowOf(now) < s.flashUntil;
@@ -414,8 +419,10 @@ export function showGuide(state, now = 0) {
 
 /** Restart from the first goal (Esc page "Restart the guide"): all progress cleared, shown, not paused. */
 export function restartGuide(state, now = 0) {
-  const n = createGuide({ now, goals: state && Array.isArray(state.goals) ? state.goals : null, tutorial: Boolean(state && state.tutorial === true),
-    features: state && state.tutorial === true ? { thirdPerson: Array.isArray(state.goals) && state.goals.includes('thirdPerson') } : null });
+  const goals = Array.isArray(state?.goals) ? state.goals : null;
+  const tutorial = state?.tutorial === true;
+  const features = tutorial && goals ? { thirdPerson: goals.includes('thirdPerson'), jointAim: goals.includes('aimJoint') } : null;
+  const n = createGuide({ now, goals, tutorial, features });
   if (state && state.paused === true) n.paused = true; // restarting from the Esc page: the line appears on resume
   return n;
 }

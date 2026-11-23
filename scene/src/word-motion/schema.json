@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "rateHz": 40,
+  "sourceRateHz": 120,
+  "durationSeconds": 0.6,
+  "units": "mm",
+  "axes": ["right of travel", "forward travel", "up"],
+  "origin": "positionsMm are relative to the instantaneous pelvis. rootMm is the separate pelvis displacement from the first output frame. Add them for a shared translating coordinate frame.",
+  "joints": ["head", "chest", "leftWaist", "rightWaist", "leftShoulder", "rightShoulder", "leftElbow", "rightElbow", "leftWrist", "rightWrist", "leftKnee", "rightKnee", "leftAnkle", "rightAnkle", "leftHeel", "rightHeel", "leftToe", "rightToe"],
+  "sites": [["LFHD","RFHD"],["CLAV"],["LFWT","LBWT"],["RFWT","RBWT"],["LSHO"],["RSHO"],["LELB"],["RELB"],["LWRA","LWRB"],["RWRA","RWRB"],["LKNE"],["RKNE"],["LANK"],["RANK"],["LHEE"],["RHEE"],["LTOE"],["RTOE"]],
+  "edges": [[0,1],[1,2],[1,3],[2,3],[1,4],[1,5],[4,6],[5,7],[6,8],[7,9],[2,10],[3,11],[10,12],[11,13],[12,14],[13,15],[14,16],[15,17]],
+  "anatomy": "Sites are named skin markers or means of the specified markers. Lines connect them to show movement. They do not locate internal anatomical joint centres."
+}

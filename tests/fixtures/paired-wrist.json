@@ -1,0 +1,345 @@
+{
+  "schema": "neurotranslate-paired-wrist-demo-oracle-v1",
+  "clip_sha256": "578184a108d7682c37a4f409ce4cd7535b33d203007f39ca0f5d28831ffde41f",
+  "clip_source_commit": "981434f03f54b9259d9c69eac6fd8215fdeaf143",
+  "source_file_id": 62570998,
+  "subject": "sub-41",
+  "run": "03",
+  "trial": 1,
+  "role": "Public development demonstration excluded from fitting, scoring and signal donors.",
+  "source_credit": "Jorge German Perez Blanco and Javier Mauricio Anteliz Ortiz, EEG-EMG-WristMotion Dataset, v3",
+  "source_doi": "https://doi.org/10.6084/m9.figshare.29666735.v3",
+  "licence": "https://creativecommons.org/licenses/by/4.0/",
+  "axes": [
+    "extension",
+    "radial_deviation"
+  ],
+  "source_sample_rate_hz": 512,
+  "nominal_encoder_update_hz": 100,
+  "cue_source_row": 2587,
+  "lead_ticks": 128,
+  "history_bins": 16,
+  "ticks_per_bin": 16,
+  "torch_version": "2.14.1+cpu",
+  "numpy_version": "2.4.6",
+  "model_weights_sha256": {
+    "emg": "c853ea8a7ce44a2ead210fbae362ca938c160c890ed65dea7521ccbf1271396e",
+    "full": "13430427eba9d5140942d8649a9c3360600ad13a48b92c083caa572606310830",
+    "motion": "34204e530608bbdd20cfc1f51d61c9967d2a04cf9f055b7a64f75fe1335cbadd"
+  },
+  "normalizers_sha256": "9f7c68a4520e86f1ced06b5c5172cb71ce440233fe2b12ce7ab6920031fdc292",
+  "rows": [
+    {
+      "target_offset_after_cue_ticks": 384,
+      "history_first_source_row": 2588,
+      "cutoff_source_row": 2843,
+      "target_source_row": 2971,
+      "anchor_deg": [
+        2.5900472542535407,
+        -2.1747654160187957
+      ],
+      "measured_deg": [
+        -1.0382045955868622,
+        -2.1747654160187957
+      ],
+      "input_sha256_f64le": {
+        "anchor_deg": "62681421afd5ded4c5612b9e5bcf182d3c2959c154cf8ed0363fff7b61df33e8",
+        "mean_angles_deg": "adf889c48eabdb18f9a1bb67dbafe026dff40bb8306ba0a3175c84bc7fef723e",
+        "emg_rms_uv": "f12c9366d121af70fbc6ecbbe32eea50f9ca6a98a6a43ae893933da9065e48e7",
+        "eeg_mean_uv": "5c633b53e6f388f00b9e0d0be179c2d0197535ccf14e78fb1eba9b134274de5d"
+      },
+      "predictions": {
+        "motion": {
+          "angle_deg": [
+            4.845509900737916,
+            -7.069533177249264
+          ],
+          "variance_deg2": [
+            163.78359985351562,
+            81.18797302246094
+          ]
+        },
+        "emg": {
+          "angle_deg": [
+            1.4742747685205084,
+            -9.280185528628659
+          ],
+          "variance_deg2": [
+            122.94429016113281,
+            92.39717102050781
+          ]
+        },
+        "full": {
+          "angle_deg": [
+            4.571843876529847,
+            -8.485043354861569
+          ],
+          "variance_deg2": [
+            128.3105010986328,
+            90.01962280273438
+          ]
+        }
+      }
+    },
+    {
+      "target_offset_after_cue_ticks": 512,
+      "history_first_source_row": 2716,
+      "cutoff_source_row": 2971,
+      "target_source_row": 3099,
+      "anchor_deg": [
+        -1.0382045955868622,
+        -2.1747654160187957
+      ],
+      "measured_deg": [
+        -16.141349344019,
+        -2.1747654160187957
+      ],
+      "input_sha256_f64le": {
+        "anchor_deg": "366b3dc0ae4ade6e3dcbb3c9ca2fcb7ec6db8e8ca65ab91d0100b6daafde7f5c",
+        "mean_angles_deg": "754fe516c524d0a61e2ef58e9336ab08faf90a7ebb411505f367c0dff0f04981",
+        "emg_rms_uv": "bca288d6a19d4b2519b20cbf50bfb03719f2fa3234f0a456fcffa55d63b0a666",
+        "eeg_mean_uv": "266c2a163194adee9f888d71486f1327542bcc3800313c740143ba152539bfba"
+      },
+      "predictions": {
+        "motion": {
+          "angle_deg": [
+            -22.763256475469674,
+            -4.195617504947018
+          ],
+          "variance_deg2": [
+            151.06161499023438,
+            20.545425415039062
+          ]
+        },
+        "emg": {
+          "angle_deg": [
+            -16.562554761907663,
+            -7.483451672427487
+          ],
+          "variance_deg2": [
+            129.99090576171875,
+            52.84939956665039
+          ]
+        },
+        "full": {
+          "angle_deg": [
+            -17.276777669927682,
+            -6.47732336127026
+          ],
+          "variance_deg2": [
+            145.2605438232422,
+            57.17544174194336
+          ]
+        }
+      }
+    },
+    {
+      "target_offset_after_cue_ticks": 640,
+      "history_first_source_row": 2844,
+      "cutoff_source_row": 3099,
+      "target_source_row": 3227,
+      "anchor_deg": [
+        -16.141349344019,
+        -2.1747654160187957
+      ],
+      "measured_deg": [
+        -34.304465532075476,
+        -2.1747654160187957
+      ],
+      "input_sha256_f64le": {
+        "anchor_deg": "0cce9cc2e565bb64b29d953316edabbfae27e924d1a9de9735ab5f57b74bdba1",
+        "mean_angles_deg": "fca69fc52ad6d7143c2b27e783ffcaa52619680a2fe14020467ae5fff3630f98",
+        "emg_rms_uv": "d6466cd2be20eb4178301ae6ce781d02b3ff4cddb81e05b6417f7b2d64014058",
+        "eeg_mean_uv": "dd57bf520df0cc3d4dee3a3fe3341e9df4ce68a62ffc9aaeff1b2ddf88c9b73e"
+      },
+      "predictions": {
+        "motion": {
+          "angle_deg": [
+            -34.790811090234826,
+            -2.267194815509152
+          ],
+          "variance_deg2": [
+            54.99837875366211,
+            3.4177582263946533
+          ]
+        },
+        "emg": {
+          "angle_deg": [
+            -34.34478714919479,
+            -2.2419316848443267
+          ],
+          "variance_deg2": [
+            40.33095169067383,
+            2.8725204467773438
+          ]
+        },
+        "full": {
+          "angle_deg": [
+            -33.79112771010787,
+            -2.2081781705544707
+          ],
+          "variance_deg2": [
+            32.850093841552734,
+            2.4808831214904785
+          ]
+        }
+      }
+    },
+    {
+      "target_offset_after_cue_ticks": 768,
+      "history_first_source_row": 2972,
+      "cutoff_source_row": 3227,
+      "target_source_row": 3355,
+      "anchor_deg": [
+        -34.304465532075476,
+        -2.1747654160187957
+      ],
+      "measured_deg": [
+        -45.71378761410383,
+        -2.1747654160187957
+      ],
+      "input_sha256_f64le": {
+        "anchor_deg": "552d224962db35c986f2a10019b83ab39bebe19dd022122b626a7082cf93a504",
+        "mean_angles_deg": "a039a2a082f78fc004f455cd4b5d1b67cef4e84a48d00bb15d858bf1458c2c73",
+        "emg_rms_uv": "9052b3354a657a4b189e58513864e90c098404ed344ee440eebe7e762f344ae1",
+        "eeg_mean_uv": "9cdf20011c9a798503ade6bae54c358b2eeec3decd385b904fc81101dfaa1f82"
+      },
+      "predictions": {
+        "motion": {
+          "angle_deg": [
+            -45.47786736465604,
+            -1.9926590999291656
+          ],
+          "variance_deg2": [
+            15.385156631469727,
+            1.3648085594177246
+          ]
+        },
+        "emg": {
+          "angle_deg": [
+            -45.89325451828153,
+            -1.9156576474831817
+          ],
+          "variance_deg2": [
+            12.082877159118652,
+            1.2878538370132446
+          ]
+        },
+        "full": {
+          "angle_deg": [
+            -45.105732202302526,
+            -1.9839087208436248
+          ],
+          "variance_deg2": [
+            10.614920616149902,
+            1.2516891956329346
+          ]
+        }
+      }
+    },
+    {
+      "target_offset_after_cue_ticks": 896,
+      "history_first_source_row": 3100,
+      "cutoff_source_row": 3355,
+      "target_source_row": 3483,
+      "anchor_deg": [
+        -45.71378761410383,
+        -2.1747654160187957
+      ],
+      "measured_deg": [
+        -49.32018252508978,
+        -2.1747654160187957
+      ],
+      "input_sha256_f64le": {
+        "anchor_deg": "3c5cb929649ede1a333490f444bd7f50b437aa6543fc2eb9e2585e3abad74d19",
+        "mean_angles_deg": "8314c4628fab9361f8890aebde6aa2c4fc8541bc69e25afc85999d9f54baca70",
+        "emg_rms_uv": "0775e292006a93d854481d8c3be7e457206fb328ef03acfc6f6c0fe1d4a58eb8",
+        "eeg_mean_uv": "bfad6e80c1995813a83c8ab7f2bf9e94d72bf73af4107b00c7be2a65c52b4bbf"
+      },
+      "predictions": {
+        "motion": {
+          "angle_deg": [
+            -50.232892571684395,
+            -2.3416863461659667
+          ],
+          "variance_deg2": [
+            2.624952554702759,
+            0.7195309996604919
+          ]
+        },
+        "emg": {
+          "angle_deg": [
+            -52.02745681881574,
+            -2.3593521495984313
+          ],
+          "variance_deg2": [
+            2.4531660079956055,
+            0.8286975026130676
+          ]
+        },
+        "full": {
+          "angle_deg": [
+            -54.9640880215135,
+            -2.355462320678067
+          ],
+          "variance_deg2": [
+            4.268614768981934,
+            1.0400499105453491
+          ]
+        }
+      }
+    },
+    {
+      "target_offset_after_cue_ticks": 1024,
+      "history_first_source_row": 3228,
+      "cutoff_source_row": 3483,
+      "target_source_row": 3611,
+      "anchor_deg": [
+        -49.32018252508978,
+        -2.1747654160187957
+      ],
+      "measured_deg": [
+        -49.298325586235315,
+        -2.1747654160187957
+      ],
+      "input_sha256_f64le": {
+        "anchor_deg": "d9d04dbd3e8ebe1d0de728f80342264a3ab444674d9c0227c59c43d323960ee5",
+        "mean_angles_deg": "96469d166b0aba68cb36e08c01eca5a26d63c8c19c06a2c2bfecd637ce497fc6",
+        "emg_rms_uv": "381f1581eaefd35415abf4a176ead6f5ee4c2b79ed0d9889feaa822c0f3e3c1e",
+        "eeg_mean_uv": "6071356339d504c971fd8b031cfc708cb540aba839de337cf824299878b52c34"
+      },
+      "predictions": {
+        "motion": {
+          "angle_deg": [
+            -50.27451106207708,
+            -2.086307891242337
+          ],
+          "variance_deg2": [
+            0.834867000579834,
+            0.5214784741401672
+          ]
+        },
+        "emg": {
+          "angle_deg": [
+            -49.811353616884745,
+            -2.2343039592431304
+          ],
+          "variance_deg2": [
+            0.5317589044570923,
+            0.5039641857147217
+          ]
+        },
+        "full": {
+          "angle_deg": [
+            -51.03522475855688,
+            -2.2973124762700317
+          ],
+          "variance_deg2": [
+            0.7075629830360413,
+            0.47742217779159546
+          ]
+        }
+      }
+    }
+  ]
+}

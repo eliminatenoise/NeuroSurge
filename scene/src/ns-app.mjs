@@ -60,6 +60,11 @@
  */
 import { DEG, clamp, transformPoint, transformDirection, rotationTranspose } from './ns-math.mjs';
 import * as WholeArmDisplay from './ns-whole-arm-display.mjs';
+import { bindActionChat } from './ns-action-chat.mjs';
+import { movementMirrorBackend } from './joint/route.mjs';
+import { bindActivityMap } from './activity/map.mjs';
+import {bindJointView} from './joint/view.mjs';
+import { createCameraCapture } from './camera.mjs';
 import { createControls, bindDom, CONTROL_CODES, MOVE_CODES, moveKeyNumber, AREA_CODES, areaKeyDir } from './ns-controls.mjs';
 import { walkQuietStep, walkUiEvent, AREA_WALK_QUIET, bindFocusRing } from './ns-look-calm.mjs'; // 22 November 2026 (LOOK2)
 import {
@@ -587,6 +592,7 @@ export function viewFramePoint(pose, place, fovYDeg, aspect) {
 }
 
 const LIMB_AIM_Y_NDC = 0.5;
+const AIM_PRACTICE_RESPONSE_S = 0.35;
 const LIMB_AIM_HALF_SWEEP_RAD = 18 * DEG;
 
 /** Map a small up/down look around the selection point onto the two remaining sides of a joint's range. */
@@ -1853,8 +1859,8 @@ export const OPTIONAL_MODULES = Object.freeze({ colors: './ns-colors.mjs', bodyM
 /** Pinned sha256 of the Root-ACCEPTED current inputs (NEUROSURGE-SOURCE-INTEGRATION-APPLIED-R1): the R6 overlay
  * movement map and the 142-entry combined mesh manifest in neurosurge-integration-r1 (tests/paths.mjs). */
 export const PINNED_SHA256 = Object.freeze({
-  movementMap: '55205e4fd9468850d2b5e694cb4a7462892efa4f58513d9956ea66a036bef258',
-  meshManifest: '0275d915148e8af4da678cd828cb577aa5e7293ffa5ef48e3786247e4ba11448',
+  movementMap: 'b818be266096220b1d46cce05990c14353ee60e48889755398e524dd5f6ede65',
+  meshManifest: 'e4146ec92f10c52b84ff07ac461bcfc00be5896709f01557321908dc7ab0a270',
   // inputs/FULLBODY-MESH-MANIFEST.json (U0 acquisition record, round 2): the full-body manifest is pinned like the arm's.
   fullbodyManifest: '979c313c1813d559aa455f5f9844079a298d1c14df55d6198a2e2ed13344029d',
   // R5-integrate-core (D20): packets/face-muscles-r1/FACE-MESH-MANIFEST.json (R5-face ACQUISITION-RECORD, the 54 Z-Anatomy
@@ -4208,7 +4214,11 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
       const Bt = rotationTranspose(att.bodyToCamera), W2C = displayedAttachment.worldToCamera;
       const restCam = att.shoulderCam.map((v, i) => v - transformDirection(att.bodyToCamera, att.girdleShiftM)[i]);
       const tw = freeIn.targetWorld;
-      if (Array.isArray(tw) && tw.length === 3 && tw.every(Number.isFinite)) {
+      if (freeIn.cameraArm) {
+        // The observed wrist gives a bearing in the avatar's lateral plane.
+        // The native elbow fit sets reach from the avatar's own arm lengths.
+        handWant = freeIn.cameraArm.bearing.map(unit => unit * (rig.upperLength + rig.foreLength) / 1000);
+      } else if (Array.isArray(tw) && tw.length === 3 && tw.every(Number.isFinite)) {
         const c = transformPoint(W2C, tw);
         handWant = transformDirection(Bt, [c[0] - restCam[0], c[1] - restCam[1], c[2] - restCam[2]]);
       } else {
@@ -4261,23 +4271,24 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
       // forward, -x out to the left); the kept place itself (state.hand) is not turned, so the arm comes back to it as
       // the movement eases off. Without a shoulder movement nothing here changes (swing is null).
       const swing = shoulderSwing(pose.shoulderLiftDeg, pose.shoulderOutDeg);
-      const handAsk0 = swing ? swing.turn(handWant) : handWant;
+      // Camera bearings already use the body frame.
+      const handAsk0 = swing && !freeIn.cameraArm ? swing.turn(handWant) : handWant;
       // 23 November 2026, round r32 (LIMBS5, ns-limb-pace TRUNK_RIDE): a hand the view does not hold (inputs.hand.ride)
       // follows the place the trunk carries it to, at most 15 mm a frame or as fast as the trunk moves its shoulder (with
       // its own movement); the kept place (state.hand.rel) is not changed by it
-      const ride = freeIn.ride && typeof freeIn.ride === 'object' ? freeHandRide(state.hand && state.hand.ride, handAsk0, { carry: freeIn.ride.carry === true, att, shown: displayedAttachment, dt: h }) : null;
+      const ride = !freeIn.cameraArm && freeIn.ride && typeof freeIn.ride === 'object' ? freeHandRide(state.hand && state.hand.ride, handAsk0, { carry: freeIn.ride.carry === true, att, shown: displayedAttachment, dt: h }) : null;
       const handAsk = ride && ride.lagging ? ride.askBodyM : handAsk0;
       // The elbow's side: the place's own (ns-arm freeHandPole), across the shoulder -> hand line, swung toward at a
       // limited rate from the side it had, so the elbow never snaps round as the hand passes under the shoulder.
       const hLen = Math.hypot(handAsk[0], handAsk[1], handAsk[2]) || 1, hd = handAsk.map(v => v / hLen);
       const across = v => { const d = v[0] * hd[0] + v[1] * hd[1] + v[2] * hd[2]; const q = [v[0] - d * hd[0], v[1] - d * hd[1], v[2] - d * hd[2]], n = Math.hypot(q[0], q[1], q[2]); return n > 0.12 ? q.map(x => x / n) : null; };
       const prevSide = hand0.side ? across(hand0.side) : null;
-      const wantSide = across(freeHandPole(handAsk)) || prevSide || across([0, -1, 0]) || across([-1, 0, 0]);
+      const wantSide = (freeIn.cameraArm && across(freeIn.cameraArm.upper)) || across(freeHandPole(handAsk)) || prevSide || across([0, -1, 0]) || across([-1, 0, 0]);
       const side = prevSide ? turnToward(prevSide, wantSide, FREE_HAND.swivelDegPerS * DEG * h) : wantSide;
-      fit = fitHandAt(rig, boxes, { handBodyM: handAsk, joints: pose.joints, rotation: rotationReq, elbowDeltaDeg: pose.elbowDeltaDeg, elbowSideBodyM: side, stayBodyM: swing ? swing.turn(hand0.rel) : hand0.rel }, viewport, armOpts);
+      fit = fitHandAt(rig, boxes, { handBodyM: handAsk, joints: pose.joints, rotation: rotationReq, reachRotationValue: a.rotation?.axialAnchor, elbowDeltaDeg: pose.elbowDeltaDeg, elbowFlexDeg: freeIn.cameraArm?.elbowDeg, elbowSideBodyM: side, stayBodyM: swing ? swing.turn(hand0.rel) : hand0.rel }, viewport, armOpts);
       if (fit.elbow) {
-        const baseRad = fit.elbow.baseRad, wanted = baseRad + pose.elbowDeltaDeg * DEG, actualRad = fit.solution.elbowFlexRad;
-        elbow = { commandDeg: pose.elbowDeltaDeg, baseDeg: baseRad / DEG, targetDeg: fit.elbow.targetRad / DEG, actualDeg: actualRad / DEG, achievedDeg: (actualRad - baseRad) / DEG,
+        const baseRad = fit.elbow.baseRad, wanted = freeIn.cameraArm ? freeIn.cameraArm.elbowDeg * DEG : baseRad + pose.elbowDeltaDeg * DEG, actualRad = fit.solution.elbowFlexRad;
+        elbow = { commandDeg: (wanted - baseRad) / DEG, baseDeg: baseRad / DEG, targetDeg: fit.elbow.targetRad / DEG, actualDeg: actualRad / DEG, achievedDeg: (actualRad - baseRad) / DEG,
           limited: Math.abs(actualRad - wanted) / DEG > ELBOW_LIMIT_TOL_DEG };
       }
       // The place asked never runs far ahead of where the hand is (a joint at its end, a place out of reach): the
@@ -5243,7 +5254,7 @@ export function createShellState({ autoPlay = false } = {}) {
  * Pure shell reducer. Events: { type: 'ready', atMs } | { type: 'tick', atMs } (hides the intro at introHideAtMs) |
  * { type: 'esc', atMs } (intro -> paused (round 3), playing -> paused, paused -> playing; without owned native release
  * evidence, an Esc within ESC_UNLOCK_GUARD_MS of lock loss is conservatively ignored) | { type: 'fatal', message } | { type: 'play' } (overlay click
- * or QA) | { type: 'locked' } | { type: 'unlocked', atMs } | { type: 'lockError' } | { type: 'lockUnavailable' } |
+ * or QA) | { type: 'locked' } | { type: 'unlocked', atMs, movementMirror? } | { type: 'lockError' } | { type: 'lockUnavailable' } |
  * { type: 'playUnlocked' } | { type: 'pause' } | { type: 'notice', text } | { type: 'contextLost', atMs } |
  * { type: 'contextRestored' }. Returns the same object when nothing changes.
  */
@@ -5285,6 +5296,9 @@ export function shellReduce(s, ev) {
       return toPlaying({ locked: true, lockFailed: false, unlockedPlay: false });
     case 'unlocked':
       if (!s.locked) return s;
+      if (ev.movementMirror === true && s.mode === 'playing') {
+        return { ...s, locked: false, unlockedPlay: true, unlockPausedAtMs: null };
+      }
       if (s.mode === 'playing' && !s.autoPlay) return { ...s, locked: false, unlockedPlay: true, mode: 'paused', unlockPausedAtMs: at };
       return { ...s, locked: false, unlockedPlay: true };
     case 'lockError':
@@ -6042,7 +6056,7 @@ export function restMuscleDrive(binding) {
  *   setSettings(settings), setInfo(model), focusPrimary(), dispose(), element, infoElement }}
  */
 export function createShell({ doc, root, text = SHELL_TEXT, settings = SETTINGS_DEFAULTS, onPlay = null, onPlayUnlocked = null, onReload = null,
-  onSettings = null, onResetBody = null, onResetBrain = null, guideText = NT.GUIDE, onGuide = null, visualGuide = false, onAmbient = null } = {}) {
+  onMovementMirror = null, onSettings = null, onResetBody = null, onResetBrain = null, guideText = NT.GUIDE, onGuide = null, visualGuide = false, guideInputs = {}, onAmbient = null } = {}) {
   if (!doc || typeof doc.createElement !== 'function') fail('app_shell', 'createShell needs a document');
   if (!root || typeof root.appendChild !== 'function') fail('app_shell', 'createShell needs a root element');
   const added = [];
@@ -6170,7 +6184,7 @@ export function createShell({ doc, root, text = SHELL_TEXT, settings = SETTINGS_
   const guideToggle = button('ns-shell-secondary ns-shell-guide-toggle', guideRow, guideText.hide, 'guide-toggle');
   let guideActions = null;
   if (visualGuide) guideActions = mountGuideActions(grpGuide, { onShow: () => onGuide?.('show'), onRestart: () => onGuide?.('restart'),
-    features: { ...GUIDE_FEATURES, jointAim: true } });
+    features: { ...GUIDE_FEATURES, jointAim: guideInputs.jointAim === true }, installed: guideInputs });
   else button('ns-shell-secondary ns-shell-guide-restart', guideRow, guideText.restart, 'guide-restart');
   el('p', 'ns-shell-guidehelp', grpGuide, guideText.escHelp);
 
@@ -6232,6 +6246,8 @@ export function createShell({ doc, root, text = SHELL_TEXT, settings = SETTINGS_
   context.setAttribute('role', 'alert');
   context.hidden = true;
   const contextText = el('span', 'ns-shell-context-text', context, text.contextLost);
+  const mirrorButton = onMovementMirror ? button('ns-shell-secondary', context, 'Continue in movement mirror', 'movement-mirror') : null;
+  if (mirrorButton) on(mirrorButton, 'click', onMovementMirror);
   const contextReload = button('ns-shell-secondary', context, text.reload, 'reload');
   contextReload.hidden = true;
   const toast = el('div', 'ns-shell-toast', root, text.freeLookHint);
@@ -6317,7 +6333,7 @@ export function createShell({ doc, root, text = SHELL_TEXT, settings = SETTINGS_
   on(sens, 'change', () => call(onSettings, current, true));
   // Clicking the heading or card text can leave focus on the body, outside the overlay's event path.
   on(doc, 'keydown', e => {
-    if (e.key !== 'Tab' || e.defaultPrevented || overlay.hidden) return;
+    if (e.key !== 'Tab' || e.defaultPrevented || overlay.hidden || (mirrorButton && !context.hidden)) return;
     const list = [...card.querySelectorAll('button, input, select, textarea, summary, a[href], [tabindex]:not([tabindex="-1"])')]
       .filter(x => !x.hidden && !x.disabled && typeof x.getClientRects === 'function' && x.getClientRects().length > 0);
     if (!list.length) return;
@@ -6391,12 +6407,14 @@ export function createShell({ doc, root, text = SHELL_TEXT, settings = SETTINGS_
     setText(notice, mode === 'error' ? NT.appErrorLine(s.error, s.errorHint) : s.notice);
     if (mode === 'error') setText(status, '');
     renderToast(s);
+    const showRecovery = mirrorButton && s.contextLost && (context.hidden || changed);
     show(context, Boolean(s.contextLost));
     if (!s.contextLost) { contextText.textContent = text.contextLost; contextReload.hidden = true; }
     // R4-integrator: the page always opens at its top (Resume, Reset body, Reset brain view first); the card scrolls,
     // and a scroll left from the last visit (e.g. down to Settings) hid those buttons the next time Esc was pressed.
     if (changed && visible) { try { card.scrollTop = 0; } catch { /* not scrollable */ } }
-    if (changed && visible) focusPrimary();
+    if (showRecovery) mirrorButton.focus({ preventScroll: true });
+    else if (changed && visible) focusPrimary();
   }
   function renderContext(s, nowMs) {
     if (!s || !s.contextLost) return;
@@ -6720,6 +6738,7 @@ export function start(params = {}) {
   const isPlaceholder = placeholder === true;
   const qaEnabled = qa === true;
   const useShell = Boolean(shellRoot);
+  const mirrorBackend = movementMirrorBackend(view.location);
   hud.render(hudStatic({ placeholder: isPlaceholder, shell: useShell }));
 
   const perf = view.performance && typeof view.performance.now === 'function' ? view.performance : null;
@@ -6739,7 +6758,7 @@ export function start(params = {}) {
   } catch { /* unreadable storage: the in-memory settings are already normalised */ }
   // R4-text (D7): the "Try this" guide (pure state machine, ns-guide). Never pauses or blocks play.
   // R5-integrate-core (R5-text W2): only the round-5 goals whose feature is wired in this build (GUIDE_FEATURES).
-  let guideFeatures = { thirdPerson: false, glow: false, mirror: false, moveKeys: false };
+  let guideFeatures = { thirdPerson: false, glow: false, mirror: false, moveKeys: false, jointAim: false };
   let guide = NG.guideFromStorage((() => { try { return storage && typeof storage.getItem === 'function' ? storage.getItem(NG.GUIDE_STORAGE_KEY) : null; } catch { return null; } })(), 0, { features: guideFeatures, tutorial: true });
   // 19 November 2026 (EASE, the playable tutorial): steps done outside the frame loop (R pressed, Enter to skip a
   // step) wait here for the next frame's guideStep.
@@ -6751,6 +6770,16 @@ export function start(params = {}) {
   const saveGuide = () => { try { if (storage && typeof storage.setItem === 'function') storage.setItem(NG.GUIDE_STORAGE_KEY, JSON.stringify(NG.guideToStorage(guide))); } catch { /* storage blocked */ } };
   let shellState = createShellState({ autoPlay: !useShell });
   let shell = null;
+  let actionSequence = null;
+  const sequenceStatus = doc.getElementById?.('ns-sequence-status');
+  function endActionSequence(message = '') {
+    actionSequence = null;
+    if (sequenceStatus && sequenceStatus.textContent !== message) sequenceStatus.textContent = message;
+  }
+  let readJointRig = null, lastDrawSeconds = 0;
+  let jointView = null, motionCamera = null, pendingCameraPose = null, trackedJoints = null, trackedLeftArm = null;
+  let cameraOpenAfterUnlock = null;
+  let dialogResumeAfterUnlock = null;
   let tick = null, controlsApi = null, cs = null, sim = null, simState = null;
   const frameTimer = createFrameTimer(); // 18 November 2026 (performance): frame time by part (ns-perf; inspect().perf)
   /* 19 November 2026 (performance): what is under the crosshair (targetsAt: a ray against every drawn mesh, 2 to 6 ms)
@@ -7402,6 +7431,7 @@ export function start(params = {}) {
   function refreshGuideFeatures() {
     const next = { thirdPerson: GUIDE_FEATURES.thirdPerson && Boolean(sceneFn('setCameraPose')),
       glow: GUIDE_FEATURES.glow && glowWired, mirror: GUIDE_FEATURES.mirror && mirrorWired && Boolean(bodyRig),
+      jointAim: Boolean(playerCamera && bodyRig),
       // R558 (Messages 55 and 56): the number-key goals need the numbered movement list on screen (only the scene's own
       // information card draws it) and the number keys wired in the controls (the controls arrive after the first
       // body install, so this is asked again on a later refresh).
@@ -7573,6 +7603,9 @@ export function start(params = {}) {
    * stamped at the observation time take their place (ns-input-epoch EPOCH_RELEASES). Saved placements, poses, latches
    * and the simulation clock are kept. waitingRecords: the overflow count when the cause is an overfull queue. */
   function cancelPendingGameplay(reason, waitingRecords = null) {
+    cameraOpenAfterUnlock = null;
+    dialogResumeAfterUnlock = null;
+    endActionSequence();
     const atMs = clockMs();
     const before = cs;
     const canceled = {
@@ -7661,6 +7694,19 @@ export function start(params = {}) {
     // Context loss freezes drawing without changing shell mode. Discard input on both flag transitions;
     // lastMs remains unchanged here so the existing wall-clock pulse aging is retained on restoration.
     if (before.contextLost !== after.contextLost) cancelPendingGameplay(after.contextLost ? 'context-lost' : 'context-restored');
+    if (mirrorBackend && after.contextLost && !before.contextLost) {
+      // Loss can arrive with C open and idle, a modal above the notice, or the pointer captured.
+      jointView?.close();
+      for (const dialog of [chatDialog, activityDialog]) {
+        if (dialog?.open) dialog.querySelector('[data-close]')?.click();
+      }
+      exitLock();
+    } else if (jointView?.visible && after.mode !== 'playing') {
+      // The open mirror can own dictation while its camera is off.
+      jointView.close();
+    }
+    if (motionCamera?.visible && (after.mode !== 'playing' || after.contextLost)) motionCamera.close();
+    motionCamera?.setPlayable(shellIsPlaying(after) && !after.contextLost);
     if (before.mode === 'playing' && after.mode !== 'playing') {
       // The pause freezes the simulated pulse. End its lens effect and wait for a fresh activation.
       pausedPunchSeq = simState?.activity?.pulseSeq ?? null;
@@ -7684,6 +7730,9 @@ export function start(params = {}) {
     }
     if (limbHud) limbHud.box.inert = !shellIsPlaying(after) || after.contextLost;
     if (shell) shell.render(after);
+    if (chatOpen) chatOpen.disabled = !shellIsPlaying(after) || after.contextLost;
+    if (cameraOpen) cameraOpen.disabled = !shellIsPlaying(after) || after.contextLost;
+    if (activityOpen) activityOpen.disabled = !shellIsPlaying(after) || after.contextLost;
   }
 
   let captureRequest = null;
@@ -7734,9 +7783,14 @@ export function start(params = {}) {
   function observePointerLock(atMs) {
     const locked = lockedNow(), wasLocked = shellState.locked;
     if (locked) captureRequest = null;
-    const lateLock = !wasLocked && (shellState.unlockedPlay || !shellIsPlaying(shellState) || shellState.contextLost);
-    if (locked && lateLock && exitLock()) return;
+    // A canvas request can arrive after focus has moved to an open control surface.
+    const lateDialogLock = !wasLocked && (chatDialog?.open || activityDialog?.open);
+    const lateFreeLock = !wasLocked && (shellState.unlockedPlay || !shellIsPlaying(shellState) || shellState.contextLost);
+    if (locked && (jointView?.visible || motionCamera?.visible || lateDialogLock || lateFreeLock) && exitLock()) return;
+    // An unchanged lock notification cannot end a pause while the browser still holds the pointer.
     if (locked && wasLocked && shellState.mode === 'paused') return;
+    const openCamera = locked ? null : cameraOpenAfterUnlock;
+    if (openCamera) cameraOpenAfterUnlock = null;
     // Only a real transition changes the press evidence. Duplicate pointerlockchange notifications cannot re-arm it.
     if (locked !== wasLocked) {
       if (locked) {
@@ -7750,13 +7804,27 @@ export function start(params = {}) {
     if (!locked) {
       if (!enforceInputCapacity()) releaseInputs(atMs);
     }
-    dispatch({ type: locked ? 'locked' : 'unlocked', atMs });
+    dispatch({ type: locked ? 'locked' : 'unlocked', atMs, movementMirror: Boolean(openCamera) });
+    if (openCamera && gameReady() && shellIsPlaying(shellState)) openCamera();
+    if (!locked && dialogResumeAfterUnlock) {
+      const { action } = dialogResumeAfterUnlock;
+      dialogResumeAfterUnlock = null;
+      dialogControls.resume(action);
+    }
   }
   function nativeEscapeDown(e) {
     if (!e || e.code !== 'Escape' || e.repeat === true) return;
+    cameraOpenAfterUnlock = null;
+    dialogResumeAfterUnlock = null;
     // Untrusted dispatches retain the old guarded behavior; they cannot manufacture native key-release evidence.
     if (e.isTrusted !== true) { onEscape(clockMs()); return; }
     if (phase !== 'running' || failed || stopped) return;
+    if (motionCamera?.visible && !lockedNow() && shellIsPlaying(shellState)) {
+      e.preventDefault();
+      motionCamera.close();
+      canvas.focus({ preventScroll: true });
+      return;
+    }
     const atMs = clockMs();
     // Actual lock loss can precede its queued notification. Observe it once before interpreting this key event.
     if (shellState.locked && !lockedNow()) observePointerLock(atMs);
@@ -7771,8 +7839,7 @@ export function start(params = {}) {
     nativeEscape.releasedBeforeUnlock = false;
     nativeEscape.releasedUnlock = false;
     if (releasedUnlock) {
-      // An actual intervening keyup proves this is a subsequent press. Hide the overlay without requesting capture;
-      // Escape resumes free look. The capture button is the only pointer-lock request.
+      // The next deliberate Escape resumes with the pointer free. Leave the browser's Escape action available.
       dispatch({ type: 'playUnlocked' });
     } else onEscape(atMs);
   }
@@ -7998,9 +8065,18 @@ export function start(params = {}) {
       onPlay: requestPlay,
       onPlayUnlocked: () => dispatch({ type: 'playUnlocked' }),
       onReload: () => { try { view.location.reload(); } catch { /* nothing else to do */ } },
+      onMovementMirror: mirrorBackend ? () => {
+        // Stop camera tracks, pending model requests, the draw loop and owned asset streams.
+        try { stop(); } finally { view.location.replace('../../movement-mirror.html'); }
+      } : null,
       onResetBody: resetBody,
       onResetBrain: resetBrainView,
       visualGuide: Boolean(viewGraph),
+      guideInputs: {
+        jointAim: Boolean(viewGraph && !wholeArmOption),
+        directions: Boolean(doc.getElementById?.('ns-chat-open')),
+        camera: Boolean(doc.getElementById?.('ns-camera-open')),
+      },
       onAmbient: viewGraph ? enabled => { ambientEnabled = enabled; renderRequested = true; } : null,
       onGuide: what => {
         const t = simState && Number.isFinite(simState.t) ? simState.t : 0;
@@ -8031,6 +8107,121 @@ export function start(params = {}) {
     obj.addEventListener(type, fn, opts);
     pageListeners.push([obj, type, fn, opts]);
   };
+  const activityDialog = doc.getElementById?.('ns-activity-map');
+  const activityOpen = doc.getElementById?.('ns-activity-open');
+  const chatDialog = doc.getElementById?.('ns-action-chat');
+  const chatOpen = doc.getElementById?.('ns-chat-open');
+  if (mirrorBackend) {
+    // A stalled renderer may never deliver the next animation frame. Use the actual canvas lifecycle.
+    listen(canvas, 'webglcontextlost', () => dispatch({ type: 'contextLost', atMs: clockMs() }));
+    listen(canvas, 'webglcontextrestored', () => dispatch({ type: 'contextRestored' }));
+  }
+  const cameraOpen = doc.getElementById?.('ns-camera-open');
+  const takeRecorder = doc.getElementById?.('ns-original-camera');
+  const gameReady = () => phase === 'running' && !stopped && !failed && !shellState.contextLost;
+  if (cameraOpen) {
+    function openCameraControls(open) {
+      if (!gameReady() || !shellIsPlaying(shellState)) return;
+      if (!lockedNow()) { open(); return; }
+      cameraOpenAfterUnlock = open;
+      if (!exitLock()) cameraOpenAfterUnlock = null;
+    }
+    function applyTrackedPose(pose) {
+        // Replace a stale sample, including on tracking loss. Keep the last
+        // visible pose until another camera sample or game movement changes it.
+        pendingCameraPose = gameReady() && shellIsPlaying(shellState) ? pose : null;
+        trackedJoints = pendingCameraPose?.joints ?? null;
+        // Pose events for the joint controller are consumed once per camera
+        // sample. The left-arm solver needs its target on every render frame
+        // until a new sample, loss, stop or change of selected limb replaces it.
+        trackedLeftArm = pendingCameraPose?.leftArm ?? null;
+    }
+
+    motionCamera = createCameraCapture({host:doc.body,onPose:applyTrackedPose,
+      returnFocus() {if (gameReady() && shellIsPlaying(shellState)) canvas.focus({preventScroll:true});}});
+    if (mirrorBackend) {
+      jointView = bindJointView({host:doc.body,onPose:applyTrackedPose,readRig:()=>readJointRig?.(),embedded:true,
+        backend:mirrorBackend,
+        onSaveTake:(take,source)=>motionCamera.saveTake(take,source),
+        onOpenCommand:chatOpen ? ()=>chatOpen.click() : null,
+        onClose(){canvas.focus({preventScroll:true});}});
+      if (takeRecorder) {
+        takeRecorder.hidden = false;
+        listen(takeRecorder, 'click', () => openCameraControls(() => {
+          jointView.close();
+          motionCamera.open();
+        }));
+      }
+    }
+    const toggleCamera = () => openCameraControls(() => {
+      if (jointView) {
+        motionCamera.close();
+        jointView.open();
+      } else if (motionCamera.visible) {
+        motionCamera.close();
+        canvas.focus({ preventScroll: true });
+      } else motionCamera.open();
+    });
+    listen(cameraOpen, 'click', toggleCamera);
+    listen(view, 'keydown', e => {
+      if (e.code !== 'KeyC' || e.repeat || e.isComposing || e.ctrlKey || e.metaKey || e.altKey ||
+          e.target?.isContentEditable || e.target?.closest?.('input, textarea, select, button, a[href], dialog[open]') ||
+          !gameReady() || !shellIsPlaying(shellState)) return;
+      e.preventDefault();
+      toggleCamera();
+    }, true);
+  }
+  const takeRecorderInstruction = takeRecorder?.hidden === false
+    ? 'Choose “Record a limb take” in the game toolbar.'
+    : 'Press C to open the recorder.';
+  if (takeRecorder?.hidden === false) {
+    const cameraHelp = doc.getElementById?.('ns-camera-key-help');
+    const recorderHelp = doc.getElementById?.('ns-take-recorder-help');
+    if (cameraHelp) cameraHelp.textContent = 'Press C for the Movement mirror. Choose Save take to keep the recent tracked movement, then use F to replay it.';
+    if (recorderHelp) recorderHelp.textContent = takeRecorderInstruction;
+  }
+  const dialogControls = {
+    canvas,
+    canOpen: () => gameReady() && shellIsPlaying(shellState),
+    pause() {
+      dispatch({ type: 'pause' });
+      exitLock();
+    },
+    resume(action) {
+      if (!gameReady() || shellState.mode !== 'paused') return;
+      // A dialog can close before the requested browser unlock takes effect.
+      if (lockedNow()) {
+        dialogResumeAfterUnlock = { action };
+        return;
+      }
+      // Consume any queued lock-loss observation while the shell is still paused.
+      if (shellState.locked) observePointerLock(clockMs());
+      dispatch({ type: 'playUnlocked' });
+      if (typeof action === 'function') {
+        action();
+      } else if (action?.type === 'sequence') {
+        actionSequence = {steps: action.steps, next: 0, moveSeq: null};
+      } else if (action) carryRawEvents.push({ ...action, timeMs: clockMs() });
+    },
+    getBodyMap: () => bodyMapOf(mods.bodyMap)
+  };
+  const disposeChat = chatDialog && chatOpen ? bindActionChat({
+    ...dialogControls, dialog: chatDialog, trigger: chatOpen,
+    askTouch: jointView?.askTouch,
+    runJointGoal: jointView ? (intent,words)=>jointView.run(intent,words) : null,
+    hasAvatarRig: () => Boolean(bodyRig),
+    takeRecorderInstruction,
+    getLatestTake: () => motionCamera?.latestTake,
+    replayTake: (take, label, interval) => { if (gameReady() && shellIsPlaying(shellState)) motionCamera?.replayTake(take, label, interval); }
+  }) : null;
+  // Returning to a game control gives the player back the remaining steps.
+  const manualOverride = () => { if (actionSequence) endActionSequence(); };
+  listen(view, 'keydown', manualOverride, true);
+  listen(view, 'pointerdown', manualOverride, true);
+  const disposeActivity = activityDialog && activityOpen ? bindActivityMap({
+    ...dialogControls, dialog: activityDialog, trigger: activityOpen, keyboardShortcut: false,
+    getCurrentRegion: () => simState?.gaze?.regionId || simState?.rawGaze?.regionId
+  }) : null;
   // 19 November 2026 (found with random input). THE WHEEL NEVER LEAVES THE GAME. The game has no use for the wheel, and
   // a wheel turn the page does not use goes to the browser: in Chromium on Linux a turn with Shift held goes BACK in
   // the browser's history (measured: Shift, a pointer move, one wheel turn, and the game was gone to the page before
@@ -8096,6 +8287,10 @@ export function start(params = {}) {
     if (unbind) { unbind(); unbind = null; }
     if (unRing) { unRing(); unRing = null; }
     if (!stopped) {
+      disposeActivity?.();
+      disposeChat?.();
+      jointView?.dispose();
+      motionCamera?.dispose();
       exitLock();
       // R558: stopped before any picture, in an upright window, because no camera distance shows the whole arm: that
       // is a window too narrow for the arm, and the message says to make it wider. Any other stop keeps its own words.
@@ -9299,6 +9494,7 @@ export function start(params = {}) {
         limbControlPicked = true;
         limbChoice = n;
         const limb = LIMB_KEYS.order[n - 1];
+        motionCamera?.choose(limb);
         setLimbLatch(limb === 'leftArm' ? null : limb);
         limbFlash = limb; limbFlashPending = true; limbFlashFromMs = NaN; // (the frame stamps its start; until then nothing is drawn)
         // (turn false: chosen by a press-and-drag on it; the limb is under the crosshair already and the view stays)
@@ -9447,6 +9643,7 @@ export function start(params = {}) {
       /* ---- 19 November 2026: the chosen limb held by the view (LIMB_KEYS.view.hold) --------------------------------- */
       const HOLD = LIMB_KEYS.view;
       const holdDbg = { refused: 0 }; // (holdMemo: kept with the hold's other records since LIMBS5 pass 4)
+      let aimPractice = null;
       let limbControlPicked = false;
       let holdLight = null, holdLightKeys = ''; // (22 November 2026, LIMBS2: ns-limb-pace holdLightStep's last result for the held limb, { acc, lit, limb }, and the keys it was made under)
       const chosenLimb = () => LIMB_KEYS.order[limbChoice - 1];
@@ -9500,9 +9697,22 @@ export function start(params = {}) {
         } catch { return null; }
       }
 
+      function cameraControlsLimb(limb) {
+        if (limb === 'leftArm') return Boolean(trackedLeftArm);
+        return Boolean(trackedJoints && NsGrasp.LIMB_CHAIN[limb]?.joints.some(id => Object.hasOwn(trackedJoints, id)));
+      }
+
+      function relativeLimbEnd(limb, out) {
+        const points = limbEnds(limb, out);
+        return points ? points.frame.map((value, axis) => value - points.root[axis]) : null;
+      }
+
       function updateJointAim(axes) {
-        if (!playerCamera || !firstPersonNow() || axes.x || axes.z || holdBusy()) { jointAim = null; return; }
         const limb = chosenLimb();
+        if (!playerCamera || !firstPersonNow() || axes.x || axes.z || holdBusy() || cameraControlsLimb(limb)) {
+          jointAim = null;
+          return;
+        }
         const lookMs = cs.lookMs ?? null;
         if (jointAim?.limb !== limb || (lookMs === jointAim.lookMs && cs.pitch !== jointAim.lastPitch)) {
           // (CAM70: after a reset, only from a frame drawn since: jointAimStaleOut)
@@ -9540,6 +9750,7 @@ export function start(params = {}) {
             transformDirection(attachment.bodyToCamera, [x, -reach * Math.cos(target), -reach * Math.sin(target)]));
           jointAim.hand = handKeepOut(root.map((v, i) => v + offset[i]));
         }
+        return true;
       }
       /** The posed segments of the drawn body, made once for a pose (the hold asks for them several times a frame). */
       let segsMemo = { posed: null, head: null, segs: null };
@@ -9824,6 +10035,10 @@ export function start(params = {}) {
         if (!pts) { limbHold = null; return; }
         const busy = holdBusy(), c = NsGrasp.LIMB_CHAIN[limb] || null;
         const ax = !busy && axes ? Number(axes.x) || 0 : 0, az = !busy && axes ? Number(axes.z) || 0 : 0, keyed = ax !== 0 || az !== 0;
+        if (!keyed && cameraControlsLimb(limb)) { limbHold = null; return; }
+        // A forearm turn carries the palm along an arc without choosing a new shoulder or elbow position.
+        if (!keyed && limb === 'rightArm' && simState.activity.isolatedRightForearm &&
+            simState.activity.bodyJerk?.r_pronation) return;
         if (c && jointAim?.active && jointAim.limb === limb && !keyed && !busy && cs.yaw === limbHold?.lookYaw) {
           limbHold.world = pts.end.slice();
           holdReframe(holdCamPose(), pts.root);
@@ -11730,6 +11945,18 @@ export function start(params = {}) {
       // 19 November 2026 (LIMB_KEYS): the four limbs for checks: where each one's end, wrist or ankle and root are (world
       // m), where the wrist or ankle stands in the picture (share of the picture's height from the bottom, 0..1; x in
       // NDC), the chosen limb and the view's hold on it. Plain numbers, read from what is drawn.
+      readJointRig = () => {
+        const world = Array(33).fill(null);
+        for (const [limb,root,bend,tip] of [['leftArm',11,13,15],['rightArm',12,14,16],
+          ['leftLeg',23,25,27],['rightLeg',24,26,28]]) {
+          const ends = limbEnds(limb);
+          if (!ends) continue;
+          world[root] = ends.root;
+          world[tip] = ends.frame;
+          world[bend] = limbRods(limb,current.out)?.bend ?? null;
+        }
+        return {id:frames,t:lastDrawSeconds,world};
+      };
       limbReportFn = () => {
         const r3 = v => (Array.isArray(v) ? v.map(x => Math.round(x * 1000) / 1000) : null);
         const ends = {};
@@ -11820,6 +12047,7 @@ export function start(params = {}) {
         const aspect = size.width / size.height;
         let timing, rawFrameEvents = [], lastMsBeforeFrame = lastMs;
         const dragTurns = [];
+        let sequenceStep = null;
         if (!live) { viewRequests = 0; moveRequests.length = 0; areaRequests.length = 0; } // E, a number or an arrow pressed while an overlay shows does nothing (bindDom refuses it there anyway)
         if (live) {
           // Actual elapsed wall time (monotonic performance clock; the rAF timestamp only as a fallback), or the QA
@@ -11841,6 +12069,19 @@ export function start(params = {}) {
             else gameEvents.push(event);
           }
           timing = frameTiming(lastMs, now, gameEvents, cs.lookMs);
+          if (actionSequence) {
+            const activity = simState.activity;
+            const {steps, next, moveSeq} = actionSequence;
+            if (moveSeq !== null && activity.moveSeq !== moveSeq) {
+              endActionSequence();
+            } else if (next === 0 || (!Object.keys(activity.armJerk).length && !Object.keys(activity.bodyJerk).length && !Number.isFinite(activity.rotation?.axialAnchor))) {
+              // These entries last through contraction AND return. Offer one step
+              // to this frame. A refused frame consumes neither the step nor its clock.
+              sequenceStep = steps[next];
+              if (sequenceStep) timing.events.push({...sequenceStep.action, at: timing.dt});
+              else endActionSequence();
+            }
+          }
           if (fixed === true && qaLookPending) timing = { ...timing, gazeAt: 0 };
           lastMsBeforeFrame = lastMs;
           lastMs = Number.isFinite(now) ? now : null;
@@ -12011,6 +12252,24 @@ export function start(params = {}) {
             }
           }
           if (add.length) timing = { ...timing, events: [...timing.events, ...add] };
+        }
+        // A deliberate movement key takes the chosen limb away from the camera
+        // for this frame. The other limb can keep following the same capture.
+        const pressedAxes = live ? controlsApi.axes(cs) : { x: 0, z: 0 };
+        const manualLimb = (pressedAxes.x || pressedAxes.z) ? chosenLimb() : null;
+        let cameraJoints = live ? pendingCameraPose?.joints : null;
+        const manualJoints = NsGrasp.LIMB_CHAIN[manualLimb]?.joints;
+        if (cameraJoints && manualJoints) {
+          cameraJoints = {...cameraJoints};
+          for (const id of manualJoints) delete cameraJoints[id];
+          if (!Object.keys(cameraJoints).length) cameraJoints = null;
+        }
+        const cameraArm = live && manualLimb !== 'leftArm' ? trackedLeftArm : null;
+        pendingCameraPose = null;
+        if (cameraJoints || cameraArm) {
+          const placement = { type: 'limbPose', joints: cameraJoints || {}, at: timing.dt,
+            trackedLeftUpperArm: Boolean(cameraArm) };
+          timing = { ...timing, events: [...timing.events, placement] };
         }
         // 18 Nov (M3): a number key came up: a short press completes its movement, a longer one leaves the part there.
         if (live && upsThisFrame.length) {
@@ -12220,7 +12479,24 @@ export function start(params = {}) {
         // per frame, before the attempts)
         { const k = live && headOffs ? NsPace.trunkRideKey(headOffs.now) : trunkRideKeyLast; trunkRideCarry = k !== trunkRideKeyLast; trunkRideKeyLast = k; }
 
-        if (live) updateJointAim(controlsApi.axes(cs));
+        const aimInput = live && updateJointAim(controlsApi.axes(cs));
+        const practisingAim = live && jointAim && guideFeatures.jointAim && !guide.hidden && !guide.paused && NG.currentGoal(guide) === 'aimJoint';
+        const moveSeqBeforeAim = simState.activity?.moveSeq;
+        if (!practisingAim || (aimPractice && (aimPractice.limb !== jointAim.limb ||
+            aimPractice.moveSeq !== moveSeqBeforeAim || (!aimInput && aimPractice.lookMs !== cs.lookMs)))) {
+          aimPractice = null;
+        }
+        if (practisingAim && aimInput) {
+          // Use the pose before this up/down gesture. An earlier sideways look cannot complete the step.
+          if (!aimPractice || simState.t > aimPractice.until) {
+            const start = relativeLimbEnd(jointAim.limb);
+            aimPractice = start ? { limb: jointAim.limb, start, moveSeq: moveSeqBeforeAim } : null;
+          }
+          if (aimPractice) {
+            aimPractice.lookMs = cs.lookMs;
+            aimPractice.until = simState.t + AIM_PRACTICE_RESPONSE_S;
+          }
+        }
         const baseTiming = live && jointAim?.bodyEvent
           ? { ...timing, events: [...timing.events, jointAim.bodyEvent] } : timing;
         // R558: ONE attempt at this frame, from the camera choice to the simulation step. It commits nothing: the caller
@@ -12243,7 +12519,6 @@ export function start(params = {}) {
         let wholeArmDisplayPlan = null, canonicalFirstFrame = null;
         // Snapshot axes and already-drained events for a virtual copied preview; the actual step keeps its original events.
         // Later arrow filtering removes clicks only. Space objects/offsets stay identical, checked by the plan stamp.
-        const pressedAxes = live ? controlsApi.axes(cs) : { x: 0, z: 0 };
         const frameAxes = { x: override && override.zeroX ? 0 : pressedAxes.x, z: override && override.zeroZ ? 0 : pressedAxes.z };
         const wholeArmCommandAxes = wholeArmOption ? Object.freeze({ ...frameAxes }) : null;
         const wholeArmCommandEvents = wholeArmOption ? copyJson(timing.events) : null;
@@ -12549,9 +12824,9 @@ export function start(params = {}) {
           // the chosen limb the hold gives its place (carried by the look, moved by the keys)
           // (23 November 2026, round r32, LIMBS5, ns-limb-pace TRUNK_RIDE: a left hand the view does not hold follows the
           // place the trunk carries it to: ride)
-          ...(LIMB_KEYS.on && HOLD.hold && !wholeArmOption ? { hand: { free: true, ...(holdHand ? { targetWorld: holdHand } : limbPush.handMove ? { moveWorld: limbPush.handMove } : {}),
+          ...(LIMB_KEYS.on && HOLD.hold && !wholeArmOption ? { hand: { free: true, cameraArm, ...(holdHand ? { targetWorld: holdHand } : limbPush.handMove ? { moveWorld: limbPush.handMove } : {}),
             // (LIMBS5 pass 2: also on a frame drawn while paused, which has no time: the hand stays where it was drawn)
-            ...(NsPace.TRUNK_RIDE.on && !holdHand && !holdBusy() && !(cs.drag && cs.drag.binding && cs.drag.binding.limb === 'leftArm') ? { ride: { carry: trunkRideCarry } } : {}) } } : {}),
+            ...(NsPace.TRUNK_RIDE.on && !cameraArm && !holdHand && !holdBusy() && !(cs.drag && cs.drag.binding && cs.drag.binding.limb === 'leftArm') ? { ride: { carry: trunkRideCarry } } : {}) } } : {}),
           // 19 November 2026: the left hand's fingers close as the look goes down and open as it goes up (GRIP_FEET.look,
           // the left hand's share of the owner's Message 173), and the limb turn's side lights the game arm's flexors
           // or extensors (TURN_SIDES)
@@ -12746,6 +13021,18 @@ export function start(params = {}) {
         carryArrival = attempted.carryKeep || null; // (CARRY_ARRIVAL: kept only by a frame that was applied)
         areaWalkQuiet = attempted.walkKeep || null; areaWalkHeldStep = false; areaWalkReleased = false; // (LOOK2, AREA_WALK_QUIET: the same)
         simState = step.state;
+        if (sequenceStep && actionSequence) {
+          const activity = simState.activity;
+          const {regionId, actionId} = sequenceStep.action;
+          if (activity.moveSeq > prevSim.activity.moveSeq && activity.lastMove?.actionId === actionId &&
+              activity.lastMove.regionId === regionId) {
+            actionSequence.next++;
+            actionSequence.moveSeq = activity.moveSeq;
+            if (sequenceStatus) sequenceStatus.textContent = `Step ${actionSequence.next} of ${actionSequence.steps.length} · ${sequenceStep.label}`;
+          } else {
+            endActionSequence('This movement could not start. The sequence stopped.');
+          }
+        }
         const out = step.out;
         // R558 (performance): the scene rests the arrows of an item while it is held (ns-scene-three setHeldItem)
         if (sceneFn('setHeldItem')) {
@@ -13340,6 +13627,18 @@ export function start(params = {}) {
         if (emapOn || (emapView ? !emapView.built || emapView.amount > 0 : !EMAP_BUILD.onPress)) { if (!emapNote) emapFrame(now, out); }
         if (ambientEmap) ambientEmap.frame({ nowMs: now, enabled: ambientEnabled && !emapOn && !(emapView?.amount > 0), reduced: prefersReducedMotion() });
         frameTimer.mark('glow');
+        if (aimPractice && (simState.activity?.moveSeq !== aimPractice.moveSeq || simState.t > aimPractice.until)) aimPractice = null;
+        // The visible limb can keep moving for several frames after one mouse event.
+        if (aimPractice) {
+          const end = relativeLimbEnd(aimPractice.limb, out);
+          if (end) {
+            const m = Math.hypot(...end.map((value, axis) => value - aimPractice.start[axis]));
+            if (m >= NG.GUIDE_OPTIONS.jointAimMinM) {
+              guideAsyncEvents.push({ type: 'jointAim', m });
+              aimPractice = null;
+            }
+          }
+        }
         refreshGuideFeatures();
         // R558 (hunt 3 check): the sim re-applies the legacy glassHit override to its cached RAW gaze every frame, so in
         // legacy mode the hit is kept while the raw gaze is empty (the glass it made); clearing it there lost the glass
@@ -13637,12 +13936,12 @@ export function start(params = {}) {
               ? sim.guideMotorTarget(camPose, out.brainTransform, camPose.viewFovYDeg || holdFov(), aspect, out.gaze?.regionId) : null;
             const motor = targeted ? guidePoint(targeted.world, targeted.area.label || targeted.area.id,
               mods.colors?.areaColorCss?.(targeted.area.id)) : null;
-            const limbKeysStep = step === 'chooseLimb' || step === 'moveHand' || step === 'dragLimb';
+            const limbKeysStep = step === 'chooseLimb' || step === 'aimJoint' || step === 'moveHand' || step === 'dragLimb';
             const limb = limbKeysStep ? guidePoint(limbEnds(selectedLimb, out)?.frame, NT.GRASP_INFO.chosen[selectedLimb]) : null;
             const brain = step === 'dragBrain' || step === 'orbit' ? guidePoint(out.brainTransform?.pivotWorld, 'Brain') : null;
             guideCues.update({ guide: guideNow, tutorial: guide.tutorial, motor, limb, brain, selectedLimb,
               showJointAim: Boolean(playerCamera && firstPersonNow() && limbHold && !holdBusy() &&
-                (limbControlPicked || step === 'chooseLimb' || step === 'moveHand')),
+                (limbControlPicked || step === 'chooseLimb' || step === 'aimJoint' || step === 'moveHand')),
               jointAimY: (1 - LIMB_AIM_Y_NDC) / 2 });
           }
         }
@@ -13731,6 +14030,7 @@ export function start(params = {}) {
         // event from supplied link data. The feature remains available; visibility/guide completion stays unverified.
         glowRendered = glowWired && sceneFn('glowLinkState') ? callScene('glowLinkState') : null;
         frames++;
+        lastDrawSeconds = now / 1000;
         startPose.fresh = false; // a picture has now been shown at this window size (START_POSE_SEARCH)
         lastGoodCam = cam; // the camera state this drawn frame used (a refused change of view is undone to it)
         // R558 (Message 40): tell the Space gesture what the game now holds and whether a limb turn still runs (only after
@@ -13796,6 +14096,10 @@ export function start(params = {}) {
     if (stopped) return;
     clearNativeEscape();
     stopped = true;
+    disposeActivity?.();
+    disposeChat?.();
+    jointView?.dispose();
+    motionCamera?.dispose();
     cancelPendingGameplay('stop');
     cancelOwnedStreams();
     phase = failed ? 'error' : 'stopped';

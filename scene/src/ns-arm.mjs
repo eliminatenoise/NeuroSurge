@@ -2200,7 +2200,8 @@ export function freeHandPole(handBodyM, o = FREE_HAND) {
 /**
  * The arm with its hand centre at a place beside the shoulder (FREE_HAND; no screen rule).
  * request: { handBodyM [x, y, z], joints, rotation? (as fitHand), elbowDeltaDeg? (a motor area's signed elbow command:
- *   the hand goes along the shoulder -> hand line to where the elbow has that much more or less bend), elbowSideBodyM?
+ *   the hand goes along the shoulder -> hand line to where the elbow has that much more or less bend), elbowFlexDeg?
+ *   (an absolute camera target, constrained by the same game-arm fit), elbowSideBodyM?
  *   (the elbow's side to use, a direction in the chest's axes; default freeHandPole of the place) }.
  * options: as fitHand (the attachment gives the shoulder and the chest's axes; its look-dependent shoulder lift is
  *   taken out and the lift of the arm's own elevation is used instead).
@@ -2210,7 +2211,7 @@ export function freeHandPole(handBodyM, o = FREE_HAND) {
  * pose), elbow ({ baseRad, targetRad } when elbowDeltaDeg was given) and elbowSideBodyM.
  */
 export function fitHandAt(rig, boxes, request, viewport, options = {}) {
-  const { handBodyM, joints = {}, rotation, elbowDeltaDeg = 0, elbowSideBodyM = null, stayBodyM = null } = request || {};
+  const { handBodyM, joints = {}, rotation, elbowDeltaDeg = 0, elbowFlexDeg, elbowSideBodyM = null, stayBodyM = null } = request || {};
   const hb = vec3(handBodyM, 'request.handBodyM');
   const o0 = mergeOptions(swivelOptions({ ...(options || {}), reachGirdle: false }, rotation));
   const { aspect, fovYDeg = o0.fovYDeg } = viewport || {};
@@ -2221,7 +2222,11 @@ export function fitHandAt(rig, boxes, request, viewport, options = {}) {
   const lookLift = att && att.girdleShiftM && att.girdleShiftM.length === 3 ? att.girdleShiftM : [0, 0, 0];
   const restCam = sub(o0.shoulderCam, toCam(lookLift)); // the shoulder joint's rest place: the origin of handBodyM
   const J0 = normalizeJoints(jointsWithRotation(joints, rotation));
-  const ctx0 = poseContext(rig, J0);
+  // During an isolated palm turn, solve the reach at its resting rotation.
+  // The hand centre is off the radioulnar axis and must travel with the radius.
+  const isolated = Number.isFinite(request.reachRotationValue);
+  const reachJoints = isolated ? jointsWithRotation(joints, { value: request.reachRotationValue }) : J0;
+  const ctx0 = poseContext(rig, reachJoints);
   const reachM = ctx0.empty ? 0 : ctx0.dMaxM;
   const G = GIRDLE_ELEVATION, dMin0 = ctx0.empty ? 0 : ctx0.dMinM;
   /** A place inside the shoulder's range, with the shoulder girdle it asks for: raised with the arm's own elevation,
@@ -2244,9 +2249,10 @@ export function fitHandAt(rig, boxes, request, viewport, options = {}) {
   let rel = P.rel, relS = P.relS, D = P.D;
   const shoulderCam = add(restCam, toCam(shiftBody));
   let elbow = null;
-  if (elbowDeltaDeg !== 0 && Number.isFinite(elbowDeltaDeg) && !ctx0.empty) {
+  if ((Number.isFinite(elbowFlexDeg) || (elbowDeltaDeg !== 0 && Number.isFinite(elbowDeltaDeg))) && !ctx0.empty) {
     const baseRad = elbowPhiFor(ctx0, D), lo = Math.max(0, ctx0.phiLimF, ctx0.cG.phi0), hi = Math.min(ELBOW_MAX, ctx0.cG.phi0 + Math.PI);
-    const targetRad = clamp(baseRad + elbowDeltaDeg * DEG, lo, hi), Dn = chainDist(ctx0.cG, targetRad) * MM;
+    const requested = Number.isFinite(elbowFlexDeg) ? elbowFlexDeg * DEG : baseRad + elbowDeltaDeg * DEG;
+    const targetRad = clamp(requested, lo, hi), Dn = chainDist(ctx0.cG, targetRad) * MM;
     relS = scale(relS, Dn / D); D = Dn; rel = add(relS, shiftBody);
     elbow = { baseRad, targetRad };
   }
@@ -2254,7 +2260,8 @@ export function fitHandAt(rig, boxes, request, viewport, options = {}) {
   const o = { ...o0, shoulderCam, pole: add(shoulderCam, toCam(side)) };
   const targetCam = add(shoulderCam, toCam(relS));
   const core = solveArmCore(ctx0, targetCam, o, o);
-  const matrices = forwardKinematics(rig, { shoulderMatrix: core.SM, elbowFlexRad: core.phi, joints: core.ctx.J });
+  const J = isolated ? { ...core.ctx.J, forearm_pronation: J0.forearm_pronation } : core.ctx.J;
+  const matrices = forwardKinematics(rig, { shoulderMatrix: core.SM, elbowFlexRad: core.phi, joints: J });
   if (B) matrices.set('chest', chestMatrix(B, core.shoulderCam, rig.pivots.shoulder));
   const elbowCam = transformPoint(matrices.get('upperarm'), rig.pivots.elbow);
   const handCentreCam = transformPoint(matrices.get('hand'), rig.handCentre);
@@ -2263,7 +2270,10 @@ export function fitHandAt(rig, boxes, request, viewport, options = {}) {
     wristCam: transformPoint(matrices.get('forearm'), rig.pivots.wrist), elbowCam, shoulderCam: core.shoulderCam.slice(),
     reachable: core.reachable, iterations: 1, targetCam, coupling: couplingReport(o, core, targetCam, elbowCam)
   };
-  const J = core.ctx.J;
+  if (isolated) {
+    solution.coupling.forearmDeg = J.forearm_pronation;
+    solution.coupling.pronationDeg = J.forearm_pronation;
+  }
   // where the hand is seen from the eye (null behind it); the box corners in front of the eye
   const seen = handCentreCam[2] < -1e-6 ? projectToNdc(handCentreCam, tanHalf, aspect) : null;
   const cornersNdc = [];
