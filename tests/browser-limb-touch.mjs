@@ -91,7 +91,7 @@ try {
   }
 
   const start = performance.now();
-  await page.goto(`http://${host}/`, { waitUntil: 'domcontentloaded' });
+  await page.goto(`http://${host}/scene/example/preview.html`, { waitUntil: 'domcontentloaded' });
   await waitShell('playing');
   const startToPlayingMs = Math.round(performance.now() - start);
   const startupOverlap = await limbs.evaluate(el => {

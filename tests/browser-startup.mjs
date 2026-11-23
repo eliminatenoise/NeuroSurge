@@ -27,7 +27,7 @@ server.listen(0, HOST);
 await once(server, 'listening');
 const host = `${HOST}:${server.address().port}`;
 allowedHosts.add(host);
-const url = `http://${host}/`;
+const url = `http://${host}/scene/example/preview.html`; // (24 November 2026: the page at / is now a game menu, no longer a redirect)
 const timeout = 60_000;
 const angle = process.env.NS_ANGLE;
 let browser;

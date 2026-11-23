@@ -59,7 +59,7 @@ try {
     await page.mouse.click(800, 450); // the pointer is captured: a move turns the look by its difference
     await sleep(500);
   };
-  await page.goto(`http://${host}/`, { waitUntil: 'domcontentloaded' });
+  await page.goto(`http://${host}/scene/example/preview.html`, { waitUntil: 'domcontentloaded' });
   await start();
   let px = 800, py = 450, ox = 0, oy = 0;
   const look = async (dx, dy, steps = 10, wait = 12) => { for (let i = 0; i < steps; i++) { px += dx / steps; py += dy / steps; await page.mouse.move(px, py); await sleep(wait); } ox += dx; oy += dy; };
@@ -174,12 +174,27 @@ try {
   // the deepest shade, where the steps were hardest to keep apart) and, for the table, looked up at
   const again = async () => { await page.reload({ waitUntil: 'domcontentloaded' }); await start(); px = 800; py = 450; ox = 0; oy = 0; };
   await again();
+  // 24 November 2026 (DESIGN-DECISIONS section 204): the player-controlled camera from GitHub main stands still, 0.96 m
+  // behind the eye, the look is no longer held inside what the neck can do, and with a limb chosen the look's up and
+  // down also aims that limb (main's joint aim, ns-app updateJointAim). The earlier sequence here (a look between the
+  // keys, then the right leg chosen and a look 250 px down and 150 px right) ended on the empty floor behind the body:
+  // no muscle drawn, 0 contacts, and the check failed on "hue null". Now the keys raise the right arm with the look left
+  // at the start look, and a turn of the look to the side only (no up or down, so the aim leaves the arm where the keys
+  // put it) brings the raised hand into the middle of the picture: the arm lies across the picture, its underside in the
+  // shade of the one light. Measured on the combined branch: 139 contacts, 22 of them in shade.
+  const rightHandX = () => page.evaluate(() => { const e = window.__nsQA.inspect().limbs.ends.rightArm; return e && e.inPicture ? e.inPicture.x : null; });
   await page.keyboard.press('Digit4'); await sleep(1200);
-  await look(250, 100); await sleep(900); await holdMove('KeyS'); if (seenOut) await probe('right-arm-S');
-  await look(-200, -250, 12); await sleep(900); await holdMove('KeyW');
-  await look(-350, 150, 12); await sleep(900); await holdMove('KeyD'); if (seenOut) await probe('right-arm-D');
-  await page.keyboard.press('Digit3'); await sleep(1200);
-  await lookTo(150, 250, 12); await sleep(2500);
+  await holdMove('KeyS'); if (seenOut) await probe('right-arm-S');
+  await holdMove('KeyW');
+  await holdMove('KeyD'); if (seenOut) await probe('right-arm-D');
+  for (let i = 0; i < 16; i++) {
+    const x = await rightHandX();
+    assert.ok(Number.isFinite(x), 'the right hand is in front of the camera');
+    if (Math.abs(x) < 0.2) break;
+    await look(Math.sign(x) * 40, 0, 4); await settle(2, 600);
+  }
+  assert.ok(Math.abs(await rightHandX()) < 0.2, 'the look turned to the raised right hand');
+  await sleep(2500);
   const shadow = await probe('right-arm-in-shadow');
   if (seenOut) {
     await lookTo(250, -150, 12); await sleep(2000); await probe('right-arm-look-up');

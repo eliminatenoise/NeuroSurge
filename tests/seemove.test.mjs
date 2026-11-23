@@ -721,7 +721,9 @@ test('letting go of Space or of the left hand during a trunk movement leaves not
   assert.ok(src.includes("if (HOLD_BODY.on && limbHold && limbHold.limb === 'leftArm' && limb !== 'leftArm' && !holdTrunkAtRest()) leftKept = limbHold;"), 'chooseLimb keeps the left hand');
   assert.ok(src.includes("if (leftKept && holdKeptDrop({ chosen: chosenLimb() === 'leftArm', trunkAtRest: holdTrunkAtRest(), busy: holdBusy(), rejoining: leftRejoin })) leftKept = null;"), 'kept by holdKeptDrop');
   assert.ok(src.includes('stepArmBack(out, timing.dt); // (HOLD_BODY: the right arm let go during a trunk movement)'), 'the right arm goes back');
-  assert.ok(src.includes('const G0 = simState && simState.activity && simState.activity.bodyGoal, RA = NsGrasp.LIMB_CHAIN.rightArm;'), 'its places, not where a movement has it (R9)');
+  // (23 November 2026, LIMBS5 pass 2: the places of the last frame at rest, read before its step, armRestGoal; still bodyGoal)
+  assert.ok(src.includes('const G0 = armRestGoal || (simState && simState.activity && simState.activity.bodyGoal), RA = NsGrasp.LIMB_CHAIN.rightArm;')
+    && src.includes('armRestGoal = HOLD_BODY.trunkNow && simState && simState.activity ? simState.activity.bodyGoal || null : null;'), 'its places, not where a movement has it (R9)');
   assert.ok(src.includes("[{ type: 'limbPlace', joints: b.joints }]"), 'places only: a movement under way goes on (R10, X6)');
   assert.ok(src.includes('turnJoints: NsActions.DANCE_BODY_JOINTS'), 'the limb turn keeps its joints (X8)');
   assert.ok(src.includes("trunkAtRest: holdTrunkAtRest() && !(limb === 'rightArm' && rightBack) });"), 'the right arm chosen again waits for its way back (X2)');

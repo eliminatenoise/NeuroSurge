@@ -4209,6 +4209,22 @@ export const BODY_GPU_COPY = Object.freeze({ frameVertices: 20000 });
  * callback (timeoutMs at the latest), the motor-area grid of the brain's plan view is built for the views pitchDeg
  * degrees off it and dropped, so the first release of a run does not build its grids with cold code. */
 export const RELEASE_WARM = Object.freeze({ on: true, pitchDeg: Object.freeze([4, -4]), timeoutMs: 3000 });
+/** 24 November 2026 (round r32, CAM70 pass 2; DESIGN-DECISIONS section 204). With the player-controlled camera from
+ * GitHub main the arrows' plan views stand at that camera's eye view (setPlanEye, first pass), but in a landscape window
+ * the mirror body's plan view still looked along the brain's placement direction (13 degrees down) instead of the
+ * player's start look (25.5 degrees down). The box kept free round the crosshair (R5_BIGBRAIN.crosshairKeepPx) was
+ * therefore kept round a point 12.5 degrees above the crosshair the player gets (y 639 in that view), and the mirror
+ * body's lower tip was drawn on the real crosshair (its box 768-830 x 430-457 at 1600x900; 379-420 x 286-304 at
+ * 800x600): the first click at the middle of the window, which the start bar asks for, tilted the mirror body by 15
+ * degrees instead of taking the pointer, and browser-muscle-shades failed from that tilt (an independent check found
+ * it; section 204's first account blamed the table of muscles seen side by side). startLook true: with a plan eye, the
+ * mirror body's opening plan (nothing carried, no outside view) looks along the player's start look (referenceLook),
+ * as the brain's opening plan already does (brainPlanCamFor), so every rule of that plan (the crosshair's box, the HUD
+ * cards, the edges of the picture) is kept in the picture the player starts with. false: the placement direction, as
+ * in the first pass. Without a plan eye (the whole-arm display, the earlier camera) nothing changes; an upright window
+ * already planned on the start look (package LAYOUT). Not changed: a carried mirror body is still planned along the
+ * placement direction (browser-keyboard-aim carries it until a tip is under the crosshair, on purpose). */
+export const PLAN_EYE_MIRROR = Object.freeze({ startLook: true });
 export const BRAIN_TIP_RULES = Object.freeze({ ends: Object.freeze({ ...NsArrows.FRAME_PAIR.ends, inwardMaxFrac: 1.6, inwardMaxFracBy: Object.freeze({ forward: NsArrows.FRAME_PAIR.inwardMaxFrac }), perpCost: 12 }) });
 /** R558 (issue hunt 2: in third person the mirror body hid behind your back while its four tips were drawn on your body,
  * the top one under the crosshair, so the first click there slid the mirror body away; looking down, the brain's bottom
@@ -7392,6 +7408,12 @@ export function createScene({
   let camPose = null, firstPose = null;
   let referenceOrigin = [0, 0, 0], referenceOriginSet = false, referenceCarry = null, referenceAngles = { yaw: 0, pitch: 0 };
   let referenceLook = referenceAngles;
+  // 24 November 2026 (round r32, CAM70; DESIGN-DECISIONS section 204): where the arrows' plan views stand (setPlanEye).
+  // null: the earlier eye view's place for each look (the eye plus ns-camera EYE_DOLLY's stand-off, package FLAT). The
+  // player-controlled camera from GitHub main stands still at one place whatever the look, 0.46 m behind that, and the
+  // plans were still made from the earlier place: the tips were planned in a view the player does not get (at 1600x900
+  // the mirror body's top tip came out on the left leg area once the strip was framed for the new camera).
+  let planEye = null;
   const activePosition = () => camPose ? camPose.position.slice() : firstPose ? firstPose.position.slice() : [0, 0, 0];
   const brainReferenceOrigin = () => lastBrainTransform && lastBrainTransform.referenceTranslation ? lastBrainTransform.referenceTranslation.slice() : [0, 0, 0];
   const camState = { mode: 'first', headInPlace: false, eyeDistM: 0 };
@@ -9028,6 +9050,13 @@ export function createScene({
     if (referenceOriginSet && (initialLook.yaw !== referenceLook.yaw || initialLook.pitch !== referenceLook.pitch)) fail('scene_input', 'initial view is constructor-owned');
     referenceOrigin = Array.from(position); referenceCarry = Array.from(K); referenceAngles = { yaw: initialPlacement.yaw, pitch: initialPlacement.pitch }; referenceOriginSet = true;
     referenceLook = { yaw: initialLook.yaw, pitch: initialLook.pitch };
+  }
+  /** (CAM70) The arrows' plan views stand at this world place (m) for every look, the player camera's eye view; null:
+   * the earlier rule (the eye plus EYE_DOLLY for the look). */
+  function setPlanEye(position = null) {
+    if (position !== null && (!position || position.length !== 3 || !Array.from(position).every(Number.isFinite))) fail('scene_input', 'plan eye needs finite world metres or null');
+    planEye = position === null ? null : Array.from(position);
+    overlayDirty = true;
   }
   function setView(yaw, pitch) {
     eyeRig.rotation.set(pitch, yaw, 0, 'YXZ');
@@ -12624,6 +12653,15 @@ export function createScene({
         const r = e.getBoundingClientRect();
         if (r.width > 0 && r.height > 0) hudRectCache.push({ x0: r.left - o.left, y0: r.top - o.top, x1: r.right - o.left, y1: r.bottom - o.top, quiet: true, emap: true });
       }
+      // 24 November 2026 (round r32, CAM70 pass 2; an independent check of update 70: at 1600 by 900 the tutorial's first
+      // cue, "Motor area · Left toes", lay under the left "Belly and back" label and read "Belly and back · Left toes"):
+      // the words of the guide cues from GitHub main (ns-guide-cues: the name beside the ring on the area or the limb a
+      // tutorial step names) as drawn; labels only, like the quiet layer, so a region label gives way to a cue's words
+      // while they show. A hidden cue (its layer or its ring hidden) is drawn at no size and is left out.
+      for (const e of parent.querySelectorAll('.ns-guide-cues .ns-guide-mark-name')) {
+        const r = e.getBoundingClientRect();
+        if (r.width > 0 && r.height > 0) hudRectCache.push({ x0: r.left - o.left, y0: r.top - o.top, x1: r.right - o.left, y1: r.bottom - o.top, quiet: true, cue: true });
+      }
       // R3-scene: the far-right information panel (when showing; flagged `info`, the arrow plan reserves its whole
       // column instead) and the capture / drag-to-look toast are obstacles for the arrows and labels too.
       if (info && !info.panel.hidden && typeof info.panel.getBoundingClientRect === 'function') {
@@ -12993,6 +13031,7 @@ export function createScene({
   // the opening look in a landscape window at the start; the mirror body's: the start look while its centre is well
   // inside that view, else the look straight at it), for the release's 'prepare' frame too
   function arrowRefAt(look) {
+    if (planEye) return planEye.slice(); // (CAM70: the player camera's eye view)
     const eye = referenceOriginSet ? referenceOrigin : [0, 0, 0];
     if (!referenceOriginSet) return Array.from(eye);
     const o = eyeDolly(look).offset; return [eye[0] + o[0], eye[1] + o[1], eye[2] + o[2]];
@@ -13005,15 +13044,22 @@ export function createScene({
   }
   function mirrorPlanCamFor(c) {
     const planFov = planLensFov(), eye = referenceOriginSet ? referenceOrigin : [0, 0, 0];
-    const openingPortrait = cssW < cssH && !camPose && !mirror.worldCentre;
-    const start = openingPortrait ? { yaw: referenceLook.yaw, pitch: referenceLook.pitch } : { yaw: referenceAngles.yaw, pitch: referenceAngles.pitch };
+    const opening = !camPose && !mirror.worldCentre;
+    // (CAM70 pass 2, PLAN_EYE_MIRROR.startLook: with a plan eye, on the player's start look in a landscape window too)
+    const onStartLook = opening && (cssW < cssH || (planEye !== null && PLAN_EYE_MIRROR.startLook));
+    const start = onStartLook ? { yaw: referenceLook.yaw, pitch: referenceLook.pitch } : { yaw: referenceAngles.yaw, pitch: referenceAngles.pitch };
     let look = start;
-    const q = NsArrows.projectWorldPx(c, { width: cssW, height: cssH, fovYDeg: planFov, yaw: start.yaw, pitch: start.pitch, position: arrowRefAt(start) });
+    // (24 November 2026, CAM70 check 2: in the outside view (camPose) a carried or later mirror plan is made from the old
+    // reference place (the eye and its dolly), as before the player camera's plan eye, so its tips follow the body as it
+    // is carried; the eye view and the opening plans keep the plan eye, the view the player gets)
+    const refPos = l => (planEye && camPose && !opening && referenceOriginSet)
+      ? (() => { const o = eyeDolly(l).offset; return [eye[0] + o[0], eye[1] + o[1], eye[2] + o[2]]; })() : arrowRefAt(l);
+    const q = NsArrows.projectWorldPx(c, { width: cssW, height: cssH, fovYDeg: planFov, yaw: start.yaw, pitch: start.pitch, position: refPos(start) });
     if (!(q.depth > 0 && q.x > 0.1 * cssW && q.x < 0.9 * cssW && q.y > 0.1 * cssH && q.y < 0.9 * cssH)) {
       const v = [c[0] - eye[0], c[1] - eye[1], c[2] - eye[2]];
       look = { yaw: Math.atan2(-v[0], -v[2]), pitch: Math.atan2(v[1], Math.hypot(v[0], v[2])) };
     }
-    return { start, look, refCam: { width: cssW, height: cssH, fovYDeg: planFov, yaw: look.yaw, pitch: look.pitch, position: arrowRefAt(look) } };
+    return { start, look, refCam: { width: cssW, height: cssH, fovYDeg: planFov, yaw: look.yaw, pitch: look.pitch, position: refPos(look) } };
   }
   /** (22 November 2026, UI3, ARROW_REPLAN.stepped) build, on a step of its own, the cover of your own body a plan's sight
    * lines will be tested against (ownSightTester for that plan view, and its grid, which the first sight line builds),
@@ -13101,10 +13147,11 @@ export function createScene({
     // 18 November 2026, late (package FLAT): the tips are planned in the view the player gets: the eye view's camera
     // stands behind and above the eye (ns-camera EYE_DOLLY), so the reference view is seen from there, not from the eye
     // itself (from the eye the brain's lower tips were planned where your own body hides them in the real picture).
-    const refAt = look => { if (!referenceOriginSet) return Array.from(eye); const o = eyeDolly(look).offset; return [eye[0] + o[0], eye[1] + o[1], eye[2] + o[2]]; };
+    // (24 November 2026, CAM70: with the player camera, from its eye view's one place: planEye, arrowRefAt)
+    const refAt = arrowRefAt;
     const U = tipBounds();
     const planFov = planLensFov(); // (the lens without the punch-in: a plan is not made again for a punch)
-    const view = `${cssW}x${cssH}|${planFov}|${eye[0]},${eye[1]},${eye[2]}|${U.x0},${U.y0},${U.x1},${U.y1}`;
+    const view = `${cssW}x${cssH}|${planFov}|${eye[0]},${eye[1]},${eye[2]}|${planEye ? planEye.join(',') : ''}|${U.x0},${U.y0},${U.x1},${U.y1}`;
     const showB = Boolean(B.rig) && regionMode && brainTransformSet && Boolean(brainSupport) && brainGroup.visible;
     if (mirrorSamplesSeen !== mirror.samples) { mirrorSamplesSeen = mirror.samples; mirrorSamplesRev++; }
     const mirrorPlace = mirror.transform && mirror.samples && mirrorRoot.visible ? `${(mirror.transform.carryCentre || mirror.transform.centre).join(',')}|${mirror.transform.scale}|${mirrorSamplesRev}` : 'no-mirror';
@@ -13278,6 +13325,8 @@ export function createScene({
       // there, they came out about 170 px off in the picture the player gets: the left and right tips lay over the face
       // areas of the strip and were drawn faint (the motor-colour rule only sees the real view). In a landscape window
       // the older plan stays, with its own correction of the up tip (fitOpeningMirrorUp, DESIGN-DECISIONS section 146).
+      // (24 November 2026, CAM70 pass 2: with the player camera's plan eye the landscape opening plan is made on the start
+      // look too, PLAN_EYE_MIRROR; the up tip's correction then works in that same view)
       const openingPortrait = mOpeningPortrait;
       // (22 November 2026, ARROW_REPLAN.keepUnmoved: no longer the brain's plan serial; mKeyNow)
       const key = mKeyNow();
@@ -16713,7 +16762,7 @@ export function createScene({
     },
     measure,
     resize,
-    setView, setEyePosition, setReferenceOrigin,
+    setView, setEyePosition, setReferenceOrigin, setPlanEye,
     setArm,
     setBrain,
     setPlacement,

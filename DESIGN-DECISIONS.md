@@ -7436,6 +7436,780 @@ half's leg stretch.
 - The probe's measure (turns in the surface's plane on the crest that faces up) and the pictures at x4 are the only
   evidence for the borders; not looked at at Low, twice the pixel density or in other browsers.
 
+## 203. An arm trails a trunk movement instead of jumping with it, a held arm comes back to its place, keys on it during the movement end where they end at rest, A brings a folded hand truly across the chest, and keys held as a way back ends keep their line (23 November)
+
+The owner, 19 November (the movements from the brain): "an extremely intense electroshock that causes a fierce
+contraction with acceleration and inertia. As if moving something heavy"; section 185: "the limb keys never whip"; and
+the rule this round's brief repeats: nothing may jump or flash. The check of update 69 (`answer-integ69-check.md`) left
+three faults: with "Bend trunk forward" your left hand moved 68 mm in one frame, and the right arm 57.3 mm when the bend
+was pressed again during its return (case T7); A across the chest stopped with the hand at the chin, about 115 mm past
+the right shoulder, and held A did nothing more; and keys on a pushed leg with another limb chosen between (case T5)
+ended 7.1 mm off their control, while in "A then D" the other leg ended 44 mm off. Everything below was measured on port
+18930 (update 69) and on this branch with the same scenario, the game stepped at 60 frames a second through its own QA
+step (`work/limbs5/sc/p3-ride.mjs`, `p4b-keys.mjs`, `s-l5.mjs`), and on the game's body offline (`tests/limbs5.test.mjs`).
+
+**An arm the view does not hold follows a trunk movement instead of riding it as one piece (`TRUNK_RIDE`, `rideFollow`,
+`trunkRideKey`, `rideLimbStep` in `ns-limb-pace.mjs`; `freeHandRide`, `rightArmRide`, `trunkRideCarry` in
+`ns-app.mjs`).** Traced frame by frame there was no one-frame switch, no hold re-based and no place beside the shoulder
+fighting the view's hold. The trunk's contraction is the jerk spring of every movement from the brain (`JOINT_LATCH`,
+omega 21, zeta 0.26): the drawn bend goes 0 to 35 degrees in six frames, is thrown back to 27.7 and slams in again. Both
+shoulders go 9, 24, 34, 37, 37, 14 mm a frame. The chosen limb is held in the room (2 to 4 mm a frame). The arm the view
+does not hold rides on the chest as one piece, so its end swings round on the arm's lever: the left hand 16, 44, 60, 68,
+67, 26 mm a frame (its place beside the shoulder, `state.hand.rel`, never changed); the right arm 64 mm with the left arm
+chosen, the way the game starts, which the check had not tried; in T7 the right arm, let go at frame 18, 57 mm. In the
+eye view the left hand fell from 43 % to 12 % of the picture's height in five frames. Now such an arm's end goes toward
+the place the trunk carries it to by at most max(15 mm a frame at 60 frames a second (`speedMps` 0.9), the shoulder's
+own step this frame plus the arm's own movement), and catches up after at 15 mm a frame: an arm with weight trails a
+jerked trunk. The left hand does it inside the simulation's step, on the free hand's asked place (its kept place is not
+touched; `hand.ride`); the right arm is drawn with its three solved joints (`NsGrasp.solveLimb`, from the joints it drew
+last frame), the activity's angles untouched. It runs only on a frame on which the trunk's own offsets moved, or while
+an end is behind; the look's own bend of the trunk is left as it was, and a gap over 300 mm (a reset) is not followed.
+Largest one-frame step, update 69 against now: left hand, right arm chosen, 68.0 against 37.1 (its shoulder 37.1); right
+arm, left arm chosen, 64.0 against 37.2; both with the right leg chosen, 68.0 / 64.0 against 37.1 / 37.2; T7's right
+arm 57.3 against 36.4 (its shoulder 26.7, and its own way back, `holdArmBack`, about 10); "Lean trunk back", right arm
+38.1 against 25.5 (shoulder 22). Frames on which an end went more than 0.5 mm past max(15 mm, its shoulder's step): left
+hand 8 frames, up to 30.9 mm past, against 1 frame of 0.7; right arm 7 frames, up to 27.9, against 1 of 0.6; T7's right
+arm 5 frames, up to 30.3, against 7 of up to 9.7 (the way back's own movement, allowed). Every limb ends exactly where it
+ended on update 69 (the arm's places are not changed). In a bend the lag was at most about 0.12 m, gone about ten
+frames after the slam; offline, the right arm's elbow goes at most 2 mm past the same bound, also when the arm is drawn
+on its place again. (Not right, found by the independent check: in a trunk TURN the hands trailed 236 to 276 mm and
+caught up only after 41 to 49 frames, and at 30 or 25 frames a second, or with uneven frames, the 300 mm snap meant for
+a reset threw a hand 323 to 361 mm in one frame. Pass 2 below replaces this rule.) Tried first: the step plus the own movement on top (max(15, shoulder) + own): in T7 the catching up and
+the way back added to 19 to 23 mm a frame; and the solve started from the riding pose each frame, which ended up to 9 mm
+short and let the hand go 4.4 mm past the bound (now from last frame's joints: at most 2.9 mm short).
+
+**After the upper arm's turn, A opens the elbow so the forearm lies across the chest (`LIMB_ACROSS.openMostDeg` 30,
+`acrossStep` in `ns-limb-pace.mjs`; `spinAcross` in `ns-app.mjs`; the key shadow uses the same rule).** After S the
+elbow is at 144 degrees (its end is 145): the forearm points up beside the upper arm, so the upper arm's turn swings the
+hand in a small circle over the top, past the chin, and the turn reaches its end (-70 degrees) with the hand about 115 mm
+across and 55 to 68 mm above the shoulder. The frames after it found no move: the swing that would take over raises the
+upper arm (offline it took the elbow up to the face and the hand 100 mm above the shoulder), and in the game the pace
+or the face's keep-out refused it. Now, at the turn's end, A opens the elbow by the angle that moves the hand the keys'
+step along a level way toward the body's left (the keys' own way, round the shoulder, points back and down once the
+hand is across), at most 30 degrees from where the opening began; with both its turn and its opening at their end, A
+moves the arm no further, rather than raising it. D closes the elbow back first, then turns the upper arm back. The
+elbow point does not move (only the forearm turns at it). In the browser, distance across past the right shoulder and
+height above it (mm), update 69 against now: after S -93 / 23 on both; A 0.25 s 38 / 82 on both; 0.5 s 112 / 59
+against 161 / 50; 1.0 s 116 / 69 against 259 / 20; 2.5 s 115 / 68 against 259 / 20. The hand at most 10.7 mm a frame
+against 11.0 (the keys' 10); the elbow point 12.4 mm a frame against 0. D for 2.5 s brings the hand back to -44 against
+-43. The probe of the elbow's step is taken the way the step will go: probed one degree past its end, it gave a step
+five times too long. Tried and dropped, offline: `offDeg` 60 -> 30, which the check suggested (the turn's first frames
+already climb 42 degrees, so A turned nothing); a cap on the rise during the turn (it stopped the turn 82 mm outside the
+shoulder, where opening the elbow raises the hand); the turn and the elbow solved together to keep the hand level (the
+elbow was at its end and the solve stalled at 4 mm a frame); `openMostDeg` 35 (the hand 280 mm across, at the other
+shoulder; 30 is the least that brings it within 30 mm of the shoulder's height).
+
+**A key held as a pushed limb's way back ends goes on along its shadow's line (`KEY_SHADOW.lineAtHome`,
+`keyShadowLine` in `ns-limb-pace.mjs`; `stepPushBack` in `ns-app.mjs`).** T5's 7.1 mm is not about the other limb: W
+then S on the same leg ended 7.1 mm off, S alone after the trunk was back 6.4, S after the way back had ended 2.2 (the
+2 to 3 mm W itself leaves, as in X1), S during the trunk 0.0. The pushed leg's way back runs on at rest (its last part
+at `PUSH_BACK.restDegS`), and S came during it: the shadow took S and the leg came home to the shadow's place, but the
+key was still held and the view's hold went on along the line of the keys it had kept while the leg stood at its pushed
+pose (`h.keyU`, `h.keyLen`, the place kept up to 2 cm ahead of the end). Now the hold takes over the shadow's line when
+the way back ends with a key held. T5 7.1 against 0.0 mm; S after the trunk 6.4 against 0.0; S during and after the way
+back with a short S 3.6 and 3.6; W then S after the way back 2.2 and 2.2.
+
+**Not changed: "A then D" (the other leg 44 mm off its control).** Measured, the shadow is not the cause: the right
+leg's own A, made during the trunk movement, pushes the left leg, and that push is recorded as one the trunk made, so
+the left leg goes back with the trunk's return (0 mm from its start) while with no trunk movement the push stays (44.3).
+Tried: a push made by the player's own keys gets no way back (and is carried into one the pushed limb already has). The
+right leg stood at its pushed pose, so its A pushed the left leg 92 mm: 50.6 mm off, worse. Taken out. A clean answer
+needs the shadow at rest to push the other limb's shadow.
+
+**Pass 2: the check of the first pass (`answer-limbs5-check.md`).** Its blocker: at the frame rates the game really
+runs at while the body moves, a trunk turn threw a hand 32 to 36 cm in one frame (update 69: 20 to 25 cm). Its major,
+already in update 69: with the right arm chosen, trunk turns and side bends threw that arm (71 and 93 mm in one frame) and
+left it far from where it started (turn right 163 mm, lean back 56, side bend left 36). Its minors: the follow's cost, a
+right arm let go during a bend still jumping about 6 cm, and numbers in this section and the guide that understated the
+lag. Everything below was measured with one scenario (`work/limbs5/sc2/m2.mjs`) on port 18930 (update 69) and on this
+branch: all six trunk and all six neck movements from the brain with each of the four limbs chosen, at 60, 30, 25 and
+20 frames a second and with the check's uneven frames (17, 40, 45, 35, 40, 30, 30, 25, 25, 20, 20 ms, then 17), 240
+cases a build, plus 14 of the check's other cases; the game stepped through its own QA step, every limb's end, bend and
+root read each frame, then 2.5 s to settle.
+
+**No snap: a hand never jumps the rest of its lag, and a long lag closes in about a fifth of a second (`TRUNK_RIDE`
+`catchS` 0.1, `maxLagMm` 250, `speedMps` 0.9 -> 1.5, `doneMm` 0.5 -> 2, `rideFollow` in `ns-limb-pace.mjs`; `rideClear`
+in `ns-app.mjs`).** In a turn the hand is carried about three times as far as its shoulder (it is far from the spine the
+chest turns about), so a hand kept to its shoulder's step fell far behind, and the snap put it back in one frame. Now a
+hand goes each frame at least max(`speedMps` x the frame's time, its shoulder's step and its own movement, the share
+1 - exp(-dt / `catchS`) of how far behind it is), so a lag closes like a weight on a spring in about the same time at any
+frame rate, and it is never more than `maxLagMm` behind: above that it moves just enough to stay there. `speedMps` 1.5:
+on the trunk's return the hand's place goes about 20 mm a frame, and at 15 the hand trailed up to 70 mm all the way back.
+Reset body and the display's rescue clear the follow outright (the right arm's next frame is drawn at its place; the left
+hand's record goes with the free hand's state), and a frame drawn while paused, which has no time, moves nothing. Tried
+first, offline on update 69's own frames (`work/limbs5/sim/sim1.mjs`, which reproduces the check's 333 / 309 mm): the
+largest lag alone, 100 to 150 mm (the 60 fps turn's step went back to 93 to 103 mm against the rigid 104); a follower
+with its own speed, a critically damped spring (it built up speed: 102 to 107 mm).
+Largest one-frame step of a hand the view does not hold (the right leg chosen, both arms follow), update 69 against now,
+left hand / right hand, mm:
+
+| Movement | 60 fps | 30 fps | 25 fps | 20 fps | uneven |
+|---|---|---|---|---|---|
+| Bend trunk forward | 68 / 64 -> 38 / 37 | 128 / 121 -> 71 / 69 | 159 / 149 -> 88 / 86 | 160 / 151 -> 89 / 86 | 133 / 126 -> 74 / 72 |
+| Lean trunk back | 41 / 38 -> 28 / 26 | 76 / 73 -> 52 / 50 | 94 / 90 -> 63 / 60 | 96 / 90 -> 76 / 74 | 81 / 75 -> 68 / 67 |
+| Bend trunk to the left | 55 / 51 -> 42 / 43 | 103 / 95 -> 80 / 80 | 129 / 118 -> 99 / 102 | 129 / 120 -> 100 / 103 | 107 / 100 -> 83 / 85 |
+| Bend trunk to the right | 54 / 51 -> 46 / 43 | 103 / 96 -> 84 / 80 | 128 / 119 -> 104 / 98 | 129 / 120 -> 106 / 99 | 107 / 100 -> 89 / 81 |
+| Turn trunk to the left | 104 / 98 -> 45 / 40 | 196 / 184 -> 87 / 80 | 244 / 227 -> 107 / 99 | 248 / 229 -> 139 / 128 | 207 / 191 -> 101 / 114 |
+| Turn trunk to the right | 103 / 100 -> 42 / 44 | 193 / 187 -> 86 / 83 | 239 / 232 -> 99 / 102 | 241 / 236 -> 134 / 134 | 201 / 198 -> 95 / 117 |
+
+(The first pass's turn at 30 fps: 323 / 85, at 25: 324 / 118, uneven 333 / 309, 20 fps 361 / 171.) How far the hands are
+drawn from where update 69 draws them (their places carried as one piece), at the most, and the last time over 10 mm:
+turns 182 to 228 mm, under 10 mm again 137 to 262 ms after the press at every frame rate (the first pass: 236 to 276 mm, caught
+up after 41 to 49 frames, 0.7 to 0.8 s); forward bend 80 to 116 mm, 133 to 177 ms; lean and side bends 15 to 50 mm. The
+price: in a turn at 60 fps a following hand goes faster than its shoulder on 26 to 29 frames, by up to 24 mm (update 69,
+riding as one piece: 22 to 25 frames, by up to 72 mm).
+
+**The right arm held by the view through a trunk movement (`HOLD_BODY.trunkNow`, `drawnJoints`; `holdTrunkDrawn`,
+`holdTrunkStale`, `holdWaitsBeyond`, `holdTrunkForget`, `armRestGoal` in `ns-app.mjs`).** Traced frame by frame
+(`work/limbs5/sc2/p5-heldarm.mjs`), the hold's place in the room was right in every case ("hold place off 0"); three
+faults kept the arm from it, all in update 69 too. (1) The hold's solve stood the arm on the drawn pose of the frame
+before, whose trunk turn and side bend (the activity's own joints) were a frame old: the solve reached its place (4 mm)
+round a shoulder that had moved on, the drawn hand was up to 98 mm off that place, and it caught up in 59 and 71 mm
+frames as the turn slowed. The hold now stands the arm, its points and its solve on this frame's drawn trunk, and solves
+two steps a frame while the trunk moves its root. (2) Where the joints could not keep the hand at its place (more than
+40 mm short with the place unmoved) the hold WAITED, as it does for a look carried beyond reach, and the arm rode the trunk
+as one piece from then on (the 93 mm frame); while the trunk moves the root and the place stays, the solve's nearest
+answer is now taken. (3) A place the hold could not reach was remembered by the place alone (`h.stuck`, and `h.probed` for
+the longer try), so nothing tried again as the trunk came back: the arm stayed where the turn had left it, 163 mm off for
+good (lean back 56, side bend 36 the same way). Both now remember the trunk too. One more, found by this pass's own
+matrix: the trunk's offsets a frame reads are those of the step before, while the drawn trunk is this step's, so on the
+first frame of a turn the hold (now on the drawn trunk) already moved the arm, and the places it goes back to when let go
+(`armRestJ`) were read a frame later with that move in them: let go during a turn, it ended 22.6 mm off. They are now the
+places of the last frame at rest (`armRestGoal`). Right arm chosen, largest one-frame step of its hand, update 69 against
+now (mm), and where it ends after settling:
+
+| Movement | 60 fps | 30 fps | 25 fps | 20 fps | uneven | ends off (update 69 at 60 / 30 / 25 / 20 / uneven -> now) |
+|---|---|---|---|---|---|---|
+| Bend trunk forward | 3.7 -> 2.2 | 6.4 -> 6.4 | 8.3 -> 8.3 | 10.5 -> 10.5 | 7.3 -> 7.3 | 1 to 1.4, both |
+| Lean trunk back | 36 -> 15 | 70 -> 30 | 87 -> 37 | 86 -> 37 | 71 -> 31 | 56 / 29 / 40 / 60 / 74 -> 1 |
+| Bend trunk to the left | 49 -> 23 | 68 -> 45 | 73 -> 53 | 89 -> 51 | 100 -> 46 | 36 / 38 / 53 / 79 / 11 -> 1 or less |
+| Bend trunk to the right | 39 -> 2.4 | 105 -> 7.1 | 93 -> 9.1 | 166 -> 11 | 138 -> 7.3 | 1 to 1.4, both |
+| Turn trunk to the left | 71 -> 3.0 | 201 -> 16 | 129 -> 63 | 246 -> 82 | 229 -> 44 | 1 to 1.4, both |
+| Turn trunk to the right | 93 -> 26 | 105 -> 47 | 158 -> 59 | 278 -> 61 | 166 -> 51 | 163 / 250 / 317 / 364 / 197 -> 0 to 1.7 |
+
+At 60 frames a second the held hand then never went faster than max(15 mm, its shoulder's step) in any of the six
+movements (update 69: up to 20 frames of a turn, by up to 61 mm); where its place is out of reach (the right turn, the
+lean, the left side bend) it is dragged by its shoulder at the end of its joints and comes back to its place with the
+trunk. (Corrected by the second check: that was true at 60 frames a second only. At 20 and 25 frames a second one frame
+of "Turn trunk to the left" still moved the held hand 82 and 63 mm with its shoulder at 25, and with uneven frames one
+frame was 12.6 mm over; pass 3 below, `trunkCatchMm`.) In the pictures (`work/limbs5/p7b/`), update 69 leaves the mirror body's right forearm folded in front of its
+chest after "Turn trunk to the right"; now its end pose is its start pose.
+
+**The first frames of a follow (`ownOff` in `rideLimbStep`; `rideTrunkLast`, `rideHeldLast` and the pose drawn last frame
+in `rightArmRide`).** Three small faults of the first pass: the right arm's follow did not run on the first frame of a turn
+(the offsets it watched are a step old, as above), so it rode that frame as one piece: 84.6 mm at 30 frames a second,
+170.5 at 20; it now also watches the drawn turn and side bend. Its first frame started from the arm's last pose posed with
+THIS frame's head and trunk bend, so in a bend it started from a place the hand had never been drawn at; it is now posed
+with the head it was drawn with. And the first frame after the view lets the arm go counted the jump of its angles from
+the hold's to the activity's as its own movement; it no longer does. A right arm let go during a bend: left arm chosen at
+frame 4, 64.1 mm in one frame on update 69, 64.3 on the first pass, now 37.4 (its shoulder 37); the right leg chosen at
+frame 3, 63.6 / 58 / 36.5; during a turn, 97.3 on update 69, now 33.5 and 0 mm off at the end.
+
+**The follow's cost (`rideCarryBoundM`, `TRUNK_RIDE.reachM` 1.3 in `ns-limb-pace.mjs`; the own movement's pose taken only
+when needed in `rideLimbStep`).** A frame on which the trunk moved too little to carry a caught-up hand beyond the follow's
+least step (its largest angle change x 1.3 m on the arc, within `speedMps` x dt: about 1 degree a frame at 60 frames a
+second, the trunk's slow return) takes no pose of the body. Tried and dropped: one solve step instead of two while the last
+answer ended within 3 to 10 mm of its target (the drawn steps went 50, 37, 16, 24 mm instead of 40, 38, 26, 24 in a turn).
+Timed in the browser, both builds in turns six times (`work/limbs5/sc2/cost2.mjs`, script time of the stepped frames with
+drawing off; see Checked for the numbers): inside the right arm's follow 22 to 31 ms over a movement's first 12 frames,
+about 2 to 2.6 ms a frame while an arm is behind.
+
+**Measured how.** Per-frame ends of all four limbs from `inspect().limbs.ends` with the game stepped at 60 frames a
+second; each case beside a control with the same input and no trunk movement; pictures drawn at the exact frame by the
+QA screenshot after the step. The cost of the right arm's follow was timed in the browser with a timer round
+`rightArmRide` added for that run only (`work/limbs5/sc/s-cost-ride.mjs`). Pass 2: run M2 above (240 cases a build and 14 more, each
+build in its own browser runs, analysed offline: `work/limbs5/m2/an2.mjs`, `table.mjs`, `cost.mjs`); the held arm traced
+with the hold's own numbers (its place, the solve's predicted end against the drawn end, `p5-heldarm.mjs`); the rules
+compared offline on update 69's recorded frames (`work/limbs5/sim/sim1.mjs`) and on the game's body (a turn at 30 frames a
+second and with uneven frames); the follow's time with timers round `rightArmRide`, the hold and the pushes, both builds
+in turns six times (`cost2.mjs`); pictures of each build at the frames named (`p7-pics.mjs`: the mirror body and the eye
+view of the right turn with the right arm chosen, the 30 fps left turn with both arms following, the lean back).
+
+**Checked.** Unit tests `tests/limbs5.test.mjs` (5) and the 13 files these rules touch (limbs2, limbs3, limbs4,
+limb-hold, limb-pair-push, seemove, fix63, limb-keys, limb-follow, hold-move, return-rules, head-hold, shader-safe): 114
+pass. The start check: "ok". Browser tests startup, keyboard-aim and limb-controls: all pass. Frame table (still / look /
+up-down / limb turn, frames a second), this branch against update 69 in turns: 60.0 / 19.8 / 32.5 / 17.8 (every part of
+that run slower, the drawing too: the machine) against 60.0 / 39.2 / 46.7 / 43.4; 60.2 / 39.3 / 47.7 / 50.8 against
+60.0 / 41.0 / 49.2 / 48.4; 60.0 / 42.4 / 46.7 / 47.2 against 60.1 / 41.4 / 51.8 / 48.5. None of this code runs in those
+phases (no trunk movement); in the up-down rows the script's parts are equal within 0.1 ms and the drawing differs
+(the phases end on a view that moves from run to run). During "Bend trunk forward" the right arm's follow took 1.1 to
+2.7 ms on the frames on which the arm was behind (about nine), at most 5.5 once, 9 the first time in a page; 0.3 to 0.7
+on the other frames of the movement; nothing at rest. The left hand's follow is a few matrix products a frame. Pictures
+were looked at for every case above (the left hand frame by frame in the eye view and on the mirror body, the right
+arm on the mirror body, A after S at each stage, T5's end).
+Pass 2: `tests/limbs5.test.mjs` 7 pass (the rule's parts; the turn at 30 frames a second on the game's body, which the
+first pass's rule fails with a 303 mm frame; the hold's three rules). The 14 related files: 115 of 116 passed, the one
+failure a source-text check in `tests/seemove.test.mjs` of the line this pass changed (the places at rest), which was
+updated; seemove and limbs5 then 24 of 24. The start check "ok"; browser tests startup, keyboard-aim and limb-controls
+pass. In run M2 every limb ends within 1.7 mm of where it started in all 240 cases (update 69: up to 364 mm; T7's right leg
+ends 3.5 mm off on both builds). (Written here first: "of the 14 others, a limb moved by a held key stays moved, as on
+update 69". Untrue, found by the second check: the right arm held with A during the bend (KA) ended 209.1 mm from where
+the same key ends with the trunk still, against 63.6 on update 69; pass 3 below.)
+nothing is still moving after 2.5 s, and the neck movements move no limb on either build; the last code change of
+this pass (no pose on slow frames) was run again on 94 of those cases: every step within 2 mm, every end within 1.7 mm.
+Frame table (still / look / up-down / limb turn, frames a second), this branch against update 69 in turns, three pairs:
+58.9 / 42.4 / 49.3 / 47.2 against 60.0 / 36.4 / 53.8 / 54.6; 42.1 / 20.2 / 28.3 / 30.6 against 59.7 / 29.4 / 38.0 / 37.4
+(every part of the branch's run slower, the drawing 13 ms against 8 at the still view: the machine; update 69 dropped
+to its lite level in its run); 52.4 / 26.7 / 32.0 / 30.8 against 48.7 / 26.3 / 29.5 / 29.5 (both slowed). No trunk
+movement is in those phases; in the first pair the limb turn's part where the limb code runs was 2.45 against 1.29 ms,
+in the third 1.52 against 1.82. Pictures opened: the mirror body and the eye view of each build for the three cases
+named (`work/limbs5/p7b/`, and the same before the last small changes, `p7/`).
+
+**Not done, or not right.**
+- In a trunk turn a hand you have not chosen still trails up to 182 to 228 mm behind its place for about a fifth of a
+  second (a visible swing after the trunk, shorter than the first pass's 0.7 to 0.8 s), and to close it that fast it goes
+  faster than its shoulder on 26 to 29 frames of the turn, by up to 24 mm. At 20 frames a second a hand still moves up to
+  139 mm in one frame of a turn (update 69: 248), at 25 up to 107. No person has watched it in motion; the pictures are
+  single frames.
+- In the eye view the left hand still goes down the picture during "Bend trunk forward" (the first pass measured 43 % to
+  18 % of its height in six frames against 12 % on update 69): the camera rides on the head and moves about 0.2 m. Not
+  measured again in pass 2 (the bend's steps are the first pass's within 1 mm). The trunk's own speed is the owner's jerk
+  and was not changed.
+- The held right arm still pushes the right leg 26 mm a frame for two frames as the trunk carries its shoulder down
+  (`LIMB_PUSH`, unchanged), and since the first pass also when it is chosen during the bend (26.7 mm, update 69: 0); the
+  leg goes back to its place.
+- With the right arm chosen, where its place is out of reach ("Turn trunk to the right", "Lean trunk back", "Bend trunk
+  to the left") the hand is dragged by its shoulder, up to 26 mm a frame at 60 frames a second and 45 to 82 mm at 30, 25
+  and 20 (its shoulder's step is larger each time); it is back at its place within 1.7 mm once the trunk is.
+- The trunk's offsets a frame reads are a step older than the trunk it draws. This pass works round it in three places
+  (the hold's places at rest, the right arm's follow, the hold's two-step solve); the left arm's shoulder (from the head's
+  carried offsets) and the drawn body are still a step apart during a turn. Not changed.
+- The cost. Timed in the browser, both builds in turns six times with drawing off (the medians of the script time of a
+  movement's first 12 frames, update 69 against now): "Turn trunk to the left", right leg chosen, 173 against 191 ms;
+  "Bend trunk forward", left arm chosen, 204 against 271; "Turn trunk to the left", right arm chosen, 228 against 264;
+  "Bend head forward" 108 against 91 (nothing of this runs there: the spread of the measure). Inside the right arm's
+  follow: 22 to 31 ms over those 12 frames, about 2 to 2.6 ms a frame while it is behind; the view's hold of the right
+  arm 30 against 38 ms. One run of all 240 cases a build, the same way, gave +13 to +78 % in the first 12 frames of the
+  trunk movements and +12 % in the neck movements (the machine). So a trunk movement's first frames cost about 2 to 3 ms
+  more a frame while an arm follows; the frame table has no trunk movement in it.
+- A folded right hand still passes the chin, about 82 mm above the shoulder, while the upper arm turns; only where A ends
+  is across the chest (259 mm across, 20 mm above the shoulder after 1 s). D's way back passes as high (102 mm against 97).
+  Not compared with a person.
+- "A then D" is still 44 mm off its control (above). T5g, S held on a pushed leg as its way back ends, ends 19.8 mm off
+  its control on this branch against 18.4 on update 69 (written here first as 18 on both: the second check measured
+  19.8; the first pass still ended 18.4; pass 3 below). Keys on a pushed limb still end 2 to 4 mm off where W was used (W's
+  own residue on the shadow, as on update 69).
+- The follow applies to the arms only; a leg does not ride the trunk (its root is the pelvis). A limb chosen while it is
+  drawn behind its place is taken up where it is drawn. Reset body now puts the arms at their places in one frame (on
+  purpose, a teleport). A frame drawn while paused keeps the arms where they were drawn; that was checked only with
+  frames of no time in the QA step (`KZ`), not with the Esc page open.
+- The view-held left hand moves 16 to 54 mm a frame during trunk movements (never faster than its shoulder), as on
+  update 69; not looked into.
+
+**Pass 3: the second check of this package (`answer-limbs5-check2.md`).** Its major, caused by pass 2: a key held on the
+chosen right arm during a trunk movement ended the arm 110 to 145 mm further from where the same keys end with the trunk
+still than update 69 did: "Bend trunk forward" with A held from frame 2 to 40 (KA) 63.6 -> 209.1 mm, "Turn trunk to the
+right" with A (KAT) 272 -> 381, "Turn trunk to the left" with W held from frame 2 to 30 (KWT) 160 -> 287, though W alone
+moves that arm 3 mm. Its minors: with a key held the arm was still thrown in a turn (87, 97, 97 mm a frame with its
+shoulder at 28 to 32; update 69 the same); the right turn with the arm held cost about 3 ms more a frame for most of a
+second; in a quick turn reversal the lag limit let a hand move almost as far as update 69 in one frame; the claim on the
+held arm's speed was true only at 60 frames a second; T5g ends 19.8 mm off, not 18. Everything below was measured with
+one scenario (`work/limbs5/sc3/k3.mjs`) on port 18930 (update 69) and on this branch, each keyed case beside its control
+(the same keys at the same times with the trunk still), at 60, 30 and 20 frames a second and with the check's uneven
+frames (17, 40, 45, 35, 40, 30, 30, 25, 25, 20, 20 ms, then 17); the game stepped through its own QA step, every limb's
+end and root read each frame together with the hold's place in the room, the shadow's end and the trunk's distance from
+rest, then settled until nothing moved; tables by `work/limbs5/an3/table3.mjs` (`work/limbs5/m3/table3.txt`).
+
+**Keys on the held right arm during a trunk movement end where the same keys end with the trunk still
+(`KEY_SHADOW.placeHome`, `homeMps` 1.2, `homeDoneMm` 0.5, `keyShadowHomeStep` in `ns-limb-pace.mjs`; `stepArmHome`,
+`armHome` in `ns-app.mjs`).** Traced frame by frame: the arm's shadow (section 201, played the same keys with the trunk at
+rest) ends exactly where the control ends (in KA 208.5 mm from the arm, as the control), but the view's hold keeps its own
+place in the room, which the keys moved along the bent or turned limb (and, on keyed frames, the trunk's carry moved too:
+below). Update 69 never honoured that place (beyond reach the arm waited and rode the trunk back, 63.6 mm off); pass 2
+made the arm go to it as the trunk came back, so it ended further off. Now, once the keys or the look have moved the
+shadow during the movement (pass 4: once the keys were played on it, below), the hold's place goes home to the shadow's end with the trunk's return: its offset from that
+end is cut in step with the trunk's distance from rest (the share of the way still to go, which never grows again,
+counted from the last frame of keys or look, as `holdArmBack` takes a right arm let go back), at most 1.2 m/s (the hold's
+own rejoin pace), and at rest it goes on at that pace until it is within 0.5 mm; the shadow is kept and played until
+then. A place moved on a frame the look does not carry is taken again in the picture before the look next carries it.
+Right arm, how far it ends from its control's end (mm), update 69 -> pass 3 (pass 2 at 60 frames a second in brackets):
+
+| Case | 60 fps | 30 fps | 20 fps | uneven |
+|---|---|---|---|---|
+| KA, bend + A held 33-667 ms | 64.2 -> 1.0 (209.1) | 52.8 -> 0 | 61.9 -> 1.0 | 61.9 -> 1.0 |
+| KAT, turn right + A | 272.1 -> 1.0 (380.6) | 288.3 -> 1.0 | 269.9 -> 1.0 | 272.5 -> 1.0 |
+| KWT, turn left + W held 33-500 ms | 159.8 -> 1.4 (287.0) | 166.1 -> 1.0 | 148.7 -> 1.0 | 152.7 -> 1.0 |
+| KD (= R7b), bend + D held 100-250 ms | 33.7 -> 1.4 (33.4) | 84.2 -> 1.0 | 92.2 -> 2.2 | 95.9 -> 1.4 |
+| KAl, bend + A held 33-1333 ms (into the return) | 25.1 -> 1.4 | 26.2 -> 1.0 | 25.8 -> 2.2 | 28.9 -> 0 |
+| KST, turn right + S held 100-667 ms | 242.3 -> 18.4 | 201.3 -> 33.9 | 159.8 -> 25.3 | 219.8 -> 14.0 |
+
+KST ends 1.1 mm from its shadow: the shadow's own S at rest differs from the real one (the head column's keep-out in
+the eye view is not modelled on the shadow, section 201). R7 (the arm let go before the trunk is back) still 0.0 on both.
+During the return the arm comes back at 8 to 17 mm a frame at 60 frames a second (update 69 rode back at 15 to 16).
+
+**Keys on the held right arm no longer throw it in a trunk movement (`HOLD_BODY.keyCarry` in `ns-app.mjs`).** On a frame
+of the keys the keys' cut measured every move from the end the trunk had CARRIED (the arm's old angles on the moved
+chest), so keeping the end against the carry (about 90 mm in a turn) was far off the keys' way and refused: the arm rode
+the trunk as one piece, and the keys' place was put on the carried end, so it rode with the trunk as well. Now, while the
+trunk moves the right arm's root, the hold first keeps the end where it was drawn last frame (one solve, unlit, as on a
+frame with no key), the keys' rules then start from that pose, and their place stays where it stands in the room. The held
+arm's largest one-frame step (mm), update 69 -> now: KA 61.4 / 113.1 / 139.2 / 128.1 -> 10.2 / 20.6 / 30.7 / 26.6 at 60 /
+30 / 20 / uneven; KAT 87.5 / 169.1 / 209.6 / 176.1 -> 27.3 / 49.4 / 67.4 / 56.6; KWT 97.7 / 184.1 / 230.2 / 192.4 -> 6.7 /
+18.7 / 63.9 / 27.2; KST 93.4 / 105.1 / 172.0 / 166.2 -> 25.7 / 46.5 / 60.2 / 50.3 (the keys alone move it 11 / 21 / 31 /
+26). Frames on which it went more than 0.5 mm past max(15 mm a sixtieth of a second, its shoulder's step): none in KA,
+KWT, KD and KST at any rate (update 69: 1 to 12 frames, by up to 157 mm); KAT 7 / 3 / 0 / 4 frames, by up to 4.1 mm (update 69 3
+to 10, by up to 132). (Corrected in pass 4: that was measured in those five cases only. The third check found the held
+hand past that bound with "Turn trunk to the left" and A at 20 frames a second, one frame by 13.7 mm, with the look moved
+during the right turn on 3 to 11 frames by 18 to 27 mm, and folded across the chest it rode a forward bend at 41 to 51 mm
+a frame with its shoulder at 24 to 34, update 69 56 to 62.)
+
+**The hold's trunk rules are the right arm's only.** Pass 2's rules for a trunk that moves the limb's root (no waiting
+beyond reach, the stuck place forgotten) are now asked for the right arm only; a leg's hip does not ride the trunk, so a
+chosen leg is held as on update 69. This was meant to remove T5g's 1.4 mm; it did not (19.8 against 18.4). Bisected by
+serving older versions of the two modules to the browser: the first pass ends 18.4, pass 2's second commit 19.8, and the
+current code still 19.8 with the arm's follow, the trunk rules, `placeHome` and the rest places each switched off for
+that page; the cause was not found.
+
+**At 20 frames a second the first frame of a turn no longer leaves the held hand behind (`HOLD_BODY.trunkCatchMm` 20).**
+The hold's two solve steps could not keep up with a 19-degree trunk step: the hand ended 82.4 mm off its place and was
+put back on the next frame (82.1 mm with its shoulder at 25). A frame of the carry whose answer ends more than 20 mm off
+and 20 mm worse than the frame before is solved on to the end from where those steps ended. "Turn trunk to the left",
+right arm chosen, 20 frames a second: 82.1 -> 12.6 mm. The held hand's frames past max(15 mm a sixtieth of a second, its
+shoulder's step), with no key and from the start pose, update 69 -> now, at 60 / 30 / 20 / uneven: left turn 5 / 5 / 4 / 5 (by up to 201 mm) -> none; right
+turn 20 / 11 / 7 / 15 (up to 233) -> none; lean back, side bends: none now (update 69 1 to 4, up to 121); and at 25
+frames a second none in any of the six (pass 2's run M2 again on this code: update 69 1 to 8, up to 122).
+
+**The held arm's cost (`HOLD_BODY.pinSkipMm` 5, `holdPinKeeps`; one solve step for an arm pinned last frame).** Timed
+with drawing off, both builds open at once and taken in turns (`work/limbs5/sc3/cost3.mjs`, timers round the hold and
+counters round every pose of the body and every solve). Update 69 waits where the place is out of reach and never solves
+there; pass 2 solved every frame. An arm left at the end of its joints with its place out of reach is now not solved
+again while the trunk has carried its end less than 5 mm from where the last solve drew it and its place stayed, and an
+arm pinned the frame before takes one solve step, not two. "Turn trunk to the right", right arm chosen, frames 12 to 60:
+solves 29 -> 22, poses of the body 224 -> 197 (update 69 96), time inside the hold 93 -> 77 ms (update 69 20), the whole
+script 565 against 505 ms (medians of four; best 560 against 462). Its steps are pass 2's (25.7 mm at 60 frames a second).
+Tried first and dropped: no solve until the trunk had moved 2 degrees, or 0.5 back toward rest: the pinned answer slides
+along the joints' end, so the arm rode and was put back, a 41.9 mm step in the right turn (25.8 before).
+
+**A quick turn reversal (`TRUNK_RIDE.maxLagMm` 250 -> 400).** The check's K3xT (right arm chosen; "Turn trunk to the
+right" at frames 0 and 5, "Turn trunk to the left" at frame 12): at the 250 mm limit a hand has to move as fast as its
+place. Replayed offline on update 69's own frames of that case (`work/limbs5/sim/sim3-rev.mjs`), the largest step 173 ->
+96 mm; a soft zone (half the excess taken from 250 to 400 or 500 mm) 120 to 130. In the browser, the left hand, update
+69 -> now: 185.7 -> 86.0 at 60 frames a second (pass 2: 163, the check), 347.2 -> 144.7 at 30, 455.1 -> 236.4 at 20,
+282.8 -> 114.9 uneven; the lag reaches 400 mm for about two frames. No other case measured comes near 250 mm (turns 182 to
+228), so they are unchanged.
+
+**Checked (pass 3).** `tests/limbs5.test.mjs` 12 pass: `keyShadowHomeStep` (cut in step, never growing back, the pace,
+home at rest, no time); KA, KAT and KWT as Node cases (the trunk's recorded distance from rest replayed at 60, 30 and 20
+frames a second from the place's recorded offset at the key's release: home once the trunk is, never more than 1.2 m/s);
+`holdPinKeeps`; the reversal replayed from the check's recorded frames (under 100 mm; the 250 mm limit 173); the switches.
+The 15 related files (limbs2 to limbs5, limb-hold, limb-pair-push, seemove, fix63, carry-release, limb-keys, limb-follow,
+hold-move, return-rules, head-hold, shader-safe): 134 of 134. The start check "ok"; browser tests startup, keyboard-aim
+and limb-controls pass. Frame table (still / look / up-down / limb turn, frames a second), this branch against update 69
+in turns: 60.1 / 42.9 / 50.3 / 50.8 against 60.0 / 41.1 / 49.4 / 53.4; 60.0 / 41.7 / 52.8 / 52.3 against 60.0 / 40.0 /
+50.1 / 48.4 (no trunk movement is in those phases; the limb turn is lower in the first pair and higher in the second).
+Pass 2's run M2 again on this code (254 cases): nothing still moving at the end, every limb within 1.7 mm of its start in
+the 240 movement cases, no step larger than update 69's but K4's right leg (26.7 mm, the held right arm's push, known
+above), and nothing worse than pass 2 by more than 1 mm but KA's end (now at its control) and one step of the left side
+bend at 20 frames a second (50.7 -> 51.8 mm). The first commit of this pass was also run alone (KA 1.0, KWT 1.4).
+Pictures of both builds at the exact frames (`work/limbs5/p12/`, montaged in `p12/cmp/`): KA at 60 frames a second, KWT
+at 30, KAT at 20 and KA with uneven frames, each at its first frames and settled beside its control; the left turn at 20;
+K3xT's reversal. On update 69 the mirror body's right arm is thrown out on the first frames and ends folded in front of
+the chest (KWT, KAT) or raised (KA); on this branch it stays low and ends as its control does. No distortion or flicker
+seen.
+
+**Not done, or not right (pass 3).**
+- KST, a key that folds the held arm toward the body (S) during a turn, ends 14 to 34 mm off its control (update 69: 160
+  to 242): the shadow does not model the head column's keep-out. (Corrected in pass 4: "other keys within 0 to 2.2 mm" was
+  more than was measured. The third check found S during the forward bend, KSF, 20 / 34.7 / 26.3 / 15.8 mm off at 60 / 30
+  / 20 frames a second / uneven, and D held 33 to 667 ms in a bend or a right turn, KD and KDT, 7 to 8 mm at 30 and 20.)
+- The held arm's cost is cut, not removed: about 1.2 ms more a frame than update 69 (best runs about 2 ms) in a right turn
+  with the arm held, for most of a second; about 0.9 ms in a left turn (inside the hold 92 against 48 ms over frames 12 to
+  60). The frame table has no trunk movement in it. (Pass 4: with A held through the right turn the third check measured
+  about 4.4 ms more a frame, 890 against 679 ms over frames 12 to 60; that case had not been timed here.)
+- The quick reversal still moves a hand 86 mm in one frame at 60 frames a second, 145 at 30 and 236 at 20 (update 69: 186,
+  347, 455), and it trails up to 400 mm for about two frames. No person has watched it.
+- With keys during the right turn (KAT) the held hand still goes up to 4.1 mm past max(15 mm, its shoulder's step) on 3
+  to 7 frames.
+- T5g: 19.8 mm off its control against update 69's 18.4; the 1.4 mm was not traced to its cause (above).
+- A right arm let go, or another limb chosen, while its place is still going home at rest ends where it is then (the
+  rest of the way is dropped); a new trunk movement started before it is home drops it too. Not measured. (The third
+  check measured it, KAg: 84 mm off, update 69 29; fixed in pass 4.)
+- The shadow stands at rest with no bend of the trunk from the look; with the look turned far enough to bend the trunk,
+  the place's home is where the arm would be without that bend. Not measured.
+- Every measurement steps the game with its QA step; no one has watched the keyed cases in motion.
+
+**Pass 4: the third check of this package (`answer-limbs5-check3.md`).** Its two majors, both caused by pass 3, both
+reproduced by a second reader: moving the look during a forward bend (no keys; the look turned 0.3 rad sideways and 0.1
+up over 17 to 500 ms, case KLF) left the chosen right arm 12.4 / 17.0 / 25.6 mm off its control at 40 / 30 / 20 frames a
+second (update 69: 2 to 3), adding up with each repeat; and a key held into the trunk's return, let go, then another
+limb chosen at once (KAg) left the arm 84 mm off (update 69: 29), in a run whose path differed by up to 175 mm from runs
+with exactly the same input. Its minors: the pinned held arm trembled in a right turn; the new tests passed with the
+fix removed from the game; a key held through a turn costs about 4.4 ms more a frame; section 203 claimed more than was
+measured (corrected above, each marked "Corrected in pass 4"). Everything below was measured with one scenario
+(`work/limbs5/sc4/k6.mjs`, lib `sc4/qalib9.mjs`) on port 18930 (update 69) and on this branch, each build in a fresh
+page, each case beside its control (the same keys and look at the same times with the trunk still), at 60, 40, 30 and
+20 frames a second and with the check's uneven frames; the game stepped through its QA step and settled until nothing
+moved; pass 3's values come from the check, or from pass 3's two modules served to the same scenario (`p13`). Tables by
+`work/limbs5/an4/table4.mjs` (`work/limbs5/fin4/table4.txt`).
+
+**A look moved during a trunk movement ends where it ends with the trunk still again (`KEY_SHADOW.homeOnLook` false,
+`keyShadowHomeDue`, `keysPlayed`; `KEY_SHADOW.replayLast`, `armShadowStart`, `holdFrameRec`).** Two faults together.
+The look alone started pass 3's way home (`stepArmHome` asked only whether the shadow had moved, and the shadow's look
+carry moves it); and the shadow's look carry fell one frame of the look short below 60 frames a second: the shadow is
+made from the arm's places of the frame BEFORE the last frame at rest (pass 2's `armRestGoal`), but its place in the
+picture was taken with the look of the frame after, so a look turned on that last frame never carried it. At 40, 30 and
+20 frames a second the look's first frame (17 ms) is that frame, so the shadow ended 13 / 17 / 26 mm short (0.52 m/s
+times one frame), and the way home sent the arm there. Now the way home starts only once the player's keys were played
+on the shadow (on every frame of the keys, whether the shadow could follow them or not); a look alone is carried by the
+view's hold, as on update 69. And the shadow takes its place in the picture with the look its places were made with,
+and the last frame at rest's look and keys are played on it as it is made. Right arm off its control (mm), update 69 /
+pass 3 / now:
+
+| Case | 60 fps | 40 fps | 30 fps | 20 fps | uneven |
+|---|---|---|---|---|---|
+| KLF, bend + the look | 3.3 / 1.0 / 3.6 | 2.2 / 12.4 / 3.2 | 3.2 / 17.0 / 4.1 | 2.2 / 25.6 / 4.5 | 3.3 / 1.0 / 3.6 |
+| KLT, right turn + the look | 222.4 / - / 3.7 | 204.6 / 12.7 / 4.6 | 207.4 / 17.3 / 4.6 | 206.2 / 26.0 / 4.5 | 227.4 / - / 3.6 |
+
+KLF twice in a row at 30 frames a second, off the same look twice with the trunk still: update 69 3.2 then 273.8 mm,
+pass 3 17 then 33 (the check), now 4.1 then 1.7. The held arm's largest one-frame step in KLT, update 69 -> now: 82 /
+126 / 186 / 304 / 205 -> 33 / 46 / 57 / 71 / 57 mm.
+
+**Keys held while the look turns, on the held right arm during a trunk movement (`KEY_SHADOW.carryKeyed`,
+`keyShadowCarryKeys`).** Found while measuring the above (a new case, KAL: "Bend trunk forward", A held 33 to 667 ms and
+the look as in KLF). On a frame of the keys on which the look turned, the view's hold carries its place by the look and
+then moves it by the keys (`holdTarget`), and solves without the keys' cut, the swing or the turn of the upper arm
+(those are asked only on frames of the keys alone); the shadow played only the keys. Now it plays such a frame as the
+hold does, and while the keys are held its place in the picture is the keys' place (kept ahead of the end), taken again
+from its end when they are let go. Right arm off its control (mm), update 69 / pass 3 / now: 174.2 / 175.8 / 15.8 at 60
+frames a second, 177.0 / - / 15.8 at 40, 173.1 / 186.5 / 14.9 at 30, 124.2 / 187.4 / 14.1 at 20, 111.8 / 171.8 / 15.6
+uneven. The 15 mm left: frame by frame at 60 frames a second the shadow's end stays within 2 to 4 mm of the control's
+hand for 25 frames, then 8 and 16 mm on frames 26 and 27, where the control's hand meets the column of the head, whose
+keep-out the shadow does not model (as in KST). A key held from before the movement (KAp: A from 0 to 767 ms, the bend
+at 100 ms), whose first frame falls on the last frame at rest: update 69 21.0 / 29.9 / 12.8 / 12.8 / 41.6, pass 3 2.2 /
+- / 3.7 / 5.1 / 2.8, now 1.0 / 1.4 / 1.7 / 1.0 / 1.0 mm at 60 / 40 / 30 / 20 / uneven.
+
+**A way home under way is not dropped (`armHomeLeft`; `rightBack` made at rest).** Choosing another limb dropped the
+way home (`chooseLimb` set `armHome` to null; a right arm let go goes back with `rightBack` only while the trunk is not
+at rest), and a new trunk movement made a new shadow at the arm's places of that moment. Now a right arm let go at rest
+while its place is still going home goes back to the shadow's places (`holdArmBack` at rest: at most `armBackDegS` 90
+degrees a second), and a new trunk movement keeps the shadow and the way home, which goes on at 1.2 m/s. Measured: A
+held from 33 ms until the trunk is at rest, let go, then one frame later the right leg chosen (g) or the same movement
+again (re); with the bend (KAg, KAre), with the right turn (KATg, KATre), and with the leg chosen or the movement started
+on the frame A is let go (KAg0, KAre0). Right arm off its control (mm), update 69 -> now, at 60 / 40 / 30 / 20 / uneven:
+
+| Case | 60 fps | 40 fps | 30 fps | 20 fps | uneven |
+|---|---|---|---|---|---|
+| KAg | 29.3 -> 3.6 | 39.8 -> 2.8 | 28.6 -> 3.6 | - -> 3.0 | 32.2 -> 3.2 |
+| KAre | 31.1 -> 1.4 | 42.5 -> 1.4 | 28.6 -> 0 | - -> 0 | 33.0 -> 0 |
+| KATg | 127.9 -> 0 | 102.6 -> 0 | 142.8 -> 0 | 144.3 -> 0 | 133.3 -> 0 |
+| KATre | 129.1 -> 0 | 103.0 -> 1.4 | 142.8 -> 0 | 144.3 -> 0 | 134.6 -> 1.0 |
+| KAg0 | 29.3 -> 0 | 39.8 -> 0 | 28.6 -> 0 | 28.6 -> 0 | 32.2 -> 0 |
+| KAre0 | 31.1 -> 1.4 | 42.5 -> 1.4 | 28.6 -> 0 | 28.6 -> 0 | 33.0 -> 0 |
+
+(update 69's KAg and KAre at 60 frames a second are the check's.) In KATg at 60 frames a second the right leg ends 2.4
+mm off its control (update 69: 0).
+
+**The same input gives the same path (`HOLD_BODY.memoTrunk`, `holdMemoForget`).** The view's hold keeps notes from frame
+to frame for its solve (`ns-grasp` `solveLimb` memo: the two columns of the arm's answer to its shoulder's joints, used
+again while those joints stay within 6 degrees of where they were found). They are in the body's frame, which the trunk
+turns the shoulder in, and since pass 2 the hold solves the right arm every frame of a trunk movement, so it used columns
+found with another trunk, and with the history of earlier cases: the notes were never cleared, not even by Reset body.
+On the game's body (`tests/limbs5.test.mjs`) columns found with the trunk at rest, used with the trunk turned 25 degrees,
+leave the answer 1.2 mm off a place 12 mm away against 0.2 mm with fresh ones. Now the notes are kept with the hold's
+other records, Reset body clears them, a fresh take-up drops the columns, and the columns are not used again from one
+frame to the next while the trunk carries the arm's root (within one frame's solve they still are). Each order of the
+dynamic cases ran after its own fresh load, KAg, KAre, KAg and KAre, KAg, KAre (60 and 20 frames a second), and KATg,
+KATre, KAg0, KAre0, KATg and the reverse: every case's path 0.00 mm apart from its repeats (the check had 175 mm).
+
+**The pinned held arm no longer trembles (`HOLD_BODY.pinSkipMm` 5 -> 0, `pinFollow`).** Skipping the solve of an arm
+pinned at its joints' end let it ride the trunk up to 5 mm and then be put back. Reversals of the right arm's direction
+in the first 59 frames of "Turn trunk to the right" (right arm chosen), update 69 / pass 3 / now: 5 / 12 / 4 at 60 frames
+a second, 7 / 10 / 3 with uneven frames, 7 / 11 / 7 at 30 (pass 2: 4, 3, 8); steps at frames 8 to 17 at 60 frames a
+second: pass 3 "5 4 5 5 5 5 5 5 7 4", now "4 1 1 4 4 6 5 1 2 1" (pass 2's). Tried: a skip of 1.5 mm: 10 / 10 / 8
+reversals. An arm pinned the frame before still takes one solve step (`pinFollow`, now apart from the skip); with two its
+steps were the same.
+
+**Keys held in a turn cost less (`HOLD_BODY.keyCarryMinMm` 3).** `keyCarry`'s extra solve only when the trunk carried
+the end at least 3 mm since the last frame; below that the keys' cut from the carried end is the same as from the kept
+one. Timed with drawing off, both builds open at once and taken in turns six times (`work/limbs5/sc4/cost4.mjs`, a timer
+round the hold and a counter round every solve), right arm chosen, script time of frames 12 to 60 (medians, best in
+brackets), update 69 -> now: "Turn trunk to the right" with A held 33 to 667 ms (KAT) 755 (690) -> 904 (833) ms, about
+3.1 ms more a frame (the check: 4.4), solves 45 -> 55 (74 with `keyCarryMinMm` 0, in an earlier run of four), time inside
+the hold 171 -> 276; the same turn with no key 492 (459) -> 598 (584), about 2.2 ms more a frame (pass 3: about 1.2 with
+the skip of a pinned arm, now off), inside the hold 21 -> 117, solves 0 -> 48; "Bend trunk forward" with A 931 -> 928;
+"Turn trunk to the left" with W 700 -> 786, about 1.8 ms. The first 12 frames of these four cost 2.5 to 5.8 ms more a
+frame. Not timed: other movements and rates, a drawn frame.
+
+**Checked (pass 4).** `tests/limbs5.test.mjs` 17 pass, five of them new: `keyShadowHomeDue` and `keysPlayed` on the
+game's body (a look's carry alone never makes the way home due, a key the shadow cannot follow does); `armShadowStart`
+(which look, which frame replayed); `armHomeLeft` and `holdArmBack` at rest taking the arm to the shadow's places at
+`armBackDegS`; `holdMemoForget` with `ns-grasp` `solveLimb` on the game's body (columns of the trunk at rest used with
+the trunk turned 25 degrees give another answer; forgotten, exactly the fresh one); and the game's wiring read from
+`ns-app.mjs` itself (the third check: the tests passed with the fix removed): the way home's call and its keys-only
+start, `keyCarry` and its 3 mm, the notes forgotten on Reset body, on a fresh take-up and before the solve while the
+trunk carries, the let-go at rest, the kept shadow, the replay, the keys carried by the look on the shadow, and no second
+memo in the hold's scope. Twelve copies of the game each with one of these removed or bypassed
+(`work/limbs5/an4/mut.py`): every one fails at least one test; the unchanged copy passes 17. The 15 related files
+(limbs2 to limbs5, limb-hold, limb-pair-push, seemove, fix63, carry-release, limb-keys, limb-follow, hold-move,
+return-rules, head-hold, shader-safe): 139 of 139. The start check "ok"; browser tests startup, keyboard-aim and
+limb-controls pass. Frame table (still / look / up-down / limb turn), this branch against update 69 in turns: 60.0 /
+41.2 / 50.6 / 49.7 against 60.0 / 42.2 / 48.3 / 49.5; 60.1 / 41.3 / 51.0 / 49.2 against 60.0 / 40.7 / 51.4 / 51.3 (no
+trunk movement is in those phases). The first commit of this pass was run alone (its two modules served): KLF and KLT at
+20 frames a second 4.5 mm, no page error. The third check's matrix again on this code (its `r3.mjs`, 96 trunk and 24
+neck cases at 60 / 30 / 20 / uneven, `work/limbs5/fin4/mx-an.txt`): no limb's largest step larger than update 69's, every
+limb within 1.7 mm of its start after settling, the held right arm never past max(15 mm a sixtieth of a second, its
+shoulder's step) with no key, nothing still moving, against pass 2 only the left side bend at 20 frames a second 1.1 mm
+worse (as in pass 3). The keyed list of the check at all five rates (KA to KWDs, 17 cases, `work/limbs5/fin4/table4.txt`)
+ends 0 to 2.2 mm off its controls but for D held 33 to 667 ms (KD 3.0 to 7.1, KDT 3.5 to 7.5; update 69 69 to 335) and S
+(KST 14.0 to 33.9, KSF 15.3 to 34.7); nothing worse than update 69 except KSF at 20 frames a second (16.7 -> 26.3).
+Pictures, whole and of the mirror body, settled, beside the control (`work/limbs5/fin4/pics/cmp/`, `pics2/cmp/`): in KAL
+at 60 frames a second update 69 ends with the mirror body's right hand across the middle of its chest and your own right
+arm raised in front of you, now and the control with that hand up at the other shoulder and yours at the crosshair; in
+KATg update 69 ends with the hand on the belly and pass 3 in the middle of the chest, now as the control at the upper
+chest; in KLF at 20 frames a second the four pictures (update 69, pass 3, now, the control) cannot be told apart at their
+size (4 against 26 mm). The right turn's frames 8 to 17 at twice the size do not show the 4 to 8 mm of pass 3's tremble
+either; it is known from the numbers only.
+
+**Not done, or not right (pass 4).**
+- The look alone during a trunk movement (KLF) ends 3.2 to 4.5 mm off its control, update 69 2.2 to 3.3: 1 to 2.3 mm
+  more, from the view's hold's own carry under pass 2's rules; not traced.
+- A held while the look turns (KAL) ends 14 to 16 mm off (update 69: 112 to 177), S during a turn or bend (KST, KSF) 14
+  to 35: the shadow has no keep-out of the head's column. D held long, 3 to 7.5 mm.
+- The cost: a key held through a turn about 3 ms more a frame than update 69 for most of a second, the turn with no key
+  about 2.2 ms (more than pass 3's 1.2: the skip that trembled is off), the first 12 frames 2.5 to 5.8 ms. The frame
+  table has no trunk movement in it.
+- A right turn with the right arm held folded across the chest (A held about 1.8 s first, then "Turn trunk to the
+  right"; the control of KATre): the hand, out of reach of its place, rides the turned chest up to 109 mm in one frame
+  at 60 frames a second and 249 at 20 (update 69: 90 and 211); in KATre's second turn 97 and 228. Not looked into.
+- In KATg at 60 frames a second the right leg, chosen as the arm goes home, ends 2.4 mm off its control.
+- The tests read the wiring from the game's source; no test runs the game's frame loop. What the wiring does is known
+  from the browser runs only, all stepped through the QA step; no person has watched any of it in motion.
+- Not measured: the look turned far enough to bend the trunk; a key held on frames before the last frame at rest
+  (only that frame is replayed; the keys before it are in the places).
+
+## 204. With the camera from GitHub main the mirror body's head stands between the two halves of the strip again, the arrows are planned in the view the player gets and the first click no longer tilts the mirror body, Reset body puts back a limb the look had aimed, the tutorial's cue words keep clear of the labels, and the checks are restated for the new camera (24 November)
+
+On 23 November another contributor published on GitHub main "Unify NeuroSurge editions and make camera player-controlled"
+(4d22d89, with the Lite trial 786d60f and a link 11bb5da). Its game files were joined to update 70 in 7fcf20e; their
+diffs there are byte for byte main's (checked file by file: ns-app, ns-camera, ns-scene-three, ns-guide-cues,
+ns-emap-ambient, ns-text, ns-guide, the launcher and early-load). The camera is deliberate and is kept: "The playing
+camera never follows the animated anatomy"; "In the eye view, moving the mouse turns the camera from one fixed place.
+From outside, moving the mouse takes the camera around the body at a steady distance. The game leaves the view where you
+set it until you move it again"; the eye stands 0.46 m further back than before "to leave room to raise either arm". With
+a limb chosen, a look up or down within about 18 degrees also aims that limb's shoulder or hip (or the left hand) across
+its range (`updateJointAim`). On 7fcf20e the unit suite passed and the start check and six browser tests failed. The
+owner's rules these checks guard: "let's center the motor strip on either side of the head of the mirror body ... So it
+looks like almost hair coming out of either side of the mirror body's head" (Message 175), and "it's better actually if
+there are no permanent movements" (Message 206). Each failure was taken apart below: what the new camera changes on
+purpose (the check is rewritten to it and keeps what it protects) and what was a real fault (the game is fixed).
+
+**The start picture: the strip is framed a little higher for the player camera (`BRAIN_START_PLAYER`, `playerCameraUsed`
+in `ns-app.mjs`; headUpDeg 10.4 -> 11.6).** A real fault of the combination. From 0.46 m further back the mirror body,
+much nearer than the strip, rises against it: its head and shoulders stood in the lower half of the leg areas, 3.5 % of
+it behind a motor colour at 1600x900 and 4.7 % at 800x600 (the start check allows 2.5 %; update 69: 2.1 % and 2.2 %), and
+the two "Belly and back" labels, which keep clear of the bodies' bones, found no place and were not drawn. The strip's
+ceiling (where the middle of the leg areas is level with the mirror body's head, `brainStartCeilNdc`) is now taken with
+the head 1.2 degrees higher for that camera. Measured with `ns-app.mjs` served with the number replaced
+(`work/cam70/s-headup.mjs`), with the arrows planned in the view the player gets (next decision): 10.4 -> 3.5 % /
+4.7 %; 10.8 -> 2.2 % / 3.0 % (fails at 800x600); 11.2 -> 1.7 % / 1.5 %; 11.6 -> 0.7 % / 1.0 %, all eight labels at
+1600x900. On a 16:9 window the height decides the strip's size, so it also grows: 754 px across at 1600x900 as seen
+(712 with 10.4 from the new camera; update 69's 757). The camera, the mirror body and the look are not moved, the
+brain is. `BRAIN_START` stays the rule of the earlier camera, which the whole-arm display still uses; start() and the framing ask the same question.
+On this branch at seven window sizes (1600x900, 800x600, 1280x720, 1920x1080, 1600x1000, 1366x768, 1024x768) the
+start check passes, with 0.5 to 1.0 % of the mirror body behind a motor colour; the two "Belly and back" labels are
+drawn at 1600x900, 1920x1080 and 1600x1000, not at the four smaller sizes (update 69 has none at 800x600 either; the
+others were not compared).
+
+**The arrows are planned in the view the player gets (`planEye`, `setPlanEye`, `arrowRefAt` in `ns-scene-three.mjs`; the
+call in `ns-app.mjs`).** A real fault of the combination, found when the full browser list ran on the framing above:
+mirror-compass failed, "the green up arrow leaves motor colours clear" (its box at 609 to 671, 37 to 63 px, over the
+left leg area). Since package FLAT (18 November) the turn arrows of the brain and the mirror body are planned in the eye
+view the player gets, from the eye plus `EYE_DOLLY`'s stand-off for the look. Main's camera stands still 0.46 m behind
+that, and the plans were still made from the earlier place: every tip was planned in a view nobody sees, and the start
+check's strip box, "the one the brain's arrow frame was planned on, which in a landscape window is the player's own
+opening view", was that other view's (801 px across where the player sees 754). Measured with the earlier plan place:
+the mirror body's top tip stays above the head up to headUpDeg 10.8 and lands on a motor colour from 11.0 on at
+1600x900, while 800x600 needs 11.0 or more for the head: no single number did both. The plan views now stand at the
+player camera's eye view for every look (that camera turns in place); without the player camera (the whole-arm
+display) the earlier rule is kept. With it, at 11.6: the strip box as seen, the mirror body's top tip beside the left
+leg area (592 to 654, 40 to 67 px at 1600x900), clear of the motor colours and of every other tip, at 800x600 at the
+top left of the strip (267 to 308, 21 to 39 px). That was the place only, not the direction; see the next decision.
+
+**The mirror body's opening arrows are planned along the player's start look as well (`PLAN_EYE_MIRROR.startLook`,
+`mirrorPlanCamFor` in `ns-scene-three.mjs`; second pass, after an independent check).** A real fault, brought in by the
+decision above. The plan views stood at the player camera's eye view, but in a landscape window the mirror body's still
+looked along the brain's placement direction (13 degrees down), not along the start look (25.5 degrees down). The box
+kept free round the crosshair (`R5_BIGBRAIN.crosshairKeepPx`, 8 px) was therefore kept round a point 12.5 degrees above
+the crosshair the player gets (y 639 in that view), and the mirror body's lower tip was drawn on the real crosshair (768
+to 830, 430 to 457 px at 1600x900; 379 to 420, 286 to 304 at 800x600): the crosshair started on an arrow (the line read
+"Shift: the brain behind the arrow tip"), and the first click at the middle of the window, which the start bar asks for
+("Click to look around"), tilted the mirror body by 15 degrees instead of only taking the pointer. Update 69 did not do
+this. With a plan eye the mirror body's opening plan (nothing carried, no outside view) now looks along the start look,
+as the brain's opening plan already did (`brainPlanCamFor`), so the crosshair's box, the HUD cards and the picture's
+edges of that plan are those of the picture the player starts with. A carried mirror body is still planned along the
+placement direction; without a plan eye (the whole-arm display) nothing changes; an upright window planned on the start
+look already. Measured at High (`work/cam70b/p1/`) at 1600x900, 800x600, 1280x720 and 1920x1080: no tip on the
+crosshair's box, the crosshair on no arrow, and the click at the middle takes the pointer with the mirror body at rest
+(turn, tilt and push 0); at 1600x900 the lower tip 29 px under the crosshair (768 to 830, 479 to 505) and the top tip
+above the head again, on the middle of its frame's top side (768 to 830, 29 to 56; 800x600: 379 to 420, 29 to 47),
+clear of the motor colours (mirror-compass passes). The start check now also fails a mirror tip on the crosshair's box
+and a crosshair that starts on an arrow (it looked at the brain's tips only); mirror-compass checks every drawn tip
+against that box at the start; keyboard-aim checks that both its capture clicks leave the mirror body as it was.
+
+**The tutorial's cue words keep clear of the region labels (`readHudRectsNow` in `ns-scene-three.mjs`; second pass).**
+The independent check: in the start picture at 1600x900 main's first guide cue, "Motor area · Left toes", lay under the
+left "Belly and back" label (their text boxes overlapping 57 x 13 px), which read "Belly and back · Left toes"; 26569b3
+had brought those labels back into that place. The words of the guide cues (`.ns-guide-mark-name`) are now, as drawn,
+an obstacle for the region labels only, like the quiet layer's prompt and tip (flagged `quiet` and `cue`; the arrows'
+plans skip them): a label gives way to a cue's words while they show. Measured (`work/cam70b/p1/`): no shown label
+touches the cue's words at 1600x900, 800x600, 1280x720 or 1920x1080; at 1600x900 the two "Belly and back" labels (a
+twin pair) are not drawn while that cue shows (six labels), at 1920x1080 they move aside (all eight). The cue's moves
+already made the HUD's boxes be read again (the HUD watcher sees its style changes), so this adds one box to a read and
+no reads.
+
+**Reset body puts back a limb the look had aimed (`jointAim`, `jointAimStaleOut`, `resetBody`, `updateJointAim` in
+`ns-app.mjs`).** A real fault, of main's code, found by the rewritten limb-controls test. The joint aim's record lived
+with the hold and survived Reset body, and for the left hand its aimed place stays the hold's target on every frame
+(`holdHand = jointAim?.hand || ...`): after a look up and back down and Reset body at the start look, the left hand stood
+0.44 m from its start place (at [-0.416, -0.608, -0.415] instead of [-0.313, -0.249, -0.644] m), held where the look had
+aimed it. For a leg or the right arm the next look up or down would have aimed from the pose the reset took away. The
+record now lives with the other limb state; Reset body and the display rescue drop it and note the frame drawn at the
+moment of the reset, and the aim is taken up again only from a frame drawn after it. With it the test passes: the left
+hand back at its start place.
+
+**The checks the new camera changes on purpose, rewritten to it (each keeps what it protects; no assertion removed
+without one in its place).**
+- `browser-brain-eyes`: "E changed the observing camera" read a change of more than 0.1 rad in the camera's pitch; the
+  outside camera now looks along the same look, so E changes its place (0.71 m) and not its direction. Read now:
+  the place moves more than half a metre, the direction, the look and both eyes stay. Reset body no longer turns the look
+  back to the start look ("leaves the view where you set it"): the eyes after it are those of the same look, and the same
+  115 px pointer move back gives the start look and the start eyes (1e-9 rad, 1e-6 rad).
+- `browser-limb-controls`: "the view is turning to the right hand when the body is reset": the player camera never
+  turns the view to a chosen limb (`limbView` is never started). Read now: 4 after a look away leaves the view where it
+  was (not turning, the same look after 950 ms); Reset body leaves the view where the player put it and puts the right
+  arm, the reach and the limb choice back; after the same pointer move back to the start look a second Reset body puts
+  everything, the left hand too, where it was at the start.
+- `browser-keyboard-aim`: the limb framing waited for a turn to a wrist or ankle outside the picture's band (a time-out).
+  Read now: choosing a limb never turns the view; from the start view each of the four ends is in the picture and
+  inside the picture's band, as before (left leg -0.093 / 0.55, right leg 0.091 / 0.55, right arm 0.202 / 0.563, left
+  arm -0.209 / 0.57; the first pass had dropped the band to "in the picture" without need, the independent check found)
+  and the pointer put on it finds that limb; from a look up the choice leaves the view too. Both clicks that capture the
+  pointer at the middle of the window must leave the mirror body's turn, tilt and push as they were (second pass). In
+  the strip part, after E the outside view looks along the same look from its orbit and the crosshair rests on another
+  area (rh_jaw, where the eye view's look was on rh_scan_inferior): the walk goes on from the area under the crosshair,
+  as anywhere, else from the card's area. The mirror body's forward tip is brought under the crosshair in at most four
+  carries, as before. The first pass allowed eight, with the reason "seen from outside, the tip planned from the player
+  camera's eye view does not follow a carry evenly": wrong, its walks were made with the mirror body tilted by the
+  capture click (above). See "Not done" for what the walk does with the mirror body at rest. The tip "clear of the strip" was always the brain's forward tip; at the thumb area it now lies over the
+  strip and is faded by design (0.34): the clear tip is now the first of the brain's four that is shown and covers no
+  motor area, and it must be drawn at full strength.
+- `browser-muscle-shades`: the raised right arm "in shadow" was reached by looks between the keys, then the right leg
+  chosen and a look 250 px down and 150 px right; with the camera standing still behind the eye and the look no longer
+  held inside the neck's reach, that ended on the empty floor (0 contacts, "hue null"). Now the keys S, W, D raise the
+  arm with the look left at the start look, and a look turned to the side only (an up or down look would aim the arm)
+  brings the raised hand into the middle of the picture. Measured: 138 to 141 contacts, 1 nearly equal, 16 to 19 weak, 24 to 28 in shade (none nearly equal, 2 to 6 weak), hue 21.4 (sd 4.3), chroma 0.101 to 0.102, in four runs; it passes its limits. The arm lies across the picture; it is
+  not the deep shade of the earlier view (section 188: 50 to 59 contacts in shade). Second pass: five other looks at the
+  raised arm from this camera, with the right leg chosen so an up or down look aims the leg and not the arm
+  (`work/cam70b/s-shade.mjs`), gave 6 to 31 contacts in shade, and the two with most failed the check's own limits (2 of
+  107 nearly equal; a 20 px pair under 0.025), so the view stays as it is and the lost case is in What is left. After the
+  arrows' fix this check, unchanged since the first pass (8f1562e), passes: the start view 93 contacts, 1 nearly equal,
+  11 weak (the limit is 12.09), 17 in shade; outside 72; the mirror body held near 167, 1 nearly equal, 18 weak, its
+  weakest pair seen along 19 px 0.032; the arm 139, 1 and 16, 24 in shade (0 nearly equal, 2 weak).
+- `browser-space-aim`: from outside the crosshair now opens on the mirror body's trunk, not on the brain, and the mirror
+  body's torso is no longer at 803, 357. The places are found in the picture: a point of the mirror body with the brain
+  behind it inside its projected box, and for the captured pointer a look raised in 12 px steps until the crosshair is
+  on the brain alone. Read as before: Space holds the mirror body under the pointer, the capture keeps the look and the
+  crosshair's target, W moves the held body, Shift + Space holds the brain behind it, the capturing click activates
+  nothing.
+- `browser-outside-compass`: main's start page offers "Play Full" and "Play Lite" (it was "Play the experimental
+  preview"); the test clicks "Play Full". As before it runs in a publish tree whose START.html is main's
+  (`NS_TEST_ROOT`; here `work/cam70/pubtree`, START.html from 11bb5da).
+
+**Checked, second pass (on 3a0531b, `work/cam70b/final/`).** Unit tests: all of `tests/`, 753 of 753 (three new in
+`tests/cam70.test.mjs`: the mirror body's opening plan on the start look, the crosshair checks of the start check,
+mirror-compass and keyboard-aim, the cue words as label obstacles). The start check (`h/lead/s-bootcase.mjs`) "ok" at
+1600x900, and in the page at 1600x900, 800x600, 1280x720 and 1920x1080 with its new mirror rule (`work/cam70b/p1/`).
+Browser tests, all 16: startup, mirror-compass, muscle-shades (unchanged), limb-controls, brain-eyes, space-aim,
+arm-collar, brain-compass, camera-resize, emap, limb-touch, play-settings, player-focus, punch-in and outside-compass
+(in a publish tree with main's START.html, `work/cam70b/pubtree`) pass; keyboard-aim FAILS at the carry walk (see "Not
+done"); its limb framing part, with the band and the two capture clicks checked, passes. Frame table (still / look /
+up-down / limb turn), this branch and update 69 in turns: 60.0 / 40.3 / 57.7 / 58.3 against 60.1 / 40.3 / 50.3 / 49.8;
+60.0 / 40.4 / 54.0 / 58.1 against 60.0 / 41.7 / 52.3 / 51.2: not slower. Pictures looked at: the start view at High at
+1600x900 (whole and cropped round the cue), 1920x1080 and 800x600 (cropped) on this branch (`work/cam70b/p1/`), the
+check's start view of 5953223 (`work/cam70-check/v/18951-big-start.png`), the raised right arm from this camera
+(`work/cam70b/sh/A-yaw-to-hand.png`) and the outside view of outside-compass (`work/cam70b/final/oc/outside.png`).
+
+**Checked, first pass.** Unit tests: all of `tests/`, 750 of 750 on the final game code (745 on 7fcf20e and five new in
+`tests/cam70.test.mjs`: the player camera's framing rule, which camera the game plays with, the framing and start()
+asking alike, Reset body dropping the joint aim, the plan views wired to the player camera). The start check
+(`h/lead/s-bootcase.mjs`) "ok" at 1600x900, and in the configured case at seven window sizes (above). Browser tests, all
+16, on the final game code (`work/cam70/final2/`; keyboard-aim on its final file `work/cam70/b7/`): startup,
+keyboard-aim, limb-controls, brain-eyes, space-aim, arm-collar, brain-compass, camera-resize, emap, limb-touch,
+mirror-compass, play-settings, player-focus, punch-in and outside-compass (in the publish tree) pass; muscle-shades
+FAILS (see below). The same list on the code before the plan views were moved (`work/cam70/final/`): all but
+mirror-compass passed, muscle-shades among them. Frame table (`h/lead/s-perf2.mjs`; still / look / up-down / limb turn),
+this branch and update 69 in turns, three pairs: 60.0 / 40.5 / 52.0 / 58.0 against 60.0 / 35.4 / 46.4 / 49.3; 30.6 /
+15.5 / 23.3 / 26.3 (every phase at half speed, the still view too: the machine was busy) against 60.0 / 41.0 / 51.7 /
+51.0; 59.5 / 41.0 / 55.2 / 59.0 against 60.0 / 43.4 / 51.4 / 52.0. Before the plan views were moved: 60.0 / 39.6 / 57.5
+/ 57.6 and 59.2 / 40.4 / 56.1 / 57.7 against 60.0 / 41.9 / 46.6 / 56.4 and 59.7 / 40.1 / 49.9 / 49.5. Not slower on
+the whole; the look phase within 2.4 frames a second either way (the new camera draws less in the up-down phase: 3.8
+ms of drawing against 6.7). Pictures looked at: the start view at High on 7fcf20e and on update 69 at 1600x900 and
+800x600, the outside view on both, the raised right arm on both (`work/cam70/v1/`); the start view at headUpDeg 11.6
+before and after the plan views moved (`work/cam70/h1/`, `h4/`) and at 1280x720 (`h2/`); the arm in shadow
+(`b3/`, `sh1/`); the mirror body held near before and after (`b3/`, `b6/`); the outside compass view (`b4/oc/`).
+
+**Not done, or not right.**
+- The camera itself is kept, as the brief asks, and it departs from the owner's notes: Message 167 ("if you pick one of
+  those, then that becomes the main limb you're controlling with all the control keys and the camera view ... the camera
+  view will shift accordingly so that those become centered and they stay within the frame"): a chosen limb no longer
+  turns the view, and a hand or foot moved out of the picture stays out until the player looks; Message 179 ("a proper
+  first person view"): the eye view stands about a metre behind the eye (EYE_DOLLY's half metre plus main's 0.46 m).
+  Your own body is drawn smaller in the start picture than in update 69, seen from behind the head, with the brain's
+  eyeballs now in the picture under it (the notes of 17 and 18 November ask for limbs that do not look small). Not
+  changed here; for the owner and the other contributor to settle.
+- With a limb chosen, every look up or down in the eye view also moves that limb (main's joint aim), the left arm too,
+  which is chosen at the start: looking up at the top of the strip lifts your left hand. Main's design and its guide say
+  so; not changed. After Reset body the look stays where it was, so looking back from there moves the chosen limb.
+- The tutorial's first cue (main's `ns-guide-cues.mjs`), "Motor area · Left toes", puts its words under its ring when
+  the ring is in the top 16 % of the picture: its words now keep clear of the labels (second pass), but they still lie
+  over the mirror body's neck at every size looked at; while that cue shows at 1600x900 the two "Belly and back" labels
+  are not drawn; and its ring lies partly under the "Left leg" label (252, 352 and 630 of its 900 px2 at 1600x900,
+  1280x720 and 1920x1080), as before the second pass. The ring was left out of the labels' obstacles on purpose (it
+  sits on the area the label names, and keeping the label off it would push the leg pair away); not looked at further.
+- The brain's arrows move a little, now planned from where the player looks. The mirror body's top arrow is above its
+  head again since the second pass (the first pass had it beside the left leg area).
+- The colour check's raised right arm is a different picture from the earlier one (seen sideways at the start look, the
+  arm across the picture), not the deep shade it had; its numbers do not compare with section 188's, and no view of the
+  raised arm from this camera was found that is that deep and passes (second pass, above).
+- The first pass's account of `browser-muscle-shades` was wrong, and is withdrawn: it failed (2 of 96 contacts nearly
+  equal in the start view) because its capturing click at the middle of the window tilted the mirror body (the arrows'
+  fault above), not because the tips "now drawn elsewhere leave one more contact in sight" or because the table of pairs
+  seen side by side was made with the earlier camera; an independent check showed it with the same game code and a
+  Shift-click, and since the fix it passes unchanged. The table (`ns-muscle-seen.mjs`) is still the earlier camera's,
+  and its regeneration (NS_SEEN_OUT) still stops on this camera ("the mirror body is let go at 0.85 m"); not done. The
+  start view's weak share is tight (11 of 93, the limit 12.09): with the bodies drawn smaller there are about 95
+  contacts against 150 on 21 November, so one or two pairs decide it.
+- **Fixed after the second pass (the lead, from the independent check's experiment):** in the outside view a carried or
+  later mirror plan is made from the eye's own place again (eye and dolly, as before the plan eye), so its tips follow the
+  body as it is carried; the eye view and the opening plans keep the plan eye. `browser-keyboard-aim` then passed three
+  runs out of three. The notes below are the second pass's own, kept as written.
+- **`browser-keyboard-aim` failed in most runs, at "the carried mirror tip reaches the actual thumb ray"** (second pass;
+  not caused by the second pass's change). With the mirror body at rest, the walk that carries it until
+  its forward tip is under the crosshair reached it at the third carry in 14 of 21 walks (the check's two, three walks of
+  the walk run alone, nine in runs of the whole test), but in seven of eight runs of the whole test one walk (the first,
+  second or fourth of its four) did not: as the mirror body comes down, the tip stays near y 340 to 347 and, where the
+  walk went on, jumps to y 519 to 555, never near the crosshair at 450. The mirror body's centre was
+  the same to the millimetre in passing and failing walks (-0.15, -0.699, -1.893 m after the third carry), so the plan
+  made after the release differs: in a passing walk the forward tip finds no clear place up its centre line and takes
+  its side's middle, in a failing one it finds one higher up. Shown: the same with the first pass's opening plan
+  (PLAN_EYE_MIRROR.startLook false, served by route, capture beside the middle); eight carries, or carries halved after
+  each overshoot, did not reach it (`work/cam70b/k1/`). What decides it was not found; most likely what covers the tip
+  in the plan view (your own body from the eye view behind your head, the left arm aimed by the look, the right arm
+  raised by W before the second walk), which the outside view the player sees does not show, but that was not shown.
+  In the first pass the test passed with the mirror body tilted, the tip coming round under the crosshair at the fifth
+  carry; the walks then were made with a mirror body no player has at that point.
+- The carried mirror body's plan is unchanged (the placement direction, from the player camera's eye place); its
+  fallback, the look "straight at it" for a body outside that view, is still taken from the eye and not from where the
+  plan view stands (the independent check's second point, not shown to matter; not changed). The second pass's changes
+  were looked at in landscape windows only.
+- From outside the crosshair opens on the mirror body's trunk (earlier: on the brain). Whether the owner wants the brain
+  under it there is not asked.
+- The joint aim's reset is checked by the browser test and by reading the source; no unit test runs the frame loop, and
+  the display rescue's path was not run.
+- headUpDeg 11.6 was read off pictures at seven landscape sizes; upright windows were not looked at (the start check's
+  rule is for landscape windows only), nor the Lite edition (it loads the same game code; not run here).
+- No person has played the combination.
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**
@@ -7444,7 +8218,16 @@ half's leg stretch.
 - Publication. Since 12 November the user asks for each finished version to be uploaded to the project's GitHub repository, and that is done. An upload is not an independent review.
 
 **Limits of this build that were looked at and left, each with its reason in the section named.**
-- Touching muscles: with the colour rule of 22 November (no pink, mauve or blood crimson) about 1 in 80 visible contacts between two muscles is drawn nearly equal and about 1 in 10 is weak (the lead's colours: 1 in 21 and 1 in 5); the darkest forearm flexors have the fewest colours; the left and right muscle of a pair share one colour at the midline; the pairs seen side by side, and the light on them, are known from eighteen views only (188).
+- The camera from GitHub main is kept (204): the eye view stands about a metre behind the eye and turns in place, it never
+  follows the body or turns to a chosen limb, and Reset body leaves the view where it is; with a limb chosen a look up or
+  down also moves that limb. Your own body is smaller in the start picture than before. The owner's Message 167 (the view
+  shifts to a chosen limb and keeps it in the frame) and Message 179 ("a proper first person view") are not met by that
+  design. The tutorial's first cue lies over the mirror body's neck in the start picture, its ring partly under the
+  "Left leg" label, and at 1600x900 the "Belly and back" labels give way to its words while it shows (204).
+- In the outside view the mirror body's up arrow can lie across its face; at 800 by 600 the brain's up arrow is half
+  under the tutorial card; with the player camera the deep-shade case of the raised arm (50 to 59 contacts in shade) is
+  no longer in any view the shading check uses (6 to 31) (204).
+- Touching muscles: with the colour rule of 22 November (no pink, mauve or blood crimson) about 1 in 80 visible contacts between two muscles is drawn nearly equal and about 1 in 10 is weak (the lead's colours: 1 in 21 and 1 in 5); the darkest forearm flexors have the fewest colours; the left and right muscle of a pair share one colour at the midline; the pairs seen side by side, and the light on them, are known from eighteen views only (188); those views were made with the earlier camera and the table was not made again for the camera from main (its regeneration stops on it); the colour check passes on it, but its raised-arm view is no longer the deepest shade (24 in shade against 50 to 59), and no view of the raised arm from this camera was found that is that deep and passes; the start view's weak share is tight (11 of 93, the limit 12.09) (204).
 - Some motor areas cannot be aimed at until the brain is turned to one side; no view from above shows them. Section 13 counted four of the 44 areas the map had then. The map now has 54, and the count has not been redone (13, 55, 59).
 - The brain has its own proportions at the start look and stretches at steep looks (13).
 - The start picture holds your whole torso since section 91; the stomach is a narrow band in it (14, 79, 90, 91).
@@ -7475,10 +8258,25 @@ half's leg stretch.
   rises and falls now, map on or off); it still flushes with it. During a held arrow walk the look's soft glow and white
   frame step from block to block with the view (198, 200).
 - The nerve data for the electrical map is typical and simplified: 74 of its 152 main roots are choices where the sources read mark none, a plexus is one bundle, the cranial nerves' openings in the skull are placed by offsets, and 1.4 % of the drawn length still lies in bone (most of it in the skull's own passages); nothing of it has been seen drawn in the game on its own branch (193).
-- With the right elbow fully bent, A turns the upper arm inward and brings the hand across at the keys' pace, then stops about 115 mm inside the shoulder, the hand rising toward the chin; D turns it back and swings the folded arm out to the side; a folded leg's A and D stop at the thigh's 45-degree sideways lift (195, 201).
+- With the right elbow fully bent, A turns the upper arm inward and then opens the elbow, at the keys' pace: the forearm ends across the chest, the hand about 260 mm past the shoulder and 20 mm above it, but on the way it passes the chin, about 80 mm above the shoulder; D closes the elbow, turns the arm back and swings the folded arm out to the side; a folded leg's A and D stop at the thigh's 45-degree sideways lift (195, 201, 203).
 - Keys and the look on a limb during a trunk movement are played on its shadow at rest, so they end within about 0 to 6 mm
-  of where the same input ends with no movement (201); the shadow pushes no other limb, and a right arm held to the end of
-  the movement, or chosen while it waits, keeps section 199's rules (R7b 34 mm, N2w 72 mm off).
+  of where the same input ends with no movement (201; a key held as the way back ends keeps the shadow's line; keys on
+  the right arm held through the movement end within 0 to 2.2 mm, also when it is let go or the movement started again
+  before it is back, D held long 3 to 7.5, and the look alone 3 to 4.5, 203), but S held on a pushed leg across the end
+  of its way back (T5g) ends about 20 mm off (19.8 to 20.5 in the checks; update 69: 18.4), a look moved during the movement with the look already turned 0.6 to 0.9 rad ends 19 to 32 mm off (update 69: about 340), and on the held right arm S during a turn or bend (KST, KSF)
+  14 to 35 mm and A held while the look turns (KAL) 14 to 16 mm (the shadow has no keep-out of the head's column). A push your own key makes on another limb during
+  the movement goes back with the trunk (A then D: the other leg 44 mm off its control); a right arm chosen while it
+  waits keeps section 199's rules (N2w 72 mm off).
+- During a trunk movement from the brain an arm you have not chosen trails the trunk and catches up: in a turn its hand
+  is up to about 0.2 m behind for about a fifth of a second and goes up to 24 mm a frame faster than its shoulder to catch
+  up; at 20 frames a second a hand still moves up to 139 mm in one frame of a turn, and in a quick turn reversal 86 mm at
+  60 frames a second (236 at 20) with up to 0.4 m of lag. The right arm you have chosen stays at its place as far as its
+  joints reach, is not thrown when you press keys on it, and is back there with the trunk. In your own view the left
+  hand still drops about a quarter of the picture's height in a bend, the held right arm still pushes the right leg 26 mm
+  a frame for two frames, while an arm follows a trunk movement's first frames cost about 2 to 3 ms more a frame (5 to 8 ms
+  with a key held on the right arm), and the held right arm about 2 to 3.4 ms more a frame for most of a second of a turn (203). Held folded
+  across the chest, the right arm rides a right turn up to 109 mm a frame (249 at 20 frames a second; update 69 90 and
+  211) (203).
 
 **Asked for in the user's notes and not done yet.** These stay with the author of these changes.
 - The electrical map (the owner's notes of 20, 21 and 22 November: "a live brain scan map where you have electrical wire, electrical storm activity going everywhere"). It is there on M, as a live scan with storms, and no person has played it. The strip's blocks show under the dark ground, not over it as the lead asked (a second draw broke them into dark triangles); an activated block is not the brightest spot. The lit nerves at your own raised shoulder are a tangle, and lines kink at strongly bent joints; the beads cannot be told apart on the small mirror body; two lit areas that share a wire show one colour; the report's way up is a drawn convention; the first M press takes about 0.7 s (192).

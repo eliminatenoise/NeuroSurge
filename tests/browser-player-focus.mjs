@@ -16,7 +16,7 @@ server.listen(0, HOST);
 await once(server, 'listening');
 const host = `${HOST}:${server.address().port}`;
 allowedHosts.add(host);
-const url = process.env.NS_PREVIEW_URL || `http://${host}/`;
+const url = process.env.NS_PREVIEW_URL || `http://${host}/scene/example/preview.html`; // (24 November 2026: / is a game menu now)
 const angle = process.env.NS_ANGLE;
 const args = ['--disable-background-networking'];
 if (angle) args.push(`--use-angle=${angle}`);

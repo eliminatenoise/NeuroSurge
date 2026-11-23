@@ -92,7 +92,7 @@ try {
     assert.equal(report.zoomSetting, '200%');
   }
   const start = performance.now();
-  await page.goto(`http://${host}/`, { waitUntil: 'domcontentloaded' });
+  await page.goto(`http://${host}/scene/example/preview.html`, { waitUntil: 'domcontentloaded' });
   await page.waitForURL('**/scene/example/preview.html');
   await page.locator('.ns-ctl').waitFor();
   report.startup = await page.locator('.ns-ctl').evaluate(card => {

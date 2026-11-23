@@ -42,7 +42,7 @@ try {
       cuts: n ? n.cuts : null, clipped: n ? n.clipped : null, hiddenOn: n ? n.on : null, draw: n ? n.draw : null };
   });
 
-  await page.goto(`http://${host}/`, { waitUntil: 'domcontentloaded' });
+  await page.goto(`http://${host}/scene/example/preview.html`, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => window.__nsQA?.inspect()?.shell.mode === 'playing', null, poll);
   await page.waitForFunction(() => { const n = window.__nsQA.inspect().scene.organs.neck; return n && n.on === true; }, null, poll);
   const start = await read();

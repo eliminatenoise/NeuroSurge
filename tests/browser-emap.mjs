@@ -43,7 +43,7 @@ try {
   page.on('console', m => { if (m.type() === 'error' && /shader|program|WebGL/i.test(m.text())) errors.push(m.text().slice(0, 300)); });
   if (raw) await page.route('**/packs/PACK-INDEX.json', route => route.abort());
   await page.addInitScript(q => { try { localStorage.setItem('neurosurge.settings.v1', JSON.stringify({ quality: q })); } catch { /* the default then */ } }, quality);
-  await page.goto(`http://${host}/`, { waitUntil: 'domcontentloaded' });
+  await page.goto(`http://${host}/scene/example/preview.html`, { waitUntil: 'domcontentloaded' });
   await page.waitForURL('**/scene/example/preview.html');
   await page.waitForFunction(() => ['playing', 'error'].includes(document.querySelector('#ns-app')?.dataset.nsPhase));
   const inspect = () => page.evaluate(() => {

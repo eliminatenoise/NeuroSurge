@@ -548,6 +548,19 @@ export async function assertConfiguredBoot() {
   // 19 November 2026: the mirror body stands under the strip and is moved as a whole (drag, or Space and carry); its
   // arrows are no longer part of the start picture's contract, so only their presence is read here.
   requireCase(!arrows.mirror || typeof arrows.mirror.shown === 'boolean', 'the mirror body\'s arrows must report whether they are shown');
+  // 24 November 2026 (round r32, CAM70 pass 2; DESIGN-DECISIONS section 204): but none of its tips may lie on the
+  // crosshair's box at the start look either, and the crosshair must not start on an arrow at all. With the player
+  // camera from GitHub main the mirror body's lower tip was drawn there, so the first click at the middle of the window,
+  // which the start bar asks for, tilted the mirror body by 15 degrees instead of taking the pointer; this check only
+  // looked at the brain's tips.
+  if (arrows.mirror && arrows.mirror.shown === true) {
+    const ck = R5_BIGBRAIN.crosshairKeepPx, cx = window.innerWidth / 2, cy = window.innerHeight / 2;
+    for (const d of ['forward', 'back', 'left', 'right']) {
+      const b = arrows.mirror.dirs && arrows.mirror.dirs[d] && arrows.mirror.dirs[d].boxPx;
+      if (b) requireCase(!(b.x0 < cx + ck && b.x1 > cx - ck && b.y0 < cy + ck && b.y1 > cy - ck), 'the mirror body\'s ' + d + ' tip must not lie on the crosshair at the start look');
+    }
+  }
+  requireCase(!s.controlTargets || s.controlTargets.arrow !== true, 'the crosshair must not start on a turn arrow (the first click would turn the brain or the mirror body instead of taking the pointer)');
   requireCase(g.referenceBp.length === 3 && g.originalEyeBp.length === 3 && g.referenceBp.every(Number.isFinite) && g.originalEyeBp.every(Number.isFinite) && g.referenceBp.every((v, i) => v === g.originalEyeBp[i]), 'eye selector must retain the exact validated source eye coordinates; this is a display reference, not measured normal eye anatomy');
   const initialPose = observations.firstReadyReadback.camera && observations.firstReadyReadback.camera.pose;
   // 19 November 2026: the eye stands back from the source eye point and the start look is the app's own (the brain

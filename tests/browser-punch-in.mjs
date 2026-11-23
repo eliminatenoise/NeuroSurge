@@ -43,7 +43,7 @@ try {
     assets.refused++;
     return route.abort();
   });
-  await page.goto('http://' + host + '/', { waitUntil: 'domcontentloaded' });
+  await page.goto('http://' + host + '/scene/example/preview.html', { waitUntil: 'domcontentloaded' });
   await page.waitForURL('**/scene/example/preview.html');
   await page.waitForFunction(() => document.querySelector('#ns-app')?.dataset.nsPhase === 'playing');
   report.graphics = await page.evaluate(async () => {

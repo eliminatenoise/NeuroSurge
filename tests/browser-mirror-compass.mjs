@@ -88,7 +88,7 @@ try {
     assert.equal(await zoom.evaluate(select => select.selectedOptions[0].textContent.trim()), '200%');
   }
   const start = performance.now();
-  await page.goto(`http://${host}/`, { waitUntil: 'domcontentloaded' });
+  await page.goto(`http://${host}/scene/example/preview.html`, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => ['playing', 'error'].includes(document.querySelector('#ns-app')?.dataset.nsPhase));
   report.readyMs = Math.round(performance.now() - start);
   await page.locator('.ns-keys.ns-ctl').waitFor({ state: 'detached' });
@@ -98,6 +98,18 @@ try {
   report.initial = await read();
   await screenshot('opening');
   assert.ok(report.initial.healthy && report.initial.camera.firstPerson);
+  // 24 November 2026 (DESIGN-DECISIONS section 204, CAM70 pass 2): no turn arrow starts on the crosshair (the box of
+  // ns-scene-three R5_BIGBRAIN.crosshairKeepPx, 8 px, round the middle). With the player camera's plan views looking
+  // along the brain's placement direction, the mirror body's lower tip was drawn there and the first click at the middle
+  // of the window tilted the mirror body.
+  for (const [target, compass] of [['brain', report.initial.brain], ['mirror', report.initial.mirror]]) {
+    for (const [name, tip] of Object.entries(compass.dirs)) {
+      if (!tip.box || !tip.draws) continue;
+      const [w, h] = report.initial.viewport, k = 8, b = tip.box;
+      assert.ok(b.x1 <= w / 2 - k || b.x0 >= w / 2 + k || b.y1 <= h / 2 - k || b.y0 >= h / 2 + k, `${target} ${name} does not start on the crosshair: ${JSON.stringify(b)}`);
+    }
+  }
+  assert.notEqual(report.initial.targets?.arrow, true, 'the crosshair does not start on a turn arrow');
   if (process.env.NS_ANGLE === 'vulkan') assert.match(report.initial.renderer, /Vulkan/);
   if (nativeBrowser) {
     assert.ok(report.initial.ratio >= report.beforeZoom.ratio * 1.99);

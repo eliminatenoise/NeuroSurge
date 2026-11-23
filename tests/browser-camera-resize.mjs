@@ -66,7 +66,7 @@ try {
     return camera();
   }
 
-  await page.goto(`http://${host}/`, { waitUntil: 'domcontentloaded' });
+  await page.goto(`http://${host}/scene/example/preview.html`, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => document.querySelector('#ns-app')?.dataset.nsPhase === 'playing');
   assert.ok(await page.evaluate(() => {
     const state = window.__nsQA.inspect();

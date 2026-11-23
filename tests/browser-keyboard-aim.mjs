@@ -19,6 +19,8 @@ import { LIMB_KEYS } from '../scene/src/ns-app.mjs';
 const { band: limbBand, bandUp: limbBandUp } = LIMB_KEYS.view;
 const BAND_SLACK = 0.03; // the turn stops within doneDeg (0.4 degrees) of the band's edge: about 0.014 of the half height
 const inLimbBand = (end, slack = 0) => Boolean(end) && Math.abs(end.x) <= limbBand + slack && Math.abs(2 * end.up - 1) <= limbBandUp + slack;
+// (24 November 2026, section 204: the mirror body's turn, tilt and push as the arrows set them, from the scene's readback)
+const turnOf = state => (state.orbit ? [state.orbit.yawDeg, state.orbit.pitchDeg, state.orbit.pushM] : null);
 
 const { chromium } = await import(process.env.NS_PLAYWRIGHT_MODULE || 'playwright');
 const root = fileURLToPath(new URL('../', import.meta.url));
@@ -61,7 +63,11 @@ try {
     const s = window.__nsQA.inspect({ arrowTrace: true });
     const compasses = s.arrowTrace.value;
     const mirrorForward = compasses.mirror.dirs.forward;
-    const brainForward = compasses.brain.dirs.forward.retainedDraw;
+    // 24 November 2026 (DESIGN-DECISIONS section 204): the tip clear of the strip is the first of the brain's four that is
+    // shown and covers no motor area (until then always its forward tip; with main's camera the outside view at the
+    // thumb area puts the brain's forward tip over the strip, where it is faded by design, 0.34)
+    const brainTips = ['forward', 'back', 'left', 'right'].map(dir => ({ dir, ...compasses.brain.dirs[dir].retainedDraw }));
+    const brainForward = brainTips.find(t => t.rootVisible && t.boxOverlapsMotorArea === false) || brainTips[0];
     const tip = document.querySelector('.ns-tip');
     const gl = document.querySelector('#ns-canvas').getContext('webgl2');
     const ext = gl.getExtension('WEBGL_debug_renderer_info');
@@ -102,7 +108,7 @@ try {
   }
   async function openPreview() {
     const unloaded = { ...assets };
-    await page.goto(`http://${host}/`, { waitUntil: 'domcontentloaded' });
+    await page.goto(`http://${host}/scene/example/preview.html`, { waitUntil: 'domcontentloaded' });
     await page.waitForURL('**/scene/example/preview.html');
     await page.waitForFunction(() => ['playing', 'error'].includes(document.querySelector('#ns-app')?.dataset.nsPhase));
     if (raw) {
@@ -183,6 +189,12 @@ try {
     const initial = await openPreview();
     await page.mouse.click(width / 2, height / 2);
     await page.waitForFunction(() => document.pointerLockElement?.id === 'ns-canvas');
+    // 24 November 2026 (DESIGN-DECISIONS section 204, CAM70 pass 2): the click at the middle of the window takes the
+    // pointer and does nothing else. With the arrows planned from the player camera's eye view but along the brain's
+    // placement direction, the mirror body's lower tip lay on the crosshair at the start: this click tilted the mirror
+    // body by 15 degrees, and every walk below was made with it tilted.
+    const captured = await nextFrames((await inspect()).frames, 6);
+    assert.deepEqual(turnOf(captured), turnOf(initial), 'the capture click at the middle of the window leaves the mirror body as it was');
 
     // 21 November 2026 (browser hunt of update 62, H6; restated): from a look on no area the first arrow key now goes to
     // the nearest area on ITS side of the crosshair. This walk pressed the RIGHT key first and was taken to the throat
@@ -212,8 +224,13 @@ try {
     // looked at, so the walk starts where it was on any machine, and goes RIGHT to the thumb area (as before the carry
     // was added here). On the way it lands on the neck area, whose movement moves the head for about 1.6 s: the next
     // key waits until the head is still (ns-app AREA_REQUEST_KEEP_MS; it used to be dropped after 1 s).
+    // 24 November 2026 (DESIGN-DECISIONS section 204): with the player-controlled camera from GitHub main the outside view
+    // looks along the same look from its orbit, so after E the crosshair rests on another place of the strip, which can be
+    // an area (rh_jaw, where the eye view's look was on rh_scan_inferior); the walk then goes on from the area under the
+    // crosshair, as it does anywhere. With the crosshair on no area it goes on from the card's area, as before.
+    const beforeWalk = await inspect();
     let covered = await step('ArrowRight');
-    assert.equal(covered.step.from, firstLeft.area, 'after the carry the walk goes on from the area stepped to before it');
+    assert.equal(covered.step.from, beforeWalk.area || firstLeft.area, 'after the carry the walk goes on from the area under the crosshair, or else from the area stepped to before it');
     for (let i = 0; i < 20 && covered.area !== 'rh_thumb'; i++) {
       const previous = covered.area;
       covered = await step('ArrowRight');
@@ -228,11 +245,18 @@ try {
     covered = await inspect();
     // Move the drawn forward tip toward the same crosshair. A pointer carry restores the previous look on release.
     // Each correction uses part of the measured screen error because the camera moves with the look during a carry.
+    // (24 November 2026, section 204, second pass: four corrections, as before the first pass. The first pass allowed 8,
+    // for a reason that was wrong: its walks were made with the mirror body tilted by the capture click above. With the
+    // mirror body at rest the tip came under the crosshair at the third carry in most walks; in some walks no place of
+    // the mirror body puts it there at all (the tip jumps from about y 345 to about y 520 as the mirror body comes
+    // down, also with the mirror body's opening plan of the first pass), and then neither 8 carries nor smaller ones
+    // reach it: DESIGN-DECISIONS section 204, "Not done". Each carry and the mirror body's centre are logged.)
     for (let n = 0; n < 4 && (!covered.input.arrow || covered.mirrorHover !== 'forward'); n++) {
       assert.ok(covered.overlapClick?.every(Number.isFinite));
       const dx = Math.round((width / 2 - covered.overlapClick[0]) * 0.42);
       const dy = Math.round((height / 2 - covered.overlapClick[1]) * 0.42);
       covered = await moveMirror(dx, dy);
+      console.log(JSON.stringify({ case: 'mirror tip correction', n, dx, dy, click: covered.overlapClick, hover: covered.mirrorHover, arrow: covered.input.arrow, area: covered.area, front: covered.input.front, centre: covered.mirrorCentre, orbit: turnOf(covered) }));
     }
     assert.equal(covered.mirrorHover, 'forward', 'the carried mirror tip reaches the actual thumb ray');
     // Pointer movement releases keyboard aim. Step away from the area now under the compass tip and then back to it.
@@ -277,29 +301,29 @@ try {
     // One choice; `before` was read just before the key. With the pointer free, the pointer is then put on the limb's
     // own wrist or ankle and must find that limb (20 November 2026: it was put at the middle of the picture, 0.6 of the
     // way up, where the earlier rule's turn brought the end).
+    // 24 November 2026 (DESIGN-DECISIONS section 204): the player-controlled camera from GitHub main ("The game leaves
+    // the view where you set it until you move it again"; ns-app limbView is never started with it) never turns the view
+    // to a chosen limb. Until then a limb whose wrist or ankle was outside the picture's band turned the view until it was
+    // inside, and this test waited for that turn (it timed out here on the combined branch). Now choosing a limb leaves
+    // the view as it was. From the start view the camera stands far enough back for the whole body to be in the picture,
+    // so there each wrist and ankle must be in the picture and the pointer put on it must find that limb; from a look
+    // elsewhere the player turns the view himself.
+    const inPicture = end => Boolean(end) && Math.abs(end.x) <= 1 && end.up >= 0 && end.up <= 1;
     async function chooseAndFrame(key, name, limb, before, pointerFree) {
-      const wasInBand = inLimbBand(before.limbs.ends[limb]);
       await page.keyboard.press(key);
       await selected(key, name).waitFor({ timeout: 5_000 });
-      let early = null;
-      if (!wasInBand) {
-        await page.waitForFunction(look => {
-          const c = window.__nsQA.inspect().controls;
-          return Math.hypot(c.yaw - look.yaw, c.pitch - look.pitch) > 0.03;
-        }, before.look, { polling: 20 });
-        early = await inspect();
-      }
-      await page.waitForTimeout(950); // One framing turn takes at most 900 ms.
-      // (20 November 2026: the turn now ends when the end is within doneDeg of the band, or after LIMB_KEYS.view.maxS)
-      await page.waitForFunction(() => !window.__nsQA.inspect().limbs.turning, null, { polling: 20, timeout: 5_000 });
+      await page.waitForTimeout(950); // (one framing turn of the earlier camera took at most 900 ms)
       let settled = await nextFrames((await inspect()).frames);
       const end = settled.limbs.ends[limb];
-      if (wasInBand) {
-        assert.deepEqual([settled.look.yaw, settled.look.pitch], [before.look.yaw, before.look.pitch],
-          `${name}: its wrist or ankle was inside the picture's band, so choosing it leaves the view where it was`);
-      }
-      assert.ok(inLimbBand(end, BAND_SLACK), `${name}: its wrist or ankle is inside the picture's band: ${JSON.stringify(end)}`);
+      assert.equal(settled.limbs.turning, false, `${name}: choosing a limb never turns the view`);
+      assert.deepEqual([settled.look.yaw, settled.look.pitch], [before.look.yaw, before.look.pitch],
+        `${name}: choosing it leaves the view where the player put it`);
       if (pointerFree) {
+        assert.ok(inPicture(end), `${name}: from the start view its wrist or ankle is in the picture: ${JSON.stringify(end)}`);
+        // (CAM70 pass 2: and inside the picture's band, as before the player camera; measured with it: leftLeg (-0.093,
+        // 0.55), rightLeg (0.091, 0.55), rightArm (0.202, 0.563), leftArm (-0.209, 0.57). A change that pushes a wrist or
+        // an ankle toward the edge of the start picture fails here.)
+        assert.ok(inLimbBand(end, BAND_SLACK), `${name}: from the start view its wrist or ankle is inside the picture's band: ${JSON.stringify(end)}`);
         await page.mouse.move((1 + end.x) / 2 * width, (1 - end.up) * height);
         settled = await nextFrames(settled.frames);
         assert.equal(settled.input.at, 'pointer');
@@ -307,11 +331,7 @@ try {
       }
       assert.equal(settled.camera.firstPerson, true);
       assert.equal(settled.trigger.seq, before.trigger.seq);
-      if (early) {
-        const correction = Math.hypot(settled.look.yaw - early.look.yaw, settled.look.pitch - early.look.pitch);
-        if (reduced) assert.ok(correction < 0.05, 'reduced motion must make the main turn immediately');
-      }
-      framed.push({ key, turned: !wasInBand, before: before.look, early: early?.look ?? null, settled: settled.look, end, hit: settled.input.front });
+      framed.push({ key, inBand: inLimbBand(end, BAND_SLACK), before: before.look, settled: settled.look, end, hit: settled.input.front });
       return settled;
     }
     for (const [key, name, limb] of [
@@ -321,10 +341,13 @@ try {
       assert.equal(before.trigger.seq, initial.trigger.seq);
       await chooseAndFrame(key, name, limb, before, true);
     }
-    // A choice whose wrist or ankle is outside the band turns the view, just far enough. Look up (the pointer captured)
-    // until both ankles have left the picture's band, then choose the right leg.
+    // A choice whose wrist or ankle is outside the band leaves the view where it is too (24 November 2026; until then it
+    // turned the view, just far enough). Look up (the pointer captured) until both ankles have left the picture's band,
+    // then choose the right leg.
+    const beforeCapture = await inspect();
     await page.mouse.click(width / 2, height / 2);
     await page.waitForFunction(() => document.pointerLockElement?.id === 'ns-canvas');
+    assert.deepEqual(turnOf(await nextFrames((await inspect()).frames, 6)), turnOf(beforeCapture), 'this capture click leaves the mirror body as it was too');
     const pointer = { x: width / 2, y: height / 2 };
     async function lookBy(dx, dy, steps = 10) {
       const from = await inspect();
@@ -338,15 +361,16 @@ try {
     const away = await lookBy(0, -250);
     assert.ok(!inLimbBand(away.limbs.ends.rightLeg), `looking up takes the right ankle out of the band: ${JSON.stringify(away.limbs.ends.rightLeg)}`);
     const reframed = await chooseAndFrame('3', 'Right leg', 'rightLeg', away, false);
-    assert.ok(reframed.look.pitch < away.look.pitch, 'the view turned down toward the right ankle');
-    // The pointer takes the look back at any moment: look up again so that the left ankle (the right leg, now chosen,
-    // goes with the look) is outside the band, choose the left leg, and move the pointer while the view turns to it.
+    assert.ok(!inLimbBand(reframed.limbs.ends.rightLeg), 'the view did not turn toward the right ankle');
+    // The pointer has the look at any moment: look up again so that the left ankle is outside the band (the right leg, now
+    // chosen, is aimed by the look's up and down: main's joint aim), choose the left leg (nothing turns), and move the
+    // pointer: the choice never takes the look.
     const awayAgain = await lookBy(0, -250);
     assert.ok(!inLimbBand(awayAgain.limbs.ends.leftLeg), `looking up takes the left ankle out of the band: ${JSON.stringify(awayAgain.limbs.ends.leftLeg)}`);
     await page.keyboard.press('2');
     await selected('2', 'Left leg').waitFor({ timeout: 5_000 });
     const automatic = await inspect();
-    if (!reduced) assert.equal(automatic.limbs.turning, true, 'the view is turning toward the left ankle when the pointer moves');
+    assert.equal(automatic.limbs.turning, false, 'choosing the left leg does not turn the view');
     pointer.x += 100; pointer.y -= 45;
     await page.mouse.move(pointer.x, pointer.y);
     await page.waitForFunction(time => window.__nsQA.inspect().controls.lookMs !== time, automatic.look.time, { polling: 20 });
