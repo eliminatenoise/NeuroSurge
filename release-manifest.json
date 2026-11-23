@@ -69,8 +69,8 @@
     },
     {
       "path": "README.md",
-      "bytes": 2417,
-      "sha256": "190389c6b7bbc80af48d4e5e454a4953ec3c8ea1f5b2d5dbc8a8855fa67a395a"
+      "bytes": 2623,
+      "sha256": "cc0c224fbe479cf4c1addae601dab59412cd245e1f1d137bda273559b8b965ab"
     },
     {
       "path": "START.html",
@@ -79,8 +79,8 @@
     },
     {
       "path": "index.html",
-      "bytes": 3572,
-      "sha256": "a8e338fb5fd21aec38455fa090244839dace498febbda492c7e5012a6adde73f"
+      "bytes": 3687,
+      "sha256": "a431d81ab1e39916c9c78a7e1888a8a12a915d21063bb7a16712f16f3d770589"
     },
     {
       "path": "inputs/FULLBODY-MESH-MANIFEST.json",
