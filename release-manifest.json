@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-23-camera-guidance",
-  "source": "Full and Lite share motion commands, opt-in video tracking, a shoulder and hip tutorial and an optional local model. Escape can resume play with a free pointer. The recorder lets players choose limbs before starting video and shows which limbs are following, need a knee bend, or need a clearer view.",
+  "version": "experimental-2026-11-24-fresh-camera-frames",
+  "source": "Full and Lite share motion commands, opt-in video tracking, a shoulder and hip tutorial and an optional local model. Escape can resume play with a free pointer. The recorder lets players choose limbs before starting video and shows which limbs are following, need a knee bend, or need a clearer view. The recorder follows new camera frames and releases tracking on a stall in browsers that report when a frame is displayed.",
   "experimental": true,
   "incomplete_acceptance": true,
   "root_checksum_includes_this_manifest": true,
@@ -54,13 +54,13 @@
     },
     {
       "path": "PLAYER-GUIDE-TECHNICAL.md",
-      "bytes": 4539,
-      "sha256": "eccaf383802a0a773c8e8cc579e75d04cf52ce5d0a0837b73bd3d54f3d7a98d3"
+      "bytes": 5135,
+      "sha256": "41d8265886cd16e85529ee8021d6a8fdd41da36e3e4d14499b28654cba56a0dd"
     },
     {
       "path": "PLAYER-GUIDE.md",
-      "bytes": 7087,
-      "sha256": "66fbe06bd895c0351e5e4a376a183e08b8742a35ae9c4166c5aa20b845e451a4"
+      "bytes": 7991,
+      "sha256": "bddbddda77ed02c3aecd07feb966495da235994e8bed9efe455648c58fc3223a"
     },
     {
       "path": "PREVIEW-NOTES.html",
@@ -4649,13 +4649,13 @@
     },
     {
       "path": "scene/src/camera.mjs",
-      "bytes": 18840,
-      "sha256": "31ac234504b81921bbda93260f4ade99c66d65b34e1b516f9500e291554abed7"
+      "bytes": 21401,
+      "sha256": "c53409dd3302dcd4649fdfaf83d59d441cf98ccd292f9937c0d22167a7a57ff1"
     },
     {
       "path": "scene/src/camera/README.md",
-      "bytes": 16347,
-      "sha256": "2f8182a785ee301d0cd7a6e604e97e2b9b04de8ccdbb34d8f6391e5dedb02447"
+      "bytes": 17093,
+      "sha256": "1530058050fbe7856036812eb718ff6c46b9c17bf36dbdbc5481028324b70b9a"
     },
     {
       "path": "scene/src/camera/THIRD-PARTY-SHA256SUMS",

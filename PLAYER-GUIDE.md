@@ -33,6 +33,10 @@ Press and drag on a limb to move the joint you pressed on. Press **Space** to gr
 4. Choose **Stop** in the Movement mirror or **Stop camera** in the recorder when you finish. Use **Close** or **Escape** to return from the Movement mirror. Your own mouse still controls the view of the game while the body follows the camera.
 5. To replay a movement, start video in the recorder. Choose **Record take** and **Finish take**. In the Command box, enter **replay my take** to move the simulated body through the saved poses. Takes stay in the current tab.
 
+The recorder checks one picture at a time. When the browser reports new pictures, the game waits at least one twentieth of a second between grabs. On older browsers it waits about nine hundredths of a second after each check before looking again.
+
+When the browser can tell the game that new pictures have stopped arriving, the green lines disappear after about 1.2 seconds. The recorder says **Camera on. Waiting for video.** You can still move the virtual body with the game controls. The recorder can follow you again when new pictures arrive. It turns off the camera after roughly 15 seconds without a new picture. Select **Start camera** to try again. A motionless arm can keep tracking as long as the camera keeps sending pictures. Some older browsers only report how long the video has played. If their camera picture freezes and the lines stay on, select **Stop camera**, then **Start camera**.
+
 A local model can also forecast a tracked point or answer a supported movement goal. It receives point histories or game inputs from the interface. The movement shown on screen, the points estimated from video, and the model's forecast are three distinct readings.
 
 ## See what moved

@@ -17,6 +17,9 @@ const choices = {
 const BRIEF_KNEE_GAP_MS = 600;
 const MAX_FRAME_AGE_MS = 1200;
 const FRAME_TIMEOUT_MS = 15000;
+const POLL_INTERVAL_MS = 90;
+const MIN_FRAME_INTERVAL_MS = 50;
+const WAITING_FOR_VIDEO = 'Camera on. Waiting for video.';
 const kneeJoints = {leftLeg: ['knee_ext_L'], rightLeg: ['knee_ext_R'], bothKnees: ['knee_ext_L', 'knee_ext_R'], armsAndKnees: ['knee_ext_L', 'knee_ext_R']};
 
 // Each knee must show two consecutive bends in the picture before its straight
@@ -122,6 +125,16 @@ export function createCameraCapture({ onPose, onArmPose, returnFocus = () => {},
     session.knees = {};
     clearPose();
   }
+  function watchFrame(session, capturedAt) {
+    clearTimeout(session.watchdog);
+    const expiresAt = capturedAt + MAX_FRAME_AGE_MS;
+    session.watchdog = setTimeout(() => {
+      if (current !== session) return;
+      const waiting = session.lastFrameAt === capturedAt;
+      resetTracking(session, expiresAt);
+      show(waiting ? WAITING_FOR_VIDEO : framing(), true);
+    }, Math.max(0, expiresAt - performance.now()));
+  }
   function choose(value, fromChooser = false) {
     if (!Object.hasOwn(choices, value) || value === limb) return;
     take?.interrupt('Take cancelled on limb change.');
@@ -130,9 +143,10 @@ export function createCameraCapture({ onPose, onArmPose, returnFocus = () => {},
     selection++;
     select.value = value;
     if (current) {
-      clearTimeout(current.watchdog);
       resetTracking(current);
-      show(framing(), true);
+      const waiting = current.stream?.getVideoTracks()[0]?.muted ||
+        performance.now() - current.lastFrameAt >= MAX_FRAME_AGE_MS;
+      show(waiting ? WAITING_FOR_VIDEO : framing(), true);
     } else show(beforeStart(), false);
   }
 
@@ -208,6 +222,7 @@ export function createCameraCapture({ onPose, onArmPose, returnFocus = () => {},
     current = null;
     if (session) {
       clearTimeout(session.timer);
+      if (session.frameCallback !== undefined) video.cancelVideoFrameCallback(session.frameCallback);
       clearTimeout(session.watchdog);
       clearTimeout(session.workerDeadline);
       session.worker?.terminate();
@@ -224,18 +239,59 @@ export function createCameraCapture({ onPose, onArmPose, returnFocus = () => {},
     if (current === session) stop(message);
   }
 
-  async function sendFrame(session) {
+  function canReadVideo(session) {
+    return video.readyState >= 2 && video.videoWidth > 0 && video.videoHeight > 0 &&
+      !session.stream.getVideoTracks()[0]?.muted;
+  }
+
+  function noVideo(session) {
+    failed(session, 'Camera off. The video stream stopped delivering frames.');
+  }
+
+  function pollFrame(session) {
     if (current !== session) return;
-    const delay = () => { session.timer = setTimeout(() => sendFrame(session), 90); };
-    if (video.readyState < 2 || video.videoWidth === 0 || video.currentTime === session.lastVideoTime ||
-      session.stream.getVideoTracks()[0]?.muted) {
-      if (performance.now() - session.lastFrameAt >= FRAME_TIMEOUT_MS) {
-        return failed(session, 'Camera off. The video stream stopped delivering frames.');
+    if (canReadVideo(session)) {
+      const quality = video.getVideoPlaybackQuality?.();
+      const displayed = quality ? quality.totalVideoFrames - quality.droppedVideoFrames : null;
+      // The playback clock can advance even while the image is frozen.
+      const frame = displayed ?? video.currentTime;
+      if ((displayed === null || displayed > 0) && frame !== session.lastPolledFrame) {
+        session.lastPolledFrame = frame;
+        sendFrame(session);
+        return;
       }
-      return delay();
     }
+    if (performance.now() - session.lastFrameAt >= FRAME_TIMEOUT_MS) noVideo(session);
+    else waitForFrame(session);
+  }
+
+  function waitForFrame(session) {
+    if (current !== session) return;
+    if (!session.usesPresentedFrames) {
+      session.timer = setTimeout(() => pollFrame(session), POLL_INTERVAL_MS);
+      return;
+    }
+    // Request a new video frame only when the previous inference is finished.
+    // Keep a separate deadline because a frozen stream may never call back.
+    const nextFrame = (_now, {presentedFrames}) => {
+      session.frameCallback = undefined;
+      if (current !== session) return;
+      if (!canReadVideo(session) || (session.presentedFrames !== undefined &&
+          (presentedFrames <= session.presentedFrames || performance.now() - session.lastFrameAt < MIN_FRAME_INTERVAL_MS))) {
+        session.frameCallback = video.requestVideoFrameCallback(nextFrame);
+        return;
+      }
+      session.presentedFrames = presentedFrames;
+      clearTimeout(session.timer);
+      sendFrame(session);
+    };
+    const remaining = Math.max(0, FRAME_TIMEOUT_MS - (performance.now() - session.lastFrameAt));
+    session.timer = setTimeout(() => noVideo(session), remaining);
+    session.frameCallback = video.requestVideoFrameCallback(nextFrame);
+  }
+
+  async function sendFrame(session) {
     try {
-      session.lastVideoTime = video.currentTime;
       const scale = Math.min(1, 640 / Math.max(video.videoWidth, video.videoHeight));
       // Bind the grab to its consent interval and side before bitmap creation yields.
       const frameTime = performance.now(), frameLimb = limb, frameSelection = selection;
@@ -277,7 +333,9 @@ export function createCameraCapture({ onPose, onArmPose, returnFocus = () => {},
       show('Camera unavailable. This browser lacks the local pose tracker’s video or worker support.', false);
       return;
     }
-    const session = {lastVideoTime: -1, knees: {}};
+    const session = {lastPolledFrame: -1, knees: {},
+      usesPresentedFrames: typeof video.requestVideoFrameCallback === 'function' &&
+        typeof video.cancelVideoFrameCallback === 'function'};
     current = session;
     show('Allow video to move the avatar. Video stays on this device.', true);
     try {
@@ -294,12 +352,17 @@ export function createCameraCapture({ onPose, onArmPose, returnFocus = () => {},
       track.addEventListener('ended', () => failed(session, 'Camera off. The camera was disconnected.'), {once: true});
       stream.addEventListener('inactive', () => failed(session, 'Camera off. The video stream ended.'), {once: true});
       track.addEventListener('mute', () => {
-        if (current === session) { selection++; resetTracking(session); show('Camera on. Waiting for video.', true); }
+        if (current !== session) return;
+        selection++;
+        resetTracking(session);
+        show(WAITING_FOR_VIDEO, true);
       });
       video.srcObject = stream;
       show('Camera on. Loading the local pose tracker…', true);
+      session.workerDeadline = setTimeout(() => noVideo(session), FRAME_TIMEOUT_MS);
       await video.play();
       if (current !== session) return;
+      clearTimeout(session.workerDeadline);
       const worker = new Worker(new URL('./camera/pose-worker.js', import.meta.url));
       session.worker = worker;
       const trackerFailed = () => failed(session, 'Camera off. The local tracker could not run. Check browser WebGL support and the preview files.');
@@ -313,7 +376,9 @@ export function createCameraCapture({ onPose, onArmPose, returnFocus = () => {},
         if (data.type === 'ready') {
           session.lastFrameAt = performance.now();
           show(framing(), true);
-          sendFrame(session);
+          watchFrame(session, session.lastFrameAt);
+          if (session.usesPresentedFrames) waitForFrame(session);
+          else pollFrame(session);
         } else if (data.type === 'pose') {
           // A selection can change (and change back) while inference is in flight.
           const capturedAt = session.frameTime;
@@ -330,15 +395,11 @@ export function createCameraCapture({ onPose, onArmPose, returnFocus = () => {},
             else feedback.clear();
             if (take.recording && data.wrists) take.observe(result, capturedAt, false, data.wrists, data.armGeometry);
             else take.observe(result, capturedAt);
-            show(fresh ? trackingMessage(result) : 'Camera on. Waiting for video.', true);
-            if (result) {
-              clearTimeout(session.watchdog);
-              session.watchdog = setTimeout(() => {
-                if (current === session) { resetTracking(session, capturedAt + MAX_FRAME_AGE_MS); show(framing(), true); }
-              }, MAX_FRAME_AGE_MS - age);
-            }
+            show(fresh ? trackingMessage(result) : WAITING_FOR_VIDEO, true);
+            if (fresh) watchFrame(session, capturedAt);
+            else clearTimeout(session.watchdog);
           }
-          session.timer = setTimeout(() => sendFrame(session), 90);
+          waitForFrame(session);
         }
       };
       worker.postMessage({type: 'init'});
