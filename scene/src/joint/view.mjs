@@ -1,4 +1,4 @@
-import {BONES,WRIST,TRACKED_POINTS,trackedPoint,observation,endpoint,parseGoal,virtualFrame,checkGoal,virtualUnits} from './landmark.mjs';
+import {BONES,WRIST,TRACKED_POINTS,trackedPoint,observation,endpoint,observeTarget,parseGoal,virtualFrame,checkGoal,virtualUnits} from './landmark.mjs';
 import {captureSource,readKeyframes} from './media.mjs';
 import {calibratedPose, poseForSelection} from '../camera/limb-pose.mjs';
 
@@ -26,7 +26,7 @@ const markup=`
 <p data-language role="status">Try “Raise my left hand above my shoulder.” The avatar attempts the goal. The ring forecasts its wrist.</p></form>
 ${touchPanel}
 <details><summary>Virtual brain</summary><p>Three invented unit histories. Which unit would the model rank first for the next single-spike bin?</p><button data-brain type="button">Score virtual units</button><output data-brain-output></output></details>
-<details><summary>What is being measured?</summary><p>The tracker estimates 2D joint positions in each source image. The model forecasts the selected point from the last five frames. The point and the result are in the image plane. The model trained on tracked animal movement. Human camera accuracy remains unmeasured. Sparse keyframes and tracking losses can leave gaps. No frames are interpolated. Camera images contain no neural recording. The 3D game checks the drawn wrist and shoulder in world metres. The standalone two-link arm checks its drawing in pixels.</p></details>
+<details><summary>Measurements and limits</summary><p>The tracker estimates 2D joint positions in each source image. The model uses the last five frames to forecast the selected point 120 ms ahead. The score uses the nearest tracked frame within 40 ms of the target time, even when the reply arrives later. Simulated movement is compared with a simulated frame.</p><p>The model trained on tracked animal movement. Human camera accuracy remains unmeasured. Sparse keyframes and tracking losses can leave gaps. No frames are interpolated. Camera images contain no neural recording. The 3D game checks the drawn wrist and shoulder in world metres. The standalone two-link arm checks its drawing in pixels.</p></details>
 <p data-model>Checkpoint pending.</p>
 </div></div>`;
 const finitePair=p=>Array.isArray(p)&&p.length===2&&p.every(Number.isFinite);
@@ -51,7 +51,9 @@ export function bindJointView({host,onPose=()=>{},embedded=false,readRig=null,on
     const title=point.label[0].toUpperCase()+point.label.slice(1);
     pointControl.add(new Option(title,key));
   }
-  let media=null,epoch=0,controller=new AbortController(),pending=null,busy=false,rows=[],issued=[],latest=null,shown=null,schedule=null,modelHash=null,recognizer=null,active=false,simSide=null,lastIssue=-Infinity,activePoint=null;
+  const comparisons=new Set();
+  let media=null,epoch=0,controller=new AbortController(),pending=null,busy=false,rows=[],latest=null,shown=null,schedule=null,modelHash=null,recognizer=null,active=false,simSide=null,lastIssue=-Infinity,activePoint=null;
+  let lastComparisonIssue=-Infinity;
   if (!embedded) {el('[data-close]').hidden=true;el('[data-size]').hidden=true;}
   function compact(value) {
     const collapsed=embedded && value;
@@ -82,7 +84,8 @@ export function bindJointView({host,onPose=()=>{},embedded=false,readRig=null,on
     }
   }
   function clearHistory(reason='') {
-    epoch++;controller.abort();controller=new AbortController();pending=null;rows=[];issued=[];shown=null;latest=null;lastIssue=-Infinity;activePoint=null;
+    epoch++;controller.abort();controller=new AbortController();pending=null;rows=[];shown=null;latest=null;lastIssue=-Infinity;activePoint=null;
+    comparisons.clear();lastComparisonIssue=-Infinity;
     text('[data-frame]',reason||'Waiting for movement.');text('[data-forecast]','');text('[data-score]','');onPose(null);paint();
   }
   function cameraMessage(message) {
@@ -140,27 +143,46 @@ export function bindJointView({host,onPose=()=>{},embedded=false,readRig=null,on
     try {
       const pred=endpoint(job.packet,await forecast('landmark_motion',job.packet.X,controller.signal));
       if(job.epoch!==epoch) return;
-      const p={...job.packet,pred,label:job.label};issued.push(p);
-      if(issued.length>8)issued.shift();
-      shown=p;
+      const p={...job.packet,pred,label:job.label};
+      job.pred=pred;
+      job.replyThrough=latest?.t??p.issue;
+      shown=job.replyThrough<p.issue+p.lead ? p : null;
       text('[data-forecast]',job.label+' · frame '+p.frameId+' → '+(p.issue+p.lead).toFixed(3)+' s · forecast ('+pred.map(x=>x.toFixed(1)).join(', ')+') px');
+      showComparison(job);
       paint();
-    } catch(e) {if(job.epoch===epoch && e.name!=='AbortError')text('[data-forecast]',e.message);}
+    } catch(e) {
+      comparisons.delete(job);
+      if(job.epoch===epoch && e.name!=='AbortError')text('[data-forecast]',e.message);
+    }
     finally {busy=false;if(pending) drain();}
   }
-  function score(frame) {
-    const remaining=[];
-    for(const p of issued) {
-      const dt=frame.t-(p.issue+p.lead);
-      if(Math.abs(dt)<=.04+1e-9 && dt+p.lead>0 && finitePair(frame.xy[p.point]) && (!p.match||Math.abs(dt)<p.match.diff)) {
-        p.match={diff:Math.abs(dt),t:frame.t,error:Math.hypot(...frame.xy[p.point].map((v,a)=>v-p.pred[a]))};
-      }
-      if(dt>=0 && p.match || dt>.04) {
-        if (p.match) text('[data-score]',p.label+' · next observed at '+p.match.t.toFixed(3)+' s · forecast error '+p.match.error.toFixed(1)+' px');
-      } else remaining.push(p);
+
+  function showComparison(job) {
+    if (!job.closed || !job.pred) return;
+    comparisons.delete(job);
+    const {packet, match, pred} = job;
+    if (packet.issue < lastComparisonIssue) return;
+    lastComparisonIssue = packet.issue;
+    const prefix = job.label + ' · forecast from frame ' + packet.frameId;
+    const frameName = job.tracked ? 'tracked frame' : 'simulated frame';
+    if (!match) {
+      text('[data-score]', prefix + ' · no ' + frameName + ' within 40 ms of ' +
+        (packet.issue + packet.lead).toFixed(3) + ' s');
+      return;
     }
-    issued=remaining;
+    const error = Math.hypot(match.coordinates[0] - pred[0], match.coordinates[1] - pred[1]);
+    const timing = match.time <= job.replyThrough ? ' · reply arrived after frame processing' : '';
+    text('[data-score]', prefix + ' · ' + frameName + ' at ' + match.time.toFixed(3) +
+      ' s · error ' + error.toFixed(1) + ' px' + timing);
   }
+
+  function finishComparisons() {
+    for (const job of comparisons) {
+      job.closed = true;
+      showComparison(job);
+    }
+  }
+
   function add(frame,kind,chosen) {
     if (latest && (frame.w!==latest.w || frame.h!==latest.h || frame.t<=latest.t || frame.t-latest.t>.24+1e-10)) clearHistory('Frame gap. Building a new window.');
     const point=trackedPoint(chosen,frame.xy);
@@ -177,10 +199,19 @@ export function bindJointView({host,onPose=()=>{},embedded=false,readRig=null,on
     if (!present) text('[data-forecast]',(point?.label || 'Selected point')+' obscured. Forecast withheld.');
     rows.push(latest);rows=rows.slice(-5);if(Object.hasOwn(frame,'pose'))onPose(frame.pose);
     text('[data-frame]',kind+' · frame '+frame.id+' · '+frame.t.toFixed(3)+' s · '+frame.xy.filter(finitePair).length+(frame.bitmap?' tracked points':' simulated points'));
-    score(frame);
+    for (const job of comparisons) {
+      observeTarget(job, frame);
+      showComparison(job);
+    }
     if (present && frame.t>=lastIssue+.12-1e-9) {
       const packet=observation(rows,point.index);
-      if(packet){lastIssue=frame.t;pending={epoch,packet,label:point.label};drain();}
+      if(packet) {
+        lastIssue=frame.t;
+        if (pending) comparisons.delete(pending);
+        pending={epoch,packet,label:point.label,tracked:Boolean(frame.bitmap),closed:false};
+        comparisons.add(pending);
+        drain();
+      }
     }
     paint();
   }
@@ -205,7 +236,7 @@ export function bindJointView({host,onPose=()=>{},embedded=false,readRig=null,on
       }
       const cameraKnees=kind==='camera' && embedded ? {} : null;
       let lastCameraPoseAt=null;
-      media=captureSource({kind,video,clip,stills,followKnees:embedded,
+      media=captureSource({kind,video,clip,stills,followKnees:embedded,waitForFinalFrame:true,
         onFrame:f=>{
           let pose=f.pose;
           if (cameraKnees) {
@@ -229,7 +260,11 @@ export function bindJointView({host,onPose=()=>{},embedded=false,readRig=null,on
           stop();compact(false);text('[data-status]',m);
           if (document.activeElement===title) el('[data-start]').focus({preventScroll:true});
         },
-        onEnd:()=>{text('[data-status]',kind==='clip'?'Clip ended. Seek or replay to inspect another interval.':'All still images processed.');if(kind==='stills'){media?.stop();media=null;active=false;el('[data-stop]').disabled=true;}}});
+        onEnd:()=>{
+          finishComparisons();
+          text('[data-status]',kind==='clip'?'Clip ended. Seek or replay to inspect another interval.':'All still images processed.');
+          if(kind==='stills'){media?.stop();media=null;active=false;el('[data-stop]').disabled=true;}
+        }});
     } catch(e){stop();text('[data-status]',e.message);}
   }
   function runGoal(intent) {
@@ -275,6 +310,7 @@ export function bindJointView({host,onPose=()=>{},embedded=false,readRig=null,on
             result={...checkGoal(intent,xy),domain:'two-link simulator',unit:'px'};
             text('[data-goal]',(result.passed?'Goal reached':'Goal missed')+' in the simulator. The '+side+' wrist cleared the shoulder by '+result.clearance.toFixed(1)+' px. Shortfall '+result.shortfall.toFixed(1)+' px.');
           }
+          finishComparisons();
           node.dataset.result=JSON.stringify(result);active=false;el('[data-stop]').disabled=true;return;
         }
       }

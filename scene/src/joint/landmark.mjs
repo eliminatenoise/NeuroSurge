@@ -45,6 +45,27 @@ export function endpoint(packet, prediction) {
   if (!Array.isArray(prediction) || prediction.length!==2 || !prediction.every(Number.isFinite)) throw Error('Invalid landmark forecast.');
   return prediction.map((x,i)=>packet.origin[i]+packet.radius*x);
 }
+
+// Record the closest usable point while the forecast can still be in flight.
+// The first usable frame at or after the target closes the comparison window.
+export function observeTarget(comparison, frame) {
+  if (comparison.closed) return;
+  const {packet, match} = comparison;
+  const target = packet.issue + packet.lead;
+  const offset = frame.t - target;
+  const distance = Math.abs(offset);
+  const coordinates = frame.xy[packet.point];
+  const usable = visible(coordinates);
+  const tolerance = .04;
+  // Absorb rounding from adding the lead and subtracting source times.
+  const precision = 2 * Number.EPSILON * Math.max(Math.abs(target), Math.abs(frame.t), tolerance);
+  if (frame.t > packet.issue && distance <= tolerance + precision && usable &&
+      (!match || distance < match.distance - precision)) {
+    comparison.match = {time: frame.t, distance, coordinates: [...coordinates]};
+  }
+  comparison.closed = offset > tolerance + precision || (offset >= -precision && usable && !!comparison.match);
+}
+
 export function parseGoal(text) {
   const s=text.trim().toLowerCase().replace(/[.!?]+$/,'').replace(/\s+/g,' ');
   const m=/^(?:(?:please|can you|could you) )?(?:(?:raise|lift|move|bring|put|get) (?:my |your |the |the avatar['’]s )?(left|right) (?:hand|wrist|arm) (?:up )?(?:above|over|higher than) (?:my |your |the |its |that |the same |the avatar['’]s )?(?:(left|right) )?shoulder)(?: please)?$/.exec(s);

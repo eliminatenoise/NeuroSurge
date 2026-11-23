@@ -15,8 +15,10 @@ export function readKeyframes(files, times, {minimum=1} = {}) {
   if (rows.some((r,i)=>i && r.t<=rows[i-1].t)) throw Error('Each still needs a distinct capture time.');
   return rows;
 }
-export function captureSource({kind,video,clip,stills,followKnees=false,getLimb,captureWrists=false,onFrame,onReset,onStatus,onError,onEnd}) {
+export function captureSource({kind,video,clip,stills,followKnees=false,getLimb,captureWrists=false,
+  waitForFinalFrame=false,onFrame,onReset,onStatus,onError,onEnd}) {
   let closed=false, epoch=0, id=0, busy=false, clock=0, callback, stream, objectURL, worker, timer, silence, finish;
+  let endPending=false;
   const buffer=document.createElement('canvas'), ctx=buffer.getContext('2d',{alpha:false});
   const cancel=()=>new DOMException('Stopped','AbortError');
   function reset(reason) { if (!closed) { epoch++; onReset(reason); } }
@@ -31,8 +33,18 @@ export function captureSource({kind,video,clip,stills,followKnees=false,getLimb,
     video.removeAttribute('src'); video.load(); if (objectURL) URL.revokeObjectURL(objectURL);
   }
   function fail(error) { if (!closed) {stop(); onError(error.message||String(error));} }
-  function seeking(){clearTimeout(silence);reset('Clip seek. Waiting for five fresh frames.');}
-  function ended(){if (!closed) onEnd();}
+  function seeking(){endPending=false;clearTimeout(silence);reset('Clip seek. Waiting for five fresh frames.');}
+  function finishVideo() {
+    if (closed || busy || !endPending || !video.ended) return;
+    endPending=false;
+    onEnd();
+  }
+  function ended() {
+    if (closed) return;
+    if (!waitForFinalFrame) {onEnd();return;}
+    endPending=true;
+    finishVideo();
+  }
   function mediaError(){fail(Error('This browser could not decode the selected video.'));}
   function callWorker(data,transfers=[]) {
     return new Promise((resolve,reject)=>{
@@ -72,7 +84,13 @@ export function captureSource({kind,video,clip,stills,followKnees=false,getLimb,
       onFrame({id:sequence,t,xy:result.xy,pose:result.result,w:buffer.width,h:buffer.height,bitmap:buffer,
         ...(getLimb ? {limbPaths:result.limbPaths} : {}),
         ...(captureWrists ? {wrists:result.wrists,armGeometry:result.armGeometry} : {})});
-    } finally {busy=false;}
+    } catch (error) {
+      endPending=false;
+      throw error;
+    } finally {
+      busy=false;
+      finishVideo();
+    }
   }
   function schedule() {
     if(closed) return;
