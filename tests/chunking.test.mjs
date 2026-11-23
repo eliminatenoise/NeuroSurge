@@ -76,7 +76,8 @@ test('the Esc page is a few titled groups: look and press, move, hold and carry,
   assert.deepEqual(SHELL.menu.map(g => g.title), ['Look and press', 'Move', 'Hold and carry', 'Views and reading']);
   for (const g of SHELL.menu) {
     assert.ok(g.rows.length >= 2 && g.rows.length <= 5, `${g.title}: a few rows, not a list`);
-    for (const [what, does] of g.rows) { assert.ok(what.length <= 10, `${g.title}: "${what}" is a key or one gesture`); assert.ok(does.length <= 32, `${g.title}: "${does}" is a few words`); }
+    // (22 November 2026, WORDS2, second pass: "Drag, arrow tips" is one row for two ways of the same thing: 16 characters)
+    for (const [what, does] of g.rows) { assert.ok(what.length <= 16, `${g.title}: "${what}" is a key or one gesture`); assert.ok(does.length <= 32, `${g.title}: "${does}" is a few words`); }
   }
   const doc = fakeDoc(), card = doc.createElement('div');
   const menu = buildShellMenu(doc, card, SHELL.menu);
@@ -91,7 +92,7 @@ test('the Esc page is a few titled groups: look and press, move, hold and carry,
   const keysOf = g => all(g, e => e.tagName === 'KBD').map(e => e.textContent);
   assert.deepEqual(keysOf(groups[1]), ['W', 'A', 'S', 'D'], 'the pyramid is its own group');
   assert.deepEqual(keysOf(groups[2]), ['Space']);
-  assert.deepEqual(keysOf(groups[3]), ['E', 'R', 'Esc']);
+  assert.deepEqual(keysOf(groups[3]), ['E', 'R', 'M', 'Esc']); // (21 November 2026: M, the electrical map, on the Esc page; not on the five-second card)
   const words = all(menu, e => e.tagName === 'DD' || e.tagName === 'DT' || e.tagName === 'P').map(e => e.textContent).join(' ');
   assert.doesNotMatch(words, /1 to 9|row below/i, 'no sentence about a row of nine number keys');
   assert.equal(buildShellMenu(doc, card, null), null);

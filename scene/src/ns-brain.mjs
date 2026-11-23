@@ -1564,18 +1564,20 @@ function meshOrientation(pos, idx) {
   return s < 0 ? -1 : 1;
 }
 
-function compactPart(pos, idx, vU, vS, tris) {
+function compactPart(pos, idx, vU, vS, tris, vD = null) {
   const remap = new Map();
   const ids = [];
   for (const t of tris) for (let j = 0; j < 3; j++) { const v = idx[3 * t + j]; if (!remap.has(v)) { remap.set(v, ids.length); ids.push(v); } }
   const positions = new Float32Array(ids.length * 3), u = new Float32Array(ids.length), s = new Float32Array(ids.length), sourceIndex = new Uint32Array(ids.length);
+  const sDraw = vD ? new Float32Array(ids.length) : null; // (UI4, STRIP_DRAWN: the drawn coordinate per vertex, or null = s)
   ids.forEach((v, r) => {
     positions[3 * r] = pos[3 * v]; positions[3 * r + 1] = pos[3 * v + 1]; positions[3 * r + 2] = pos[3 * v + 2];
     u[r] = vU[v]; s[r] = vS ? vS(v) : vU[v]; sourceIndex[r] = v;
+    if (sDraw) sDraw[r] = vD[v];
   });
   const indices = new Uint32Array(tris.length * 3), triangles = new Uint32Array(tris.length);
   tris.forEach((t, j) => { indices[3 * j] = remap.get(idx[3 * t]); indices[3 * j + 1] = remap.get(idx[3 * t + 1]); indices[3 * j + 2] = remap.get(idx[3 * t + 2]); triangles[j] = t; });
-  return { positions, indices, u, s, sourceIndex, triangles, vertexCount: ids.length, faceCount: tris.length };
+  return { positions, indices, u, s, sDraw, sourceIndex, triangles, vertexCount: ids.length, faceCount: tris.length };
 }
 
 /** R558 (strip audit round 2): the along-the-gyrus strip coordinate v of each hemisphere's primary precentral mesh.
@@ -1635,6 +1637,176 @@ export function crestStripS(v, turn = MEDIAL_TURN) {
   const t = turn && turn.on === true ? turn : null, x0 = t ? t.crestV : 0;
   const g0 = t && Number.isFinite(t.gamma) && t.gamma > 0 ? t.gamma : CREST_COMPRESS.gamma;
   return t && v < x0 ? t.sTop + (f0 - t.sTop) * (Math.max(0, v) / x0) : f0 + (f1 - f0) * Math.pow(Math.max(0, v - x0) / (f1 - x0), g0);
+}
+
+/**
+ * 22 November 2026 (LOOK2; hunt of update 64 H20: "The leg blocks and the upper black block at the top of the strip have
+ * jagged, stair-stepped borders"). crestStripS is strongly bent below crestTop (infinitely steep at crestV), and it
+ * was applied per VERTEX: the strip coordinate went to the screen as a per-vertex value interpolated in straight lines
+ * over triangles of about 2.4 mm (12 to 27 px at the start view), so every border in the leg stretch ran straight
+ * inside a triangle and turned at its edges: steps the size of a triangle, at any pixel density (16 to 26 degrees a mm
+ * on the crown, against 8 to 15 for the same bend per point). CREST_PER_POINT: the renderer (ns-scene-three
+ * patchRegionBorderShaders) and the picker (classifyRegionGaze) take the vertices' coordinate back to the smooth
+ * along-gyrus v (crestStripV, the exact inverse), interpolate THAT, and bend it at each point (crestStripS), so the
+ * borders follow v's own smooth level lines. The vertices' values, the segmentation and the owner runs are unchanged
+ * (crestStripS(crestStripV(s)) = s), so every block keeps its place and its area; at and above crestTop both are the
+ * identity, and the medial wall's s (all 0) stays 0. on: false = the straight interpolation, as before.
+ */
+export const CREST_PER_POINT = freezeR2({ on: true });
+/** The exact inverse of crestStripS (pure): the along-gyrus v whose strip coordinate is s. Below the turn's sTop (a
+ * value crestStripS never gives on the strip) and from crestTop on: s - sTop / s itself, so the pair stays continuous
+ * and exact. */
+export function crestStripV(s, turn = MEDIAL_TURN) {
+  const { crestFloor: f0, crestTop: f1 } = CREST_COMPRESS;
+  if (!(s < f1)) return s;
+  const t = turn && turn.on === true ? turn : null, x0 = t ? t.crestV : 0, s0 = t ? t.sTop : f0;
+  const g0 = t && Number.isFinite(t.gamma) && t.gamma > 0 ? t.gamma : CREST_COMPRESS.gamma;
+  if (s < s0) return s - s0; // (no strip value lies here; crestStripS of a negative v gives it back: see crestBendFull)
+  if (t && s < f0) return f0 > s0 ? x0 * (s - s0) / (f0 - s0) : x0;
+  return x0 + (f1 - x0) * Math.pow(Math.max(0, s - f0) / (f1 - f0), 1 / g0);
+}
+/** crestStripS continued below v 0 as s = sTop + v (so crestStripV's values below sTop come back exactly). Pure. */
+export function crestBendFull(v, turn = MEDIAL_TURN) {
+  const t = turn && turn.on === true ? turn : null, s0 = t ? t.sTop : CREST_COMPRESS.crestFloor;
+  return v < 0 ? s0 + v : crestStripS(v, turn);
+}
+/** GLSL twins of crestStripV and crestBendFull: `float <name>V( float s )` and `float <name>S( float v )`, with the same
+ * constants (pow only of values held at or above 0). Pure. */
+export function crestStripGlsl(name = 'nsCrest', turn = MEDIAL_TURN) {
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) throw new Error('ns:brain_glsl: name must be a GLSL identifier');
+  const f = x => { const v = Number(x); return Number.isInteger(v) ? v.toFixed(1) : String(v); };
+  const { crestFloor: f0, crestTop: f1 } = CREST_COMPRESS;
+  const t = turn && turn.on === true ? turn : null, x0 = t ? t.crestV : 0, s0 = t ? t.sTop : f0;
+  const g0 = t && Number.isFinite(t.gamma) && t.gamma > 0 ? t.gamma : CREST_COMPRESS.gamma;
+  const lin = t ? (f0 > s0 ? `if ( s < ${f(f0)} ) return ${f(x0)} * ( s - ${f(s0)} ) / ${f(f0 - s0)};` : `if ( s < ${f(f0)} ) return ${f(x0)};`) : '';
+  const linS = t ? `if ( v < ${f(x0)} ) return ${f(s0)} + ${f(f0 - s0)} * ( v / ${f(x0)} );` : '';
+  return [
+    `float ${name}V( float s ) { if ( s >= ${f(f1)} ) return s; if ( s < ${f(s0)} ) return s - ${f(s0)}; ${lin} return ${f(x0)} + ${f(f1 - x0)} * pow( max( s - ${f(f0)}, 0.0 ) / ${f(f1 - f0)}, ${f(1 / g0)} ); }`,
+    `float ${name}S( float v ) { if ( v >= ${f(f1)} ) return v; if ( v < 0.0 ) return ${f(s0)} + v; ${linS} return ${f(f0)} + ${f(f1 - f0)} * pow( max( v - ${f(x0)}, 0.0 ) / ${f(f1 - x0)}, ${f(g0)} ); }`
+  ].join('\n');
+}
+
+/**
+ * 22 November 2026 (UI4; the hunt of update 64, H20, and what section 198 left: "the purple Left leg block still
+ * waves"). The leg blocks lie in the first one or two rings of triangles next to the medial wall, where the along-gyrus
+ * v is pinned to 0 on the vertices of whole medial triangles: a staircase. Several block borders cross one triangle
+ * there, as parallel straight lines, and all of them turn at its edges, where the field's gradient jumps from one
+ * triangle to the next (most where the staircase steps). Measured on the atlas strips (work probe, the borders' turn in
+ * the surface's own plane, on the crest that faces up): 11.6 to 12.0 degrees a mm with 11 to 13 kinks sharper than
+ * 45 degrees over the leg borders, against 5 to 9 degrees a mm and none to 3 kinks for the arm and face borders far from
+ * the wall. STRIP_DRAWN: the strip coordinate that is DRAWN and PICKED per point (the area shader's nsS and
+ * classifyRegionGaze) comes, in the leg stretch, from vertex values that keep the gradient as even as they can from
+ * triangle to triangle while staying near v (smoothStripDrawnV); the staircase's own vertices are free in it. Which
+ * block each triangle is, every area's mm2 (section 176), the anchors and the owner runs keep coming from v itself; only
+ * the borders drawn between the blocks move, by a fraction of a triangle. Measured with mu 1, vBand 0.12: 6.9 to 7.0
+ * degrees a mm, 1 to 2 kinks; each leg block's drawn area within 2.5 % of before (toes 285 -> 279 and 316 -> 308 mm2,
+ * the trunk unchanged). Tried and dropped: a second harmonic solve with a soft, smoothed medial pull (borders longer and
+ * kinkier, the toes 15 % larger); v from the distance to a smoothed medial edge (new creases); interpolating with
+ * per-vertex gradients (wiggles inside the triangles); smoothing v along its own level lines (kinkier); the same as
+ * here with the staircase held at 0 (8 to 11 degrees a mm, 4 to 9 kinks). on: false = the drawn coordinate is v (as
+ * before). mu: how strongly the values stay near v (area-weighted); vBand: vertices with v at or above it keep v; vTop:
+ * every corner of a triangle that reaches it keeps v too, so from crestTop on (the trunk's end, the arms, the face)
+ * nothing is drawn or picked any differently, not even inside a long triangle that spans the band (a shoulder movement's
+ * border moved there before this rule); tol / maxIter: the solve. Display layout, not a measured border.
+ */
+export const STRIP_DRAWN = freezeR2({ on: true, mu: 1, vBand: 0.12, vTop: CREST_COMPRESS.crestTop, tol: 1e-10, maxIter: 3000 });
+/**
+ * The drawn along-gyrus value per vertex (STRIP_DRAWN, pure): positions / indices: one strip mesh (source mm); v: its
+ * along-gyrus values per vertex; triMedial: per triangle, 1 on the medial wall. Over the convexity triangles with a
+ * vertex below vBand, minimises  sum over the edges two of them share of  w |grad_t - grad_t'|^2  (w: their mean area)
+ * + mu sum_i a_i (x_i - v_i)^2  (a_i: a third of the vertex's triangle area there), every other vertex held at v, by
+ * conjugate gradients. Returns { v: Float64Array (per input vertex), iterations, free } (v itself when nothing is free).
+ */
+export function smoothStripDrawnV(positions, indices, v, triMedial, { mu = STRIP_DRAWN.mu, vBand = STRIP_DRAWN.vBand, vTop = STRIP_DRAWN.vTop, tol = STRIP_DRAWN.tol, maxIter = STRIP_DRAWN.maxIter } = {}) {
+  const P0 = checkPositions(positions, 'positions'), n0 = P0.length / 3, m = indices.length / 3;
+  const out = Float64Array.from(v);
+  // weld exactly coincident vertices (the OBJ parser splits them along seams), as alongGyrusCoordinate does
+  const keyOf = new Map(), rep = new Int32Array(n0), first = [];
+  for (let i = 0; i < n0; i++) {
+    const k = `${P0[3 * i]},${P0[3 * i + 1]},${P0[3 * i + 2]}`;
+    let r = keyOf.get(k);
+    if (r === undefined) { r = first.length; keyOf.set(k, r); first.push(i); }
+    rep[i] = r;
+  }
+  const n = first.length, P = new Float64Array(3 * n), V = new Float64Array(n), med = new Uint8Array(n);
+  first.forEach((i, w) => { P[3 * w] = P0[3 * i]; P[3 * w + 1] = P0[3 * i + 1]; P[3 * w + 2] = P0[3 * i + 2]; V[w] = v[i]; });
+  for (let t = 0; t < m; t++) if (triMedial[t]) for (let k = 0; k < 3; k++) med[rep[indices[3 * t + k]]] = 1;
+  // the band's convexity triangles: corners, the gradients of their three hat functions, areas
+  const tri = [], G = [], A = [], area = new Float64Array(n);
+  for (let t = 0; t < m; t++) {
+    if (triMedial[t]) continue;
+    const a = rep[indices[3 * t]], b = rep[indices[3 * t + 1]], c = rep[indices[3 * t + 2]];
+    if (!((!med[a] && V[a] < vBand) || (!med[b] && V[b] < vBand) || (!med[c] && V[c] < vBand))) continue;
+    const e1x = P[3 * b] - P[3 * a], e1y = P[3 * b + 1] - P[3 * a + 1], e1z = P[3 * b + 2] - P[3 * a + 2];
+    const e2x = P[3 * c] - P[3 * a], e2y = P[3 * c + 1] - P[3 * a + 1], e2z = P[3 * c + 2] - P[3 * a + 2];
+    const nx = e1y * e2z - e1z * e2y, ny = e1z * e2x - e1x * e2z, nz = e1x * e2y - e1y * e2x, n2 = nx * nx + ny * ny + nz * nz;
+    if (!(n2 > 1e-14)) continue;
+    const vs = [a, b, c], g = new Float64Array(9);
+    for (let k = 0; k < 3; k++) {
+      const p = vs[(k + 1) % 3], q = vs[(k + 2) % 3], ex = P[3 * q] - P[3 * p], ey = P[3 * q + 1] - P[3 * p + 1], ez = P[3 * q + 2] - P[3 * p + 2];
+      g[3 * k] = (ny * ez - nz * ey) / n2; g[3 * k + 1] = (nz * ex - nx * ez) / n2; g[3 * k + 2] = (nx * ey - ny * ex) / n2;
+    }
+    const ar = Math.sqrt(n2) / 2;
+    tri.push(vs); G.push(g); A.push(ar);
+    area[a] += ar / 3; area[b] += ar / 3; area[c] += ar / 3;
+  }
+  // (held too: every corner of a triangle that reaches vTop, so no point at or above vTop is drawn any differently)
+  const top = new Uint8Array(n);
+  for (let t = 0; t < m; t++) {
+    const a = rep[indices[3 * t]], b = rep[indices[3 * t + 1]], c = rep[indices[3 * t + 2]];
+    if (Math.max(V[a], V[b], V[c]) >= vTop) { top[a] = 1; top[b] = 1; top[c] = 1; }
+  }
+  const held = i => (!med[i] && V[i] >= vBand) || top[i] === 1;
+  const fi = new Int32Array(n).fill(-1), free = [];
+  for (const vs of tri) for (const i of vs) if (fi[i] < 0 && !held(i)) { fi[i] = free.length; free.push(i); }
+  const N = free.length;
+  if (N === 0) return { v: out, iterations: 0, free: 0 };
+  // the edge terms: J = grad_t - grad_t' over the four corners; K += w J^T J (free part), rhs -= w J^T J_held
+  const edgeOf = new Map(), K = new Map(), rhs = new Float64Array(N);
+  tri.forEach((vs, t) => { for (let k = 0; k < 3; k++) { const a = vs[k], b = vs[(k + 1) % 3], key = a < b ? a * n + b : b * n + a; const e = edgeOf.get(key); if (e === undefined) edgeOf.set(key, t); else if (e >= 0) { edgeOf.set(key, -1); pairTerm(e, t); } } });
+  function pairTerm(t0, t1) {
+    const ids = [], co = [];
+    const add = (i, gx, gy, gz, s) => { let j = ids.indexOf(i); if (j < 0) { j = ids.length; ids.push(i); co.push([0, 0, 0]); } co[j][0] += s * gx; co[j][1] += s * gy; co[j][2] += s * gz; };
+    for (let k = 0; k < 3; k++) add(tri[t0][k], G[t0][3 * k], G[t0][3 * k + 1], G[t0][3 * k + 2], 1);
+    for (let k = 0; k < 3; k++) add(tri[t1][k], G[t1][3 * k], G[t1][3 * k + 1], G[t1][3 * k + 2], -1);
+    const w = (A[t0] + A[t1]) / 2;
+    for (let p = 0; p < ids.length; p++) {
+      const fp = fi[ids[p]];
+      if (fp < 0) continue;
+      for (let q = 0; q < ids.length; q++) {
+        const d = w * (co[p][0] * co[q][0] + co[p][1] * co[q][1] + co[p][2] * co[q][2]), fq = fi[ids[q]];
+        if (fq >= 0) { const key = fp * N + fq; K.set(key, (K.get(key) || 0) + d); } else rhs[fp] -= d * V[ids[q]];
+      }
+    }
+  }
+  // CSR of K + mu diag(area)
+  const rows = Array.from({ length: N }, () => []);
+  for (const [key, d] of K) rows[Math.floor(key / N)].push([key % N, d]);
+  const ptr = new Int32Array(N + 1), diag = new Float64Array(N);
+  for (let r = 0; r < N; r++) ptr[r + 1] = ptr[r] + rows[r].length;
+  const col = new Int32Array(ptr[N]), val = new Float64Array(ptr[N]);
+  for (let r = 0; r < N; r++) rows[r].forEach(([c, d], k) => { col[ptr[r] + k] = c; val[ptr[r] + k] = d + (c === r ? mu * area[free[r]] : 0); if (c === r) diag[r] = val[ptr[r] + k]; });
+  for (let r = 0; r < N; r++) { rhs[r] += mu * area[free[r]] * V[free[r]]; if (!(diag[r] > 0)) diag[r] = 1; }
+  const x = Float64Array.from(free, i => V[i]), res = new Float64Array(N), z = new Float64Array(N), d = new Float64Array(N), q = new Float64Array(N);
+  const mul = (y, o) => { for (let r = 0; r < N; r++) { let s = 0; for (let k = ptr[r]; k < ptr[r + 1]; k++) s += val[k] * y[col[k]]; o[r] = s; } };
+  mul(x, q);
+  let rz = 0, rr = 0, bn = 0;
+  for (let r = 0; r < N; r++) { res[r] = rhs[r] - q[r]; z[r] = res[r] / diag[r]; d[r] = z[r]; rz += res[r] * z[r]; rr += res[r] * res[r]; bn += rhs[r] * rhs[r]; }
+  bn = Math.sqrt(bn) || 1;
+  let it = 0;
+  while (Math.sqrt(rr) / bn > tol && it < maxIter) {
+    mul(d, q);
+    let dq = 0; for (let r = 0; r < N; r++) dq += d[r] * q[r];
+    if (!(dq > 0)) break;
+    const al = rz / dq; let rz2 = 0; rr = 0;
+    for (let r = 0; r < N; r++) { x[r] += al * d[r]; res[r] -= al * q[r]; z[r] = res[r] / diag[r]; rz2 += res[r] * z[r]; rr += res[r] * res[r]; }
+    const be = rz2 / rz; rz = rz2;
+    for (let r = 0; r < N; r++) d[r] = z[r] + be * d[r];
+    it++;
+  }
+  const W = Float64Array.from(V); free.forEach((i, r) => { W[i] = x[r]; });
+  for (let i = 0; i < n0; i++) out[i] = W[rep[i]];
+  return { v: out, iterations: it, free: N };
 }
 
 /**
@@ -1779,7 +1951,7 @@ export function alongGyrusCoordinate(positions, indices, medialVertex, { tipMm =
 export function segmentMotorStrips(strips, bodyMap, {
   gapTolU = SEGMENT_DEFAULTS.gapTolU, hysteresisU = SEGMENT_DEFAULTS.hysteresisU, hysteresisActionU = SEGMENT_DEFAULTS.hysteresisActionU,
   medialWall = MEDIAL_WALL, glassMeshes = null, glassVoxelMm = 3, lateralityTolMm = 0.5, outline = true, alongGyrus = ALONG_GYRUS,
-  medialTurn = MEDIAL_TURN
+  medialTurn = MEDIAL_TURN, drawn = STRIP_DRAWN
 } = {}) {
   const turn = medialTurn && medialTurn.on === true && medialTurn.crestV > 0 && medialTurn.crestV < CREST_COMPRESS.crestTop &&
     medialTurn.sTop >= 0 && medialTurn.sTop < CREST_COMPRESS.crestFloor ? medialTurn : null;
@@ -1834,13 +2006,20 @@ export function segmentMotorStrips(strips, bodyMap, {
     // (alongGyrusCoordinate: 0 at the medial-wall edge, 1 at the ventral tip next to the Sylvian fissure), so the map's
     // regions run down the whole gyrus in order. Further convexity pieces and paracentral meshes keep the medial-lateral
     // |x| fraction of the primary's range (no atlas mesh of those kinds is loaded; a warning says so).
-    let vu, coordinate;
+    let vu, coordinate, vuDraw = null;
     if (d === H.primary && d.kind !== 'paracentral') {
       const medialV = new Uint8Array(n);
       for (let t = 0; t < m; t++) if (triMedial[t]) { medialV[idx[3 * t]] = 1; medialV[idx[3 * t + 1]] = 1; medialV[idx[3 * t + 2]] = 1; }
       if (!medialV.some(x => x)) for (let i = 0; i < n; i++) if (Math.abs(pos[3 * i]) - H.lo < medialWall.bandMm) medialV[i] = 1; // no medial-facing triangle: the medial band
       const g = alongGyrusCoordinate(pos, idx, i => medialV[i] === 1, alongGyrus);
       vu = g.v;
+      // (22 November 2026, UI4, STRIP_DRAWN: the drawn and picked coordinate, from v before the crest's bend; the
+      // assignment below keeps v's own values)
+      if (drawn && drawn.on === true) {
+        const d = smoothStripDrawnV(pos, idx, vu, triMedial, drawn);
+        vuDraw = new Float32Array(n);
+        for (let i = 0; i < n; i++) vuDraw[i] = crestBendFull(d.v[i], turn);
+      }
       for (let i = 0; i < n; i++) vu[i] = crestStripS(vu[i], turn); // (MEDIAL_TURN: the crest continues the toe block from the medial wall's top)
       coordinate = freezeR2({ kind: 'along-gyrus', iterations: g.iterations, residual: g.residual, vertices: g.vertices, pinnedMedial: g.pinnedMedial, pinnedTip: g.pinnedTip, islands: g.islands });
     } else {
@@ -1852,7 +2031,7 @@ export function segmentMotorStrips(strips, bodyMap, {
     }
     for (let t = 0; t < m; t++) triU[t] = (vu[idx[3 * t]] + vu[idx[3 * t + 1]] + vu[idx[3 * t + 2]]) / 3;
     if (d === H.primary) H.coordinate = coordinate;
-    return { d, H, pos, idx, n, m, vu, triMedial, triU, triArea, triN, triC };
+    return { d, H, pos, idx, n, m, vu, vuDraw, triMedial, triU, triArea, triN, triC };
   });
   // Per-hemisphere medial-wall depth range and the motor y range of the primary's medial wall.
   for (const h of HEMIS) {
@@ -1950,7 +2129,7 @@ export function segmentMotorStrips(strips, bodyMap, {
     }
     const pad = 1e-6 * (Math.abs(x0) + Math.abs(x1) + Math.abs(y0) + Math.abs(y1) + Math.abs(z0) + Math.abs(z1) + 1);
     stripTables.push({
-      id: d.id, hemisphere: d.hemisphere, kind: d.kind, positions: P, indices: I, u: M.vu,
+      id: d.id, hemisphere: d.hemisphere, kind: d.kind, positions: P, indices: I, u: M.vu, uDraw: M.vuDraw, // (UI4, STRIP_DRAWN: uDraw, the drawn and picked coordinate, or null)
       triRegion, triS, triSurface, triMedial: M.triMedial, triangleCount: M.m, tri,
       boundsMin: [x0 - pad, y0 - pad, z0 - pad], boundsMax: [x1 + pad, y1 + pad, z1 + pad]
     });
@@ -1966,7 +2145,7 @@ export function segmentMotorStrips(strips, bodyMap, {
     const [ri, mi, surf] = key.split('|').map(Number);
     const M = meshes[mi], H = M.H;
     const vS = surf === 1 && H.medial && H.medial.sLo !== null ? vi => medialS(H, M.pos[3 * vi + 2]) : null;
-    const part = compactPart(M.pos, M.idx, M.vu, vS, partsMap.get(key));
+    const part = compactPart(M.pos, M.idx, M.vu, vS, partsMap.get(key), surf === 1 ? null : M.vuDraw); // (UI4: sDraw on the convexity)
     partIndices[ri].push(parts.length);
     parts.push({ regionId: regions[ri].id, regionIndex: ri, hemisphere: M.d.hemisphere, meshId: M.d.id, surface: surf === 1 ? 'medial' : 'convexity', ...part });
   }
@@ -2361,9 +2540,20 @@ export function classifyRegionGaze(rayOriginSrc, rayDirSrc, seg, {
     const S = bestS, I = S.indices, k = best.tri;
     const ia = I[3 * k], ib = I[3 * k + 1], ic = I[3 * k + 2];
     const wa = 1 - best.b1 - best.b2;
-    let u = wa * S.u[ia] + best.b1 * S.u[ib] + best.b2 * S.u[ic];
-    const uLo = Math.min(S.u[ia], S.u[ib], S.u[ic]), uHi = Math.max(S.u[ia], S.u[ib], S.u[ic]);
-    u = u < uLo ? uLo : u > uHi ? uHi : u;
+    let u;
+    // (22 November 2026, UI4, STRIP_DRAWN: the drawn coordinate, uDraw, where the strip has one)
+    const SU = S.uDraw && S.uDraw.length === S.u.length ? S.uDraw : S.u;
+    if (CREST_PER_POINT.on === true) {
+      // 22 November 2026 (LOOK2, CREST_PER_POINT): as the renderer draws it, v interpolated and bent at the point
+      const va = crestStripV(SU[ia]), vb = crestStripV(SU[ib]), vc = crestStripV(SU[ic]);
+      let v = wa * va + best.b1 * vb + best.b2 * vc;
+      const vLo = Math.min(va, vb, vc), vHi = Math.max(va, vb, vc);
+      u = crestBendFull(v < vLo ? vLo : v > vHi ? vHi : v);
+    } else {
+      u = wa * SU[ia] + best.b1 * SU[ib] + best.b2 * SU[ic];
+      const uLo = Math.min(SU[ia], SU[ib], SU[ic]), uHi = Math.max(SU[ia], SU[ib], SU[ic]);
+      u = u < uLo ? uLo : u > uHi ? uHi : u;
+    }
     const point = add(o, scale(d, best.t));
     const surface = S.triSurface[k] ? 'medial' : 'convexity';
     const owners = seg._owners[S.hemisphere];

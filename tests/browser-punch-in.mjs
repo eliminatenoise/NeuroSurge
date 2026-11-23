@@ -143,7 +143,10 @@ try {
   await page.mouse.click(800, 450);
   await page.waitForFunction(() => document.pointerLockElement?.id === 'ns-canvas');
   await waitForPulseEnd();
-  await sampleView('eye', 'ArrowRight');
+  // 21 November 2026 (browser hunt of update 62, H6; restated): from the start look (on no area) the first arrow key
+  // goes to the nearest area on its own side of the crosshair; the throat area at the lower-LEFT end of the strip, which
+  // the RIGHT key used to reach (the nearest area of all, whichever key), is now the left key's.
+  await sampleView('eye', 'ArrowLeft');
   await page.keyboard.press('e');
   await page.waitForFunction(() => {
     const pose = window.__nsQA.inspect().camera.pose;
@@ -158,6 +161,7 @@ try {
   const displayBefore = await page.evaluate(() => {
     const s = window.__nsQA.inspect();
     return { area: s.state.gaze.regionId, seq: s.state.trigger.seq, joints: s.bodyJointTargets,
+      presses: (s.scene && s.scene.brainInk && s.scene.brainInk.areaInk && s.scene.brainInk.areaInk.presses) || 0,
       render: window.readPunchFrames(true).last };
   });
   assert.equal(displayBefore.area, 'rh_tongue');
@@ -175,9 +179,11 @@ try {
       pickingFov: s.arrowTrace.value.activeCamera.fovYDeg };
   });
   await waitForPulseEnd();
-  const displayAfter = await page.evaluate(() => ({
-    joints: window.__nsQA.inspect().bodyJointTargets, recording: window.readPunchFrames()
-  }));
+  const displayAfter = await page.evaluate(() => {
+    const s = window.__nsQA.inspect();
+    return { joints: s.bodyJointTargets, recording: window.readPunchFrames(),
+      presses: (s.scene && s.scene.brainInk && s.scene.brainInk.areaInk && s.scene.brainInk.areaInk.presses) || 0 };
+  });
   report.displayOnly = { before: displayBefore, active: displayActive, after: displayAfter };
   assert.equal(displayActive.trigger.regionId, 'rh_tongue');
   assert.equal(displayActive.trigger.source, 'click');
@@ -189,7 +195,12 @@ try {
   assert.deepEqual(displayAfter.joints, displayBefore.joints);
   assert.ok(displayAfter.recording.drawn > 5);
   assert.ok(displayBefore.render.tongueGlow !== null);
-  assert.ok(displayAfter.recording.peakTongueGlow > displayBefore.render.tongueGlow, 'the drawn marker lights up');
+  // 22 November 2026 (section 191, restated with the lead's agreement): an area with no movement no longer lights up on a
+  // click (ns-area-halo NO_FLARE.noMovement): the tongue area glows under the look like any area and keeps its mark,
+  // with no flare of its own (it lit for about a second before). Its drawn light stays at what the look gives it.
+  assert.ok(displayAfter.recording.peakTongueGlow <= displayBefore.render.tongueGlow + 1e-6, 'the drawn area does not flare');
+  // (22 November 2026, section 191: the click is still seen: its key is pressed once, and the look's own count presses nothing)
+  assert.equal(displayAfter.presses - displayBefore.presses, 1, 'the click pressed the key once');
   assert.equal(displayAfter.recording.low.fov, displayBefore.render.fov, 'a highlight alone keeps the lens steady');
   assert.equal(displayAfter.recording.high.fov, displayBefore.render.fov);
   assert.equal(displayActive.pickingFov, displayBefore.render.fov);

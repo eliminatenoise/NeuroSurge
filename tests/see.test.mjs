@@ -42,7 +42,8 @@ test('every part of a body is a thing: its limb, or its trunk with the neck and 
   assert.equal(seeThingOfGroup(G.trunk + M), SEE_THINGS.mirrorTrunk);
   assert.equal(seeThingOfGroup(G.lFoot + M), 7);
   assert.equal(seeThingOfGroup(0), 0);
-  assert.equal(seeThingOfGroup(15), 0, 'no such group');
+  assert.equal(seeThingOfGroup(15), SEE_THINGS.ownTrunk, 'the face\'s moving edges (ns-outline OUTLINE_FACE_EDGE_GROUP, 22 November 2026) are the head\'s');
+  assert.equal(seeThingOfGroup(M), 0, 'no such group');
   assert.equal(seeThingOfGroup(99), 0);
   assert.equal(seeBodyOfThing(3), 1);
   assert.equal(seeBodyOfThing(SEE_THINGS.ownTrunk), 1);
@@ -198,6 +199,39 @@ test('the ghost drawn on a ray: the nearest thing behind the front that the draw
   assert.equal(seeShows({ thing: B.brain }, { thing: B.eyes }), false);
   assert.equal(seeDrawnEntry([]), null);
   assert.equal(seeDrawnEntry(null), null);
+});
+
+// 20 November 2026 (a review of Body updates 60 and 61): the brain's picture holds ONE of its surface and small parts per
+// pixel, the nearest. With the eyeballs never a ghost, the graphics card draws nothing for an eyeball behind a body part
+// (BEHIND_FS), and the brain's surface behind the eyeball is not in the picture, so the body part behind both is the
+// ghost drawn there. The rule on the ray said the surface, and the crosshair refused the locked-away limb drawn there.
+test('an eyeball between the part in front and the brain\'s surface: the surface is not in the picture, the limb behind both is drawn', () => {
+  const eyeAt = (distance, part = 'eyeball') => ({ item: 'brain', kind: 'glass', distance, point: [0, 0, 0], regionId: null, part });
+  const hand = own(G.lHand, 0.5, 'left hand'), thigh = own(G.rThigh, 1.2, 'right thigh');
+  const L = [hand, eyeAt(0.7), glass(0.85), thigh];
+  assert.equal(seeHiddenEntry(L), thigh);
+  assert.equal(seeDrawnEntry(L), thigh, 'the thigh, as the graphics card draws it there');
+  assert.equal(seeTakesGhost(lockedOf(4), thigh, L), true);
+  const t = controlTargets(L, { ghost: lockedOf(4) });
+  assert.equal(t.front, thigh, 'the crosshair takes the locked-away thigh whose glass is drawn there');
+  assert.equal(t.ghost, thigh);
+  assert.equal(controlTargets(L, { ghost: lockedOf() }).front, hand, 'not locked away: the hand seen there');
+  // the mirror body the same way, and a nerve as an eyeball
+  const mh = mir(G.lHand + M, 0.5), mt = mir(G.rThigh + M, 1.2);
+  assert.equal(seeDrawnEntry([mh, eyeAt(0.7, 'nerve'), glass(0.85), mt]), mt);
+  // no limb behind: nothing is drawn there (the eyeball is no ghost; the surface is behind it, not in the picture)
+  assert.equal(seeDrawnEntry([hand, eyeAt(0.7), glass(0.85)]), null);
+  // a motor area behind the eyeball IS in the picture (the areas are drawn over the rest of the brain): it is drawn
+  const a = area(0.86);
+  assert.equal(seeDrawnEntry([hand, eyeAt(0.7), a, thigh]), a);
+  // the surface nearest: it is drawn, as before (an eyeball behind it is no ghost either)
+  const g = glass(0.7);
+  assert.equal(seeDrawnEntry([hand, g, eyeAt(0.85), thigh]), g);
+  // a fold of the surface touching the hand (within the gap) is what the picture holds: no brain ghost, and the fold
+  // behind it is not in the picture either, so the thigh is drawn
+  assert.equal(seeDrawnEntry([hand, glass(0.505), glass(0.9), thigh]), thigh);
+  // with the eyeball in front of everything nothing changes: the body part behind it is drawn
+  assert.equal(seeDrawnEntry([eyeAt(0.4), glass(0.6), hand]), hand);
 });
 
 test('the crosshair takes a locked-away ghost only where it is the ghost drawn there', () => {

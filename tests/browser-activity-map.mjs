@@ -76,7 +76,7 @@ try {
   assert.match(await dialog.locator('[data-plane-angles]').textContent(), /-16\.14° extension · -2\.17° radial/);
   await dialog.getByLabel('Forearm trace').selectOption('forearmM4LminusM4R_uV');
   assert.equal(await dialog.getByLabel('Forearm EMG · M4L − M4R',{exact:true}).textContent(), '-19 µV');
-  await dialog.locator('.activity-transport').scrollIntoViewIfNeeded();
+  await dialog.locator('[data-replay] .activity-transport').scrollIntoViewIfNeeded();
   if (process.env.NS_ACTIVITY_CAPTURE) await dialog.screenshot({path:process.env.NS_ACTIVITY_CAPTURE});
   await page.setViewportSize({width:390,height:700});
   assert.ok(await dialog.evaluate(el => el.scrollWidth <= el.clientWidth));
@@ -122,14 +122,22 @@ try {
     return [j.knee_ext_L, j.knee_ext_R];
   });
   const before = await knees();
-  await dialog.getByRole('button',{name:'Try this movement in the game'}).click();
+  // Sample during the movement. On a slow renderer it can end before the readiness check returns.
+  const [movingFrame] = await Promise.all([
+    page.waitForFunction(rest => {
+      const joints = window.__nsQA.inspect().bodyDrawnJoints;
+      if (Math.abs(joints.knee_ext_L - rest) > 15) return [joints.knee_ext_L, joints.knee_ext_R];
+      return false;
+    }, before[0]),
+    dialog.getByRole('button',{name:'Try this movement in the game'}).click(),
+  ]);
+  const after = await movingFrame.jsonValue();
+  await movingFrame.dispose();
   await ready();
-  await page.waitForFunction(n => Math.abs(window.__nsQA.inspect().bodyDrawnJoints.knee_ext_L - n)>15, before[0]);
-  const after = await knees();
   assert.ok(Math.abs(after[1]-before[1])<5);
   assert.equal(await page.evaluate(() => document.activeElement.id), 'ns-canvas');
   await page.keyboard.press('f');
-  await page.getByRole('textbox',{name:'Move the body'}).waitFor();
+  await page.getByRole('textbox',{name:'Command box'}).waitFor();
   await page.keyboard.press('Escape');
   await page.getByRole('button',{name:'M · Activity map'}).click();
   await dialog.waitFor();

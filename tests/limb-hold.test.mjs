@@ -15,6 +15,7 @@ const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const { LIMB_KEYS, LIMBS_PASS_ITEMS, TRUNK_KEEP_OUT, viewFrameOf, viewFramePoint, lookFramingPoint, turnToward, limbKeyMove, limbKeyFollow, keyMoveCut } = await import(path.join(repo, 'scene/src/ns-app.mjs'));
 const { FREE_HAND, freeHandAngles, freeHandInRange, freeHandPole } = await import(path.join(repo, 'scene/src/ns-arm.mjs'));
 const G = await import(path.join(repo, 'scene/src/ns-grasp.mjs'));
+const PACE = await import(path.join(repo, 'scene/src/ns-limb-pace.mjs'));
 const { loadBody } = await import(path.join(repo, 'tools/load-body.mjs'));
 const { body, rig, baked } = await loadBody(repo);
 const DEG = Math.PI / 180;
@@ -276,33 +277,51 @@ test('a frame of the keys: never further than the keys go, never thrown sideways
 // The same rule on the game's own body, as stepLimbHold runs it: S held, the place kept on the keys' line within leadM
 // of the end, one solve a frame, the answer taken as limbKeyFollow says (and cut again with keyMoveCut on the drawn end).
 // A frame that waits puts the place back on the end (20 November 2026, evening: as stepLimbHold now does).
-function driveKeys(limb, q0, ax, az, frames) {
-  const V = LIMB_KEYS.view, sp = V.speedMps * 1000 / 60, lead = V.leadM * 1000, right = [-1, 0, 0], c = G.LIMB_CHAIN[limb], memo = {};
+// (22 November 2026, LIMBS2: and the elbow's or knee's pace, ns-limb-pace LIMB_PACE, cut in the same loop, as stepLimbHold)
+function driveKeys(limb, q0, ax, az, frames, spin = false, memo = {}) {
+  const V = LIMB_KEYS.view, sp = V.speedMps * 1000 / 60, lead = V.leadM * 1000, right = [-1, 0, 0], c = G.LIMB_CHAIN[limb], pace = PACE.paceFor(limb);
   const sub = (a, b) => a.map((v, k) => v - b[k]), nrm = a => Math.hypot(...a), dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-  let q = { ...q0 }, end = G.limbPoint(rig, asDrawn(q), limb, 'end'), u = null, len = 0, lastErr = 0, fastest = 0, waited = 0, widest = 0;
+  let q = { ...q0 }, end = G.limbPoint(rig, asDrawn(q), limb, 'end'), u = null, len = 0, lastErr = 0, fastest = 0, waited = 0, widest = 0, swings = 0;
   const e0 = end.slice();
   for (let f = 0; f < frames; f++) {
-    const root = G.limbPoint(rig, asDrawn(q), limb, 'root');
-    const T = limbKeyMove(u && ax === 0 ? root.map((v, k) => v + u[k] * len) : end, root, right, ax, az, sp);
-    const gap = nrm(sub(T, end)), way = sub(limbKeyMove(end, root, right, ax, az, sp), end);
-    let r = G.solveLimb({ rig, segmentsFor: asDrawn, targets: q, limb, targetMm: T, limits, opts: lastErr < 12 && gap < 60 ? G.LIMB_HOLD_FOLLOW : G.LIMB_HOLD_TRACK, project, memo });
-    const fol = limbKeyFollow(end, r.endMm, way);
-    let wait = (r.folded && r.errorMm > lead + 2) || !fol.take;
-    if (!wait && fol.share < 1) {
+    const root = G.limbPoint(rig, asDrawn(q), limb, 'root'), bend = G.limbPoint(rig, asDrawn(q), limb, 'bend');
+    // (22 November 2026, LIMBS2 second pass: A or D alone on a folded limb swing it by its upper segment, ns-limb-pace
+    // limbSwingMove, with the turn of the line for a frame where that waits, as stepLimbHold; mm here, the module's m)
+    const pts = { root: root.map(x => x / 1000), bend: bend.map(x => x / 1000), end: end.map(x => x / 1000) };
+    const swingOf = p => { const w = ax !== 0 && az === 0 && PACE.limbFolded(pts, pace) ? PACE.limbSwingMove(pts, p.map(x => x / 1000), right, ax, sp / 1000, pace) : null; return w ? w.map(x => x * 1000) : null; };
+    const classic = p => limbKeyMove(p, root, right, ax, az, sp);
+    const swEnd = swingOf(end);
+    let T = swEnd ? swingOf(end) : classic(u && ax === 0 ? root.map((v, k) => v + u[k] * len) : end);
+    let way = sub(swEnd || classic(end), end);
+    const paceOf = (e1, b1) => PACE.limbPaceShare({ root, bend, end }, { root, bend: b1, end: e1 }, sp, pace); // (mm throughout; against the keys' step)
+    const take = (r, w) => {
+      const fol = limbKeyFollow(end, r.endMm, w), p0 = fol.take ? paceOf(r.endMm, r.bendMm) : 1;
+      if ((r.folded && r.errorMm > lead + 2) || !fol.take) return null;
+      if (!(fol.share < 1 || p0 < 1)) return r;
       // (as stepLimbHold: the share cut once more where the end's move as drawn is still over what keyMoveCut allows)
-      let share = fol.share, joints = {}, endMm = r.endMm;
-      for (let pass = 0; pass < 3; pass++) {
-        const qs = { ...q }; for (const id of c.joints) qs[id] = q[id] + (r.joints[id] - q[id]) * share;
-        const p = project(qs); joints = {}; for (const id of c.joints) joints[id] = p[id];
-        endMm = G.limbPoint(rig, asDrawn({ ...q, ...joints }), limb, 'end');
-        const k = keyMoveCut(sub(endMm, end), way);
-        if (!(k > 0)) { wait = true; break; }
+      let share = Math.min(fol.share, p0), joints = {}, endMm = r.endMm;
+      for (let pass = 0; pass < 4; pass++) {
+        const ids = Object.keys(r.joints); // (with spin: the upper arm's turn too, as stepLimbHold)
+        const qs = { ...q }; for (const id of ids) qs[id] = q[id] + (r.joints[id] - q[id]) * share;
+        const p = project(qs); joints = {}; for (const id of ids) joints[id] = p[id];
+        const sg = asDrawn({ ...q, ...joints });
+        endMm = G.limbPoint(rig, sg, limb, 'end');
+        const kEnd = keyMoveCut(sub(endMm, end), w);
+        if (!(kEnd > 0)) return null;
+        const k = Math.min(kEnd, paceOf(endMm, G.limbPoint(rig, sg, limb, 'bend')));
         if (!(k < 0.999)) break;
         share *= k;
       }
-      r = { ...r, joints, endMm };
+      return { ...r, joints, endMm };
+    };
+    const gap = nrm(sub(T, end));
+    let r = take(G.solveLimb({ rig, segmentsFor: asDrawn, targets: q, limb, targetMm: T, limits, opts: lastErr < 12 && gap < 60 ? G.LIMB_HOLD_FOLLOW : G.LIMB_HOLD_TRACK, project, memo, spin }), way);
+    if (r && swEnd) swings++;
+    if (!r && swEnd) {
+      const w1 = sub(classic(end), end), wl = nrm(w1);
+      if (wl > 1e-6) { const T1 = end.map((v, i) => v + w1[i] * lead / wl); r = take(G.solveLimb({ rig, segmentsFor: asDrawn, targets: q, limb, targetMm: T1, limits, opts: G.LIMB_HOLD_TRACK, project, memo: null, spin }), w1); if (r) { T = T1; way = w1; } }
     }
-    if (wait) {
+    if (!r) {
       waited++;
       const e = sub(end, root), U = ax === 0 && u ? u : e.map(x => x / nrm(e));
       len = Math.max(dot(e, U) - lead, Math.min(dot(e, U) + lead, nrm(e))); u = U; lastErr = 0;
@@ -315,7 +334,7 @@ function driveKeys(limb, q0, ax, az, frames) {
     const e = sub(end, root), U = ax === 0 && u ? u : (() => { const v = sub(T, root), n = nrm(v); return v.map(x => x / n); })();
     len = Math.max(dot(e, U) - lead, Math.min(dot(e, U) + lead, nrm(sub(T, root)))); u = U;
   }
-  return { q, end, travel: nrm(sub(end, e0)), fastest, waited, widest };
+  return { q, end, travel: nrm(sub(end, e0)), fastest, waited, widest, swings };
 }
 
 // 20 November 2026, evening (LIMBFREE; the owner: "The limb should never get stuck"): restated. Across the chest the
@@ -344,6 +363,132 @@ test('S on the right arm across the chest curls the hand in slowly instead of th
   // and D still swings the crossed arm back out the whole way
   const d = driveKeys('rightArm', crossed, 1, 0, 50);
   assert.ok(d.travel > 400, `D swings it ${d.travel.toFixed(0)} mm`);
+});
+
+// 21 November 2026 (ELBOW; the published list of what is not done: "with the right arm across the chest, S leaves the
+// hand where it is"; the owner: "We want full range of motion on all axes"; ns-grasp LIMB_CHAIN spin). The keys' solve
+// may now turn the upper arm about its length (weighted, and only round a bent elbow), so S draws a hand across the chest
+// in toward the shoulder as a person does, turning the upper arm inward.
+test('S on the right arm across the chest draws the hand in to the shoulder when the keys may turn the upper arm; a straight arm is never turned', () => {
+  const c = G.LIMB_CHAIN.rightArm;
+  assert.equal(c.spin.joint, 'r_shoulder_rot');
+  assert.ok(c.spin.weight > 0 && c.spin.weight < 1 && c.spin.bendFrom < c.spin.bendTo);
+  const crossed = project({ ...start, r_shoulder_flex: 55, r_shoulder_abd: -37, r_elbow_flex: 8 });
+  const root = G.limbPoint(rig, asDrawn(crossed), 'rightArm', 'root'), e0 = G.limbPoint(rig, asDrawn(crossed), 'rightArm', 'end');
+  const d0 = Math.hypot(...e0.map((v, k) => v - root[k]));
+  const before = driveKeys('rightArm', crossed, 0, -1, 90, false), after = driveKeys('rightArm', crossed, 0, -1, 90, true);
+  const dIn = s => Math.hypot(...s.end.map((v, k) => v - root[k]));
+  // how far off its line (root -> where it began) the hand ends, in degrees seen from the shoulder
+  const offDeg = s => { const v = s.end.map((x, k) => x - root[k]), u = e0.map((x, k) => x - root[k]); return Math.acos(Math.max(-1, Math.min(1, (v[0] * u[0] + v[1] * u[1] + v[2] * u[2]) / (Math.hypot(...v) * Math.hypot(...u))))) / DEG; };
+  // (measured 21 November 2026: 622 -> 141 mm and 12 degrees off the line with the turn; without it 189 mm, 56 degrees
+  // off: the forearm folded out sideways)
+  assert.ok(dIn(after) < 0.3 * d0, `with the turn S brings the hand from ${d0.toFixed(0)} to ${dIn(after).toFixed(0)} mm of the shoulder in 1.5 s`);
+  assert.ok(offDeg(after) < 15, `and keeps it near its line: ${offDeg(after).toFixed(1)} degrees off`);
+  assert.ok(offDeg(before) > 35, `without the turn the hand went ${offDeg(before).toFixed(1)} degrees off its line (the fault this fixes)`);
+  assert.ok(after.q.r_shoulder_rot < crossed.r_shoulder_rot - 20, `the upper arm turned inward (${crossed.r_shoulder_rot} -> ${after.q.r_shoulder_rot.toFixed(0)})`);
+  assert.ok(after.q.r_shoulder_rot >= body.BODY_JOINT_LIMITS.r_shoulder_rot[0], 'inside its range');
+  assert.ok(after.fastest <= LIMB_KEYS.view.keyMost + 0.02, `never faster than the keys: ${after.fastest.toFixed(2)} x`);
+  // with the arm straight (A swings it across) the upper arm keeps its turn: it would move the hand only millimetres
+  const a = driveKeys('rightArm', start, -1, 0, 90, true);
+  assert.ok(Math.abs(a.q.r_shoulder_rot - start.r_shoulder_rot) < 0.5, `A with a straight arm leaves the turn at ${a.q.r_shoulder_rot.toFixed(1)}`);
+  assert.ok(a.q.r_shoulder_abd < -15, 'and still brings it across the body');
+  // from the start, where the shoulder's own joints keep the hand on its line, S turns nothing (Message 186: W and S do
+  // not turn the limb)
+  const f = driveKeys('rightArm', start, 0, -1, 90, true);
+  assert.ok(Math.abs(f.q.r_shoulder_rot - start.r_shoulder_rot) < 2, `S from the start leaves the upper arm's turn at ${f.q.r_shoulder_rot.toFixed(1)}`);
+  assert.ok(f.q.r_elbow_flex > 120, 'and still folds the arm');
+  // W lets the folded arm out again
+  const w = driveKeys('rightArm', after.q, 0, 1, 90, true);
+  assert.ok(w.travel > 250 && w.q.r_elbow_flex < 40, `W lets it out ${w.travel.toFixed(0)} mm, the elbow to ${w.q.r_elbow_flex.toFixed(0)}`);
+});
+
+// 21 November 2026, evening (FIX63; a review of Body update 63, finding C1: the across test "also fires for an ordinary
+// hanging or backward right arm, so S turns the upper arm about 45 to 50 degrees inward there"; the owner, Message 186:
+// W and S do not turn the limb). ns-grasp LIMB_CHAIN across.elbowMm: the turn's leave is given only with the upper arm
+// itself brought across (the elbow toward the body's other side of the shoulder).
+test('S on a hanging or backward right arm, and A on an arm out to the side, leave the upper arm\'s turn alone: the keys\' turn is only for an upper arm brought across', () => {
+  const A = G.LIMB_CHAIN.rightArm.spin.across;
+  assert.ok(A.elbowMm >= 40 && A.elbowMm <= 110, 'between a hanging elbow (outside the shoulder) and the crossed arms of the tests (110 mm and more inside)');
+  const medialOf = q => { // (mm the elbow lies toward the body's other side of the shoulder, as the solve measures it)
+    const seg = asDrawn(q), S = seg[A.seg], m = A.toMedial, d = [0, 1, 2].map(k => S[k] * m[0] + S[4 + k] * m[1] + S[8 + k] * m[2]);
+    const e = G.limbPoint(rig, seg, 'rightArm', 'bend'), r = G.limbPoint(rig, seg, 'rightArm', 'root');
+    return (e[0] - r[0]) * d[0] + (e[1] - r[1]) * d[1] + (e[2] - r[2]) * d[2];
+  };
+  // S held 1.5 s with the arm hanging, a little forward, and behind the trunk (measured before the change, the upper
+  // arm's turn from 35: -16.5, -15.8 and -5.8 degrees)
+  for (const [raise, swing] of [[0, 0], [20, 0], [-34, 0]]) {
+    const q0 = project({ ...start, r_shoulder_flex: raise, r_shoulder_abd: swing, r_elbow_flex: 8 });
+    assert.ok(medialOf(q0) < 0, `raise ${raise}: the hanging elbow is outside the shoulder (${medialOf(q0).toFixed(0)} mm)`);
+    const memo = {}, s = driveKeys('rightArm', q0, 0, -1, 90, true, memo);
+    assert.ok(Math.abs(s.q.r_shoulder_rot - q0.r_shoulder_rot) < 0.5, `raise ${raise}, swing ${swing}: S leaves the upper arm's turn at ${s.q.r_shoulder_rot.toFixed(1)} (from ${q0.r_shoulder_rot})`);
+    assert.notEqual(memo.spinAcross, true, 'and the leave to turn was never given');
+    assert.ok(s.q.r_elbow_flex > 120, `and S still folds the arm (elbow ${s.q.r_elbow_flex.toFixed(0)})`);
+  }
+  // A with the arm raised out to the side and the elbow at a right angle (before: 35 -> 55.2, turned outward)
+  const side = project({ ...start, r_shoulder_flex: 90, r_shoulder_abd: 90, r_elbow_flex: 90 });
+  const a = driveKeys('rightArm', side, -1, 0, 90, true);
+  assert.ok(Math.abs(a.q.r_shoulder_rot - side.r_shoulder_rot) < 0.5, `A on an arm out to the side leaves the turn at ${a.q.r_shoulder_rot.toFixed(1)}`);
+  assert.ok(a.travel > 50, 'and still swings it');
+  // one solve each: a folded hanging arm whose hand's place lies inward of its elbow gets no leave; the crossed arm does
+  const one = q => { const memo = {}, seg = asDrawn(q), e = G.limbPoint(rig, seg, 'rightArm', 'end'), r = G.limbPoint(rig, seg, 'rightArm', 'root'), n = Math.hypot(...r.map((v, k) => v - e[k]));
+    G.solveLimb({ rig, segmentsFor: asDrawn, targets: q, limb: 'rightArm', targetMm: e.map((v, k) => v + (r[k] - e[k]) / n * 10), limits, opts: G.LIMB_HOLD_TRACK, project, memo, spin: true });
+    return memo.spinAcross === true; };
+  assert.equal(one(project({ ...start, r_shoulder_flex: -23, r_shoulder_abd: 0, r_elbow_flex: 110 })), false, 'hanging, the elbow folded: no leave (the frame the fault began on)');
+  const crossed = project({ ...start, r_shoulder_flex: 55, r_shoulder_abd: -37, r_elbow_flex: 8 });
+  assert.ok(medialOf(crossed) > A.elbowMm + 50, `across the chest the elbow is ${medialOf(crossed).toFixed(0)} mm inside the shoulder`);
+  assert.equal(one(crossed), true, 'across the chest: the leave is given, as before');
+});
+
+// 21 November 2026, late (a check of the test above found two residues; ns-grasp LIMB_CHAIN across.handMm / againDeg).
+test('the keys\' leave to turn the upper arm ends when the hand is out past the shoulder, and is given again to an arm the keys have already turned', () => {
+  const A = G.LIMB_CHAIN.rightArm.spin.across;
+  assert.equal(A.handMm, 0); assert.equal(A.again, true);
+  // across the chest, S draws the hand in (the upper arm turns, as it should), W lets it out, D swings it out to the
+  // side: the same hold, the look never moved. S there turned the upper arm 7 degrees more (-49.0 to -56.1) with the
+  // elbow 29 cm outside the shoulder.
+  const memo = {};
+  const crossed = project({ ...start, r_shoulder_flex: 43, r_shoulder_abd: -31, r_elbow_flex: 8 });
+  const s1 = driveKeys('rightArm', crossed, 0, -1, 90, true, memo);
+  assert.ok(s1.q.r_shoulder_rot < -40 && memo.spinAcross === true, `S across the chest turned the upper arm to ${s1.q.r_shoulder_rot.toFixed(1)}`);
+  const w = driveKeys('rightArm', s1.q, 0, 1, 70, true, memo), d = driveKeys('rightArm', w.q, 1, 0, 90, true, memo);
+  assert.ok(d.q.r_shoulder_abd > 40, `D took the arm out to the side (swing ${d.q.r_shoulder_abd.toFixed(0)})`);
+  const s2 = driveKeys('rightArm', d.q, 0, -1, 90, true, memo);
+  assert.ok(Math.abs(s2.q.r_shoulder_rot - d.q.r_shoulder_rot) < 0.5, `S out at the side leaves the turn at ${s2.q.r_shoulder_rot.toFixed(1)} (from ${d.q.r_shoulder_rot.toFixed(1)})`);
+  assert.notEqual(memo.spinAcross, true, 'the leave has ended');
+  // S across the chest for half a second, then the look carries the limb for a moment (the app takes the leave away),
+  // then S again: the elbow is now 79 mm inside, under elbowMm, but the keys have already turned the upper arm, so the
+  // leave is given again and the hand goes on in along its line (before: 28 degrees off it, the turn stuck at -19).
+  const c2 = project({ ...start, r_shoulder_flex: 70, r_shoulder_abd: -30, r_elbow_flex: 8 });
+  const root = G.limbPoint(rig, asDrawn(c2), 'rightArm', 'root'), e0 = G.limbPoint(rig, asDrawn(c2), 'rightArm', 'end');
+  const offDeg = q => { const e = G.limbPoint(rig, asDrawn(q), 'rightArm', 'end'), r = G.limbPoint(rig, asDrawn(q), 'rightArm', 'root'), v = e.map((x, k) => x - r[k]), u = e0.map((x, k) => x - root[k]);
+    return Math.acos(Math.max(-1, Math.min(1, (v[0] * u[0] + v[1] * u[1] + v[2] * u[2]) / (Math.hypot(...v) * Math.hypot(...u))))) / DEG; };
+  const m2 = {}, half = driveKeys('rightArm', c2, 0, -1, 30, true, m2);
+  assert.ok(half.q.r_shoulder_rot < 0, `after half a second the keys have turned the upper arm to ${half.q.r_shoulder_rot.toFixed(1)}`);
+  m2.spinAcross = false;
+  const rest2 = driveKeys('rightArm', half.q, 0, -1, 60, true, m2), whole = driveKeys('rightArm', c2, 0, -1, 90, true);
+  assert.ok(offDeg(rest2.q) < 15, `the hand ends ${offDeg(rest2.q).toFixed(1)} degrees off its line (the uninterrupted run: ${offDeg(whole.q).toFixed(1)})`);
+  assert.ok(rest2.q.r_shoulder_rot < -35, `the turn went on to ${rest2.q.r_shoulder_rot.toFixed(1)} (uninterrupted ${whole.q.r_shoulder_rot.toFixed(1)})`);
+  // an upper arm turned inward by the limb turn (its overside end, -15), not by the keys: a low arm with its elbow just
+  // inside (raise 20, across 15; elbowMm refuses it) is not turned by S
+  const low = project({ ...start, r_shoulder_flex: 20, r_shoulder_abd: -15, r_elbow_flex: 8, r_shoulder_rot: -15 });
+  assert.equal(low.r_shoulder_rot, -15);
+  const s3 = driveKeys('rightArm', low, 0, -1, 90, true, {});
+  assert.ok(Math.abs(s3.q.r_shoulder_rot + 15) < 0.5, `S leaves the limb turn's -15 alone (${s3.q.r_shoulder_rot.toFixed(1)})`);
+  // the record outlives the look's carry (the carried arm is solved with no spin): S across the chest, the look carries
+  // the arm down to a low pose with the turn kept (the app takes the leave away), then S. The renewed leave still asks
+  // the elbow to be againElbowMm inside, so S leaves the turn alone (before that rule: -20.1 degrees more)
+  assert.ok(A.againElbowMm > 0 && A.againElbowMm < A.elbowMm);
+  const m4 = {}, across = driveKeys('rightArm', c2, 0, -1, 90, true, m4);
+  assert.ok(Array.isArray(m4.spinTurn), 'the keys turned the upper arm and keep the record');
+  const carried = project({ ...across.q, r_shoulder_flex: 20, r_shoulder_abd: -12, r_elbow_flex: 90, r_shoulder_rot: across.q.r_shoulder_rot });
+  assert.equal(carried.r_shoulder_rot, across.q.r_shoulder_rot, 'the carry kept the turn');
+  m4.spinAcross = false;
+  const s4 = driveKeys('rightArm', carried, 0, -1, 90, true, m4);
+  assert.ok(Math.abs(s4.q.r_shoulder_rot - carried.r_shoulder_rot) < 0.5, `S on the low arm leaves the turn at ${s4.q.r_shoulder_rot.toFixed(1)} (from ${carried.r_shoulder_rot.toFixed(1)})`);
+  // and once something else has turned the arm away from where the keys left it, the record is gone
+  const m3 = { ...m2, spinAcross: false };
+  driveKeys('rightArm', { ...rest2.q, r_shoulder_rot: 35 }, 0, 1, 1, true, m3);
+  assert.equal(m3.spinTurn, null);
 });
 
 // ---- 20 November 2026, evening (LIMBFREE; the owner, Message 207: "there are ranges of motions where the limbs get

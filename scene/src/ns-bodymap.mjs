@@ -463,8 +463,9 @@ const sided = (side, ...names) => names.map(n => `${side} ${n}`);
 
 /** R558: why each hemisphere shifts the jaw toward its own side. */
 const JAW_SHIFT_NOTE = 'Game choice: the pterygoids of one side push the chin toward the other side, and each hemisphere drives the opposite pterygoids more strongly (a crossed bias, as for the masseter), so each hemisphere shifts the chin toward its own side.';
-/** R558: the left wrist's sideways bends light and colour only (the game arm's hand fit has one wrist axis). */
-const LEFT_WRIST_SIDE_NOTE = 'The game arm keeps its hand where you look with one wrist axis (bending toward the palm or back), so this sideways bend lights the area and colours its muscles but does not move the left hand. The right wrist does bend sideways.';
+/** R558: the left wrist's sideways bends. 21 November 2026 (browser hunt of update 62, H8): they used to light and colour
+ * only (the game arm's hand fit had one wrist axis); the game arm's wrist bends sideways now (ns-rig wrist_dev). */
+const LEFT_WRIST_SIDE_NOTE = 'The left hand bends sideways at the wrist (radial 20 / ulnar 30 degrees, AAOS, as for the right wrist), then comes back.';
 
 const LEG_PATHWAY = c => `Its corticospinal fibres cross in the medulla and reach the lumbosacral motor neurons of the ${c.S} leg.`;
 
@@ -737,13 +738,13 @@ const CONTENT = {
       leftArm('wrist_flexion', 'Flex left wrist', ['FCR', 'FCU'], ['ECRL', 'ECRB', 'ECU'], ['FDS', 'FDP']),
       leftArm('wrist_extension', 'Extend left wrist', ['ECRL', 'ECRB', 'ECU'], ['FCR', 'FCU'], ['ED']),
       // R558 (Messages 14 / 15): the right wrist bends sideways (radial 20 / ulnar 30, AAOS), so the left wrist area has
-      // the same two spots. The game arm's hand fit has one wrist axis, so on the left these light and colour only.
+      // the same two spots. (21 November 2026, H8: the game arm's wrist bends sideways too now, ns-rig wrist_dev.)
       leftArm('wrist_radial_deviation', 'Bend left wrist toward the thumb (radial deviation)', ['FCR', 'ECRL', 'ECRB'], ['FCU', 'ECU'], [],
         null, null, LEFT_WRIST_SIDE_NOTE),
       leftArm('wrist_ulnar_deviation', 'Bend left wrist toward the little finger (ulnar deviation)', ['FCU', 'ECU'], ['FCR', 'ECRL', 'ECRB'], [],
         null, null, LEFT_WRIST_SIDE_NOTE)
     ],
-    explanation: 'Wrist area for the LEFT hand in the right hemisphere, between the forearm-rotation and hand areas. Crossed corticospinal fibres reach the cervical motor neurons of the wrist flexors and extensors. In the game, looking here pulses the existing left wrist flexion (flexor carpi radialis and ulnaris) or extension (the three wrist extensors); the sideways bends toward the thumb (radial deviation) or the little finger (ulnar deviation) colour their muscles but do not move the game arm, whose hand fit has one wrist axis. Wrist representation overlaps the fingers and appears on both sides of the hand zone (Meier 2008; Gordon 2023), but this one-dimensional strip shows only the dorsal part, and forearm-muscle maps have task-specific peaks (Masse-Alarie 2017).',
+    explanation: 'Wrist area for the LEFT hand in the right hemisphere, between the forearm-rotation and hand areas. Crossed corticospinal fibres reach the cervical motor neurons of the wrist flexors and extensors. In the game, looking here pulses the existing left wrist flexion (flexor carpi radialis and ulnaris) or extension (the three wrist extensors); the sideways bends toward the thumb (radial deviation) or the little finger (ulnar deviation) bend the left hand sideways at the wrist. Wrist representation overlaps the fingers and appears on both sides of the hand zone (Meier 2008; Gordon 2023), but this one-dimensional strip shows only the dorsal part, and forearm-muscle maps have task-specific peaks (Masse-Alarie 2017).',
     citationKeys: ['MEIER2008', 'MASSE2017', 'GORDON2023', 'LOYOLA', 'UAMS_UPPER']
   } : {
     label: 'Right wrist', shortLabel: 'R wrist', effector: 'wrist (right arm)', bodySide: 'right', medialSurface: false,
@@ -782,12 +783,12 @@ const CONTENT = {
       // extension and not cortical silence (Motawar 2012), and "Open" already brings a closed hand back first (the
       // latch rule). The game arm's relax_release itself stays (the grip's own release uses it).
       leftArm('open_hand', 'Open left hand', ['ED', 'EI', 'EDM', 'EPB', 'EPL'], ['FDS', 'FDP', 'FPB', 'FPL'], ['LUM', 'DI', 'PI'],
-        null, null, 'Opening on release is a game convention; natural release can be passive.'),
+        null, null, 'Letting go of Space does not open the hand: it goes back to rest (natural release can be passive).'),
       leftArm('spread_fingers', 'Spread left fingers', ['DI', 'ADM'], ['PI'], ['ED', 'LUM']),
       // R558 (Messages 14 / 15 / 6): the anatomical opposite of spreading (palmar interossei), as on the right hand.
       leftArm('fingers_together', 'Bring left fingers together', ['PI'], ['DI', 'ADM'], [])
     ],
-    explanation: 'Hand area (the hand knob) for the LEFT hand in the right hemisphere: whole-hand grasp, opening, spreading and bringing the fingers together. Crossed corticospinal fibres, including direct cortico-motoneuronal connections that support fine finger control (Lemon 2008), reach the hand motor neurons. In the game, looking here, or holding Space for the fist, drives the existing left-hand actions, and the finger flexors or extensors take the same colour ramp as the brain. Huber 2020 measured left-hand grasp and retraction in the right motor cortex as overlapping, repeated action patches that differ between people, and natural grip release can be passive (Motawar 2012), so releasing Space into an open hand is a game convention.',
+    explanation: 'Hand area (the hand knob) for the LEFT hand in the right hemisphere: whole-hand grasp, opening, spreading and bringing the fingers together. Crossed corticospinal fibres, including direct cortico-motoneuronal connections that support fine finger control (Lemon 2008), reach the hand motor neurons. In the game, looking here, or holding Space for the fist, drives the existing left-hand actions, and the finger flexors or extensors take the same colour ramp as the brain. Huber 2020 measured left-hand grasp and retraction in the right motor cortex as overlapping, repeated action patches that differ between people, and natural grip release can be passive (Motawar 2012), so letting go of Space only lets the hand go back to rest.',
     citationKeys: ['HUBER2020', 'MOTAWAR2012', 'ARBUCKLE2020', 'VANDUINEN2008', 'LEMON2008', 'YOUSRY1997', 'DEO2026', 'UAMS_UPPER']
   }),
   little: () => ({
@@ -1101,8 +1102,8 @@ const CONTENT = {
     label: 'Tongue', shortLabel: 'Tongue', effector: 'tongue protrusion', bodySide: 'midline', medialSurface: false,
     displayGroup: 'face', pathway: 'corticobulbar', laterality: 'bilateral_contralateral_bias',
     actions: [],
-    noActionReason: 'Tongue movement is not ready in this loaded rig. Selecting this region can light and mark the brain area. A suitable tongue model and checked motion are still needed.',
-    explanation: `Representative tongue area of the ${c.H} hemisphere within the mouth zone (Gordon 2023). A human magnetic brain-stimulation study reported evoked tongue-muscle electrical responses on both sides, with lower thresholds on the opposite side (Muellbacher 2001; abstract-level evidence). These responses do not specify normal tongue motion or a precise movement command here. This loaded rig has no qualified tongue movement or tongue-muscle display. Selecting the region can light and mark the brain area; tongue function remains unfinished. Swallowing has its own area just after this one; the larynx is not modelled.`,
+    noActionReason: 'Tongue movement is not ready in this loaded rig. Selecting this region marks the brain area. A suitable tongue model and checked motion are still needed.',
+    explanation: `Representative tongue area of the ${c.H} hemisphere within the mouth zone (Gordon 2023). A human magnetic brain-stimulation study reported evoked tongue-muscle electrical responses on both sides, with lower thresholds on the opposite side (Muellbacher 2001; abstract-level evidence). These responses do not specify normal tongue motion or a precise movement command here. This loaded rig has no qualified tongue movement or tongue-muscle display. Selecting the region marks the brain area; tongue function remains unfinished. Swallowing has its own area just after this one; the larynx is not modelled.`,
     citationKeys: ['GORDON2023', 'MUELLBACHER2001', 'PENFIELD1937', 'UAMS_HEADNECK']
   }),
   throat: c => ({
@@ -1184,7 +1185,7 @@ const REGION_CAVEATS = {
   wrist: c => (c.H === 'right'
     ? 'The wrist area overlaps the fingers; the game arm cannot bend its wrist sideways, so those spots only colour.'
     : 'The wrist area overlaps the fingers; this strip shows it as one simplified region.'),
-  hand: () => 'Grasp areas overlap and differ between people; opening the hand on release is a game convention.',
+  hand: () => 'Grasp areas overlap and differ between people; letting go of Space lets the hand go back to rest.',
   index: () => 'Bending and straightening one finger use overlapping activity; the colour covers every finger.',
   thumb: () => 'Placed by mirroring right-thumb studies, so the spot is representative.',
   little: () => 'Placed by mirroring right-hand studies; single-finger patterns overlap, and the colour covers every finger.',
@@ -1222,7 +1223,8 @@ const FACE_MOVES_PLAIN = 'Nothing you can see: the game only keeps a number.';
 // R5-text: with the face-muscle packet loaded. 20 November 2026 (FACE): the face moves now, so the plain rows no longer
 // start with "Nothing" (ns-guide: a face area's switch-on counts as a movement you can see).
 const FACE_COLOUR_PLAIN = 'The game moves the face more than a real face would, so you can see it on the mirror body.';
-const SCAN_MOVES_PLAIN = 'Nothing: it only lights up and gets marked.';
+// (22 November 2026, section 191: the in-between areas never light up white now; their edge glows, brighter under the look)
+const SCAN_MOVES_PLAIN = 'Nothing: its edge glows brighter while you look at it, and it gets marked.';
 const SCAN_CAVEAT_PLAIN = 'Any real job here, such as planning or posture, is not simulated.';
 const LOOK_RIGHT = ' (it starts beside your right thigh)'; // 18 Nov (SMALL, S19): the reclined start posture
 
@@ -1425,7 +1427,8 @@ const PLAIN_REGION = {
   tongue: c => ({
     plainLabel: 'Tongue',
     plainLead: `This marked area in ${half(c)} represents tongue movement.`,
-    plainMoves: 'No tongue movement or muscle colour change. This area can still light up and keep an activation mark.',
+    // (22 November 2026, section 191: an area with no movement no longer lights up; it glows under the look like any area)
+    plainMoves: 'No tongue movement or muscle colour change. It glows while you look at it and keeps a mark once tried.',
     plainCaveat: 'Tongue movement still needs to be built and checked in this 3D body.'
   }),
   throat: c => ({
@@ -1630,7 +1633,7 @@ const PLAIN_DETAIL = {
       `foot and hand zones of ${BRAIN_HALF(c)}, mixed in with them (interleaved; Gordon 2023). It is strongly linked to ` +
       'the other in-between areas and to a network that helps control actions (cingulo-opercular action-control ' +
       'network). It was most active when people tightened their belly (abdominal contraction) and while they planned an ' +
-      'action, not when they moved one body part. In the game, looking here lights up and marks the area, but on ' +
+      'action, not when they moved one body part. In the game, looking here makes its edge glow brighter and marks the area, but on ' +
       'purpose it moves nothing. Any real job here would be getting the whole body ready or holding a posture (whole-body ' +
       'postural or preparatory control), and that is not simulated.',
     noAction: `${SCAN_WEAK} They are linked to planning actions, posture and holding the trunk steady (axial control). ` +
@@ -1701,8 +1704,7 @@ const PLAIN_DETAIL = {
       `the forearm-turning area and the hand area. ${ARM_PATH_PLAIN('the wrist muscles', ', wrist flexors and extensors')} ` +
       'In the game, looking here gives a short burst (pulse) of the left wrist bending toward the palm (flexion: flexor ' +
       'carpi radialis and ulnaris) or bending back (extension: the three wrist extensors). The sideways bends toward the ' +
-      'thumb (radial deviation) or the little finger (ulnar deviation) colour their muscles, but the game arm does not ' +
-      'move: its hand fit has only one wrist axis. In the brain, the wrist area ' +
+      'thumb (radial deviation) or the little finger (ulnar deviation) bend the hand to that side. In the brain, the wrist area ' +
       'overlaps the fingers and shows up on both sides of the hand zone (wrist representation; Meier 2008; Gordon 2023). ' +
       'But this strip runs in only one direction (one-dimensional), so it shows only the upper part (dorsal part). Maps of ' +
       'the forearm muscles also peak in different places for different tasks (task-specific peaks; Masse-Alarie 2017).'
@@ -1858,7 +1860,7 @@ const PLAIN_DETAIL = {
       `hand and mouth zones of ${BRAIN_HALF(c, 'Gordon 2023')}. It is linked to the other in-between areas and to a ` +
       'network that helps control actions (cingulo-opercular network). It is also linked a bit more to the part of the ' +
       'brain for seeing (visual cortex). That may help the hands and eyes work together (hand-eye coordination). In the game, ' +
-      'looking here lights up and marks the area, but it moves nothing. Gordon’s new look at old brain stimulation data ' +
+      'looking here makes its edge glow brighter and marks the area, but it moves nothing. Gordon’s new look at old brain stimulation data ' +
       'found that this area never caused a movement in anyone (re-analysis of cortical stimulation). Raising the eyebrows ' +
       'also switched on the in-between areas (eyebrow raising co-activated the inter-effector regions).',
     noAction: 'A new look at old brain stimulation data found that this middle in-between area never caused a movement ' +
@@ -1950,10 +1952,10 @@ const PLAIN_DETAIL = {
       'sides. Less stimulation was needed for a response on the opposite side (Muellbacher 2001; abstract only). ' +
       'These are evoked electrical responses, not a measurement of normal tongue motion or a command for this game. ' +
       'Tongue movement and tongue-muscle colour changes are not ready in this loaded 3D body. Selecting this region ' +
-      'can light the brain area and leave an activation mark. Tongue function remains unfinished. Swallowing has its own ' +
+      'leaves an activation mark on the brain area. Tongue function remains unfinished. Swallowing has its own ' +
       'area just after this one; the voice box (larynx) is not modelled.',
-    noAction: 'A suitable tongue model and checked motion are still needed in this 3D body. Selecting this region can ' +
-      'light and mark the brain area, without a tongue movement or tongue-muscle colour change.'
+    noAction: 'A suitable tongue model and checked motion are still needed in this 3D body. Selecting this region ' +
+      'marks the brain area, without a tongue movement or tongue-muscle colour change.'
   }),
   throat: c => ({
     detail: `This is the swallowing area of ${BRAIN_HALF(c)}. It sits at the outer end of the strip, after the tongue, ` +
@@ -1972,7 +1974,7 @@ const PLAIN_DETAIL = {
       `the three (most ventral), past the mouth zone of ${BRAIN_HALF(c, 'Gordon 2023, seed 6 of the dorsal-to-ventral line')}. ` +
       'Gordon lists swallowing among the moves the in-between areas like best (most preferred at inter-effector ' +
       'centres). But a vowel-sound task for the voice box stayed inside the mouth zone (laryngeal vowel task). In the ' +
-      'game, looking here lights up and marks the area, but it moves nothing. Swallowing has its own area just before ' +
+      'game, looking here makes its edge glow brighter and marks the area, but it moves nothing. Swallowing has its own area just before ' +
       'this one, and breathing and the voice box (larynx) are not simulated.',
     noAction: `${SCAN_WEAK} Swallowing has its own area just before this one, and the 3D body has no voice box (the ` +
       'larynx is not in the rig), so the game moves nothing here.'
@@ -1982,9 +1984,9 @@ const PLAIN_DETAIL = {
 const JAW_SHIFT_PLAIN = 'This is a game choice. The deep chewing muscles of one side push the chin toward the other side ' +
   '(pterygoids), and each half of the brain drives the other side’s muscles more strongly (a crossed bias, as for the ' +
   'masseter). So each half shifts the chin toward its own side.';
-const LEFT_WRIST_SIDE_PLAIN = 'The game arm keeps your hand where you look, and its wrist bends only one way (toward the palm ' +
-  'or back; one wrist axis). So this sideways bend lights the area and colours its muscles, but your left hand does not ' +
-  'move. Your right wrist does bend sideways.';
+// 21 November 2026 (browser hunt of update 62, H8): the game arm's wrist bends sideways now (ns-rig wrist_dev).
+const LEFT_WRIST_SIDE_PLAIN = 'The hand bends sideways at the wrist, pulled by the muscles on that side of the forearm (a ' +
+  'flexor and an extensor together), then comes back.';
 const NECK_CHOICE_PLAIN = 'This is a game choice: each half of the brain turns the head toward the other side (each ' +
   'hemisphere, opposite side). Which half really drives head turning is not known (unresolved).';
 /** Action plain notes (restating `note`), keyed like PLAIN_ACTION. */

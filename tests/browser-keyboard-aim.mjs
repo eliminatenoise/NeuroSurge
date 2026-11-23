@@ -184,7 +184,12 @@ try {
     await page.mouse.click(width / 2, height / 2);
     await page.waitForFunction(() => document.pointerLockElement?.id === 'ns-canvas');
 
-    const firstRight = await step('ArrowRight');
+    // 21 November 2026 (browser hunt of update 62, H6; restated): from a look on no area the first arrow key now goes to
+    // the nearest area on ITS side of the crosshair. This walk pressed the RIGHT key first and was taken to the throat
+    // area at the lower-LEFT end of the strip (the nearest area of all, whichever key), then went one further left to
+    // the left end. The same two areas are now reached with the left key twice.
+    const firstRight = await step('ArrowLeft');
+    assert.equal(firstRight.step.from, null, 'the first key starts from no area');
     const firstLeft = await step('ArrowLeft');
     assert.equal(firstLeft.step.from, firstRight.area);
     assert.notEqual(firstLeft.area, firstRight.area);

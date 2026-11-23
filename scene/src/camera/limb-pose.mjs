@@ -60,3 +60,65 @@ export function poseForLimb(points, width, height, limb) {
   }
   return {leftArm: {bearing: chestDirection(wrist), upper: chestDirection(upper), elbowDeg: Math.min(145, bend)}};
 }
+
+// When the detector fits both shins to nearly the same line, a visible shoe
+// cannot tell which knee it belongs to. Measure separation in image pixels
+// relative to the shorter shin, so moving closer to the lens changes neither test.
+function shinsOverlap(points, width, height) {
+  const shins = [25, 26, 27, 28].map(index => points?.[index]);
+  if (!shins.every(visible)) return false;
+  const distance = (a, b) => Math.hypot((a.x - b.x) * width, (a.y - b.y) * height);
+  const [leftKnee, rightKnee, leftAnkle, rightAnkle] = shins;
+  const separation = Math.min(distance(leftKnee, leftAnkle), distance(rightKnee, rightAnkle)) / 4;
+  return distance(leftKnee, rightKnee) < separation && distance(leftAnkle, rightAnkle) < separation;
+}
+
+// Build a fresh packet from just the limbs visible in this frame.
+export function poseForSelection(points, width, height, selection, hasDetail) {
+  function read(limb) {
+    const result = poseForLimb(points, width, height, limb);
+    return result && hasDetail(limb) ? result : null;
+  }
+  const arms = selection === 'bothArms' || selection === 'armsAndKnees';
+  const knees = selection === 'bothKnees' || selection === 'armsAndKnees';
+  if (!arms && !knees) return read(selection);
+  const leftArm = arms ? read('leftArm')?.leftArm : null;
+  const joints = arms ? {...read('rightArm')?.joints} : {};
+  if (knees && !shinsOverlap(points, width, height)) {
+    Object.assign(joints, read('leftLeg')?.joints, read('rightLeg')?.joints);
+  }
+  const pose = {};
+  if (leftArm) pose.leftArm = leftArm;
+  if (Object.keys(joints).length) pose.joints = joints;
+  return pose.leftArm || pose.joints ? pose : null;
+}
+
+// Keep two coordinates per tracked wrist. The source bitmap is unmirrored.
+// A frame-height is isotropic in image pixels even when the video is not square.
+export function observedWrists(points, width, height, pose) {
+  const tracks = {};
+  for (const [side, tracked, shoulder, wrist, sign] of [
+    ['leftArm', pose?.leftArm, 11, 15, 1],
+    ['rightArm', Number.isFinite(pose?.joints?.r_elbow_flex), 12, 16, -1]
+  ]) {
+    const a = points?.[shoulder], b = points?.[wrist];
+    if (tracked && visible(a) && visible(b) && width > 0 && height > 0) {
+      tracks[side] = [sign * (b.x - a.x) * width / height, a.y - b.y];
+    }
+  }
+  return tracks;
+}
+
+// Unmirrored image coordinates in units of frame height, with Y increasing down.
+// Admit only the selected arms that passed the detector and image-detail gates.
+export function observedArmGeometry(points, width, height, pose) {
+  if (!(width > 0) || !(height > 0)) return;
+  const ratio = width / height;
+  if (!(ratio > 0) || !Number.isFinite(ratio) || ![11, 12].every(i => visible(points?.[i]))) return;
+  const xy = i => [points[i].x * ratio, points[i].y];
+  const geometry = {aspect: ratio, shoulders: {leftArm: xy(11), rightArm: xy(12)}};
+  if (pose?.leftArm && [15, 13].every(i => visible(points[i]))) geometry.leftArm = [xy(15), xy(13)];
+  if (Number.isFinite(pose?.joints?.r_elbow_flex) && [16, 14].every(i => visible(points[i])))
+    geometry.rightArm = [xy(16), xy(14)];
+  if (geometry.leftArm || geometry.rightArm) return geometry;
+}

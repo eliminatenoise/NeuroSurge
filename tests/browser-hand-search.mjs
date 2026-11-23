@@ -22,7 +22,7 @@ try {
   await page.waitForFunction(()=>window.__nsQA?.inspect()?.features?.bodyRig && document.querySelector('#ns-app')?.dataset.nsPhase==='playing',null,{timeout:120000});
   assert.equal(requests.some(u=>u.includes('/assets/hand-search/')),false);
   await page.locator('#ns-canvas').click({position:{x:400,y:300}});
-  await page.keyboard.press('f');const input=page.getByRole('textbox',{name:'Move the body'});
+  await page.keyboard.press('f');const input=page.getByRole('textbox',{name:'Command box'});
   await input.fill('press the button');await page.getByRole('button',{name:'Find hand recording'}).click();
   const hand=page.locator('#ns-act-hand');await hand.locator('[data-hand-ready]').waitFor();
   const rows=hand.locator('[data-hand-rows] tr');

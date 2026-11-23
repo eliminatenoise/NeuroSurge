@@ -1,0 +1,239 @@
+// Each take lives in this page's memory. The camera passes only its selected
+// rig pose, frame time and projected arm points after side and tracking checks.
+const LIMIT_MS = 8000;
+const groupedLimbs = {
+  bothArms: ['leftArm', 'rightArm'],
+  bothKnees: ['leftLeg', 'rightLeg'],
+  armsAndKnees: ['leftArm', 'rightArm', 'leftLeg', 'rightLeg']
+};
+const jointKeys = {
+  rightArm: ['r_shoulder_abd', 'r_shoulder_flex', 'r_elbow_flex'],
+  rightLeg: ['knee_ext_R'],
+  leftLeg: ['knee_ext_L']
+};
+
+// Keep only the game channels named here if the worker gains new outputs.
+function copyLimb(result, limb, pose) {
+  if (!result) return false;
+  if (limb === 'leftArm') {
+    const arm = result.leftArm;
+    const direction = v => Array.isArray(v) && v.length === 3 && v.every(Number.isFinite);
+    if (!arm || !direction(arm.bearing) || !direction(arm.upper) || !Number.isFinite(arm.elbowDeg)) return false;
+    pose.leftArm = {bearing: [...arm.bearing], upper: [...arm.upper], elbowDeg: arm.elbowDeg};
+    return true;
+  }
+  const keys = jointKeys[limb];
+  for (const key of keys) if (!Number.isFinite(result.joints?.[key])) return false;
+  const joints = pose.joints ??= {};
+  for (const key of keys) joints[key] = result.joints[key];
+  return true;
+}
+
+// One timestamp covers both sides of a camera frame. A missing side contributes
+// no channels. On playback the ordinary camera controller releases that side.
+export function createTakeTimeline(limb, start) {
+  const sides = groupedLimbs[limb] || [limb];
+  const counts = sides.map(() => 0);
+  const frames = [];
+  let count = 0, lastObservation = -Infinity;
+  function observe(result, at, expiry = false, wrists, armGeometry) {
+    const time = at - start;
+    if (!Number.isFinite(time) || time < 0 || time >= LIMIT_MS) return;
+    if (!expiry) {
+      if (time <= lastObservation) return;
+      lastObservation = time;
+    }
+    // A frame may be grabbed before the previous pose expires and delivered
+    // afterwards. On the capture clock that newer frame precedes the timeout.
+    if (!expiry && frames.at(-1)?.expiry && time <= frames.at(-1).time) frames.pop();
+    if (frames.length && time <= frames.at(-1).time) return;
+    const pose = {}, frame = {time, pose};
+    for (let i = 0; i < sides.length; i++) {
+      const side = sides[i];
+      if (!copyLimb(result, side, pose)) continue;
+      counts[i]++;
+      const point = wrists?.[side];
+      if ((side === 'leftArm' || side === 'rightArm') && Array.isArray(point) &&
+          point.length === 2 && point.every(Number.isFinite)) {
+        (frame.wrists ??= {})[side] = [...point];
+      }
+    }
+    if (armGeometry && frame.wrists) {
+      const {aspect, shoulders} = armGeometry;
+      const point = p => Array.isArray(p) && p.length === 2 && p.every(Number.isFinite);
+      if (Number.isFinite(aspect) && aspect > 0 && point(shoulders?.leftArm) && point(shoulders?.rightArm)) {
+        const copy = {aspect, shoulders: {leftArm: [...shoulders.leftArm], rightArm: [...shoulders.rightArm]}};
+        for (const side of Object.keys(frame.wrists)) {
+          const arm = armGeometry[side];
+          if (Array.isArray(arm) && arm.length === 2 && arm.every(point)) copy[side] = arm.map(p => [...p]);
+        }
+        if (copy.leftArm || copy.rightArm) frame.armGeometry = copy;
+      }
+    }
+    if (pose.leftArm || pose.joints) {
+      frames.push(frame);
+      count++;
+    } else if (frames.at(-1)?.pose) {
+      frames.push({time, pose: null, expiry});
+    }
+  }
+  function finish(at) {
+    const enough = n => n >= 2;
+    const ready = limb === 'armsAndKnees' ? counts.some(enough) : counts.every(enough);
+    if (!ready) return null;
+    return {limb, frames, count, counts, duration: Math.min(LIMIT_MS, at - start)};
+  }
+  return {start, observe, finish};
+}
+
+export function createLimbTake({panel, emit, onFinish, onReplay, returnFocus}) {
+  const box = document.createElement('div');
+  const hint = document.createElement('div');
+  const recordHint = 'Record up to 8 s in this tab. Arm takes keep projected shoulder, elbow and wrist positions. Press F to name a take or match a reach. No images or audio are saved.';
+  const info = document.createElement('div');
+  info.setAttribute('role', 'status');
+  const clock = document.createElement('span');
+  clock.setAttribute('aria-hidden', 'true');
+  function button(label, action) {
+    const el = document.createElement('button');
+    el.type = 'button';
+    el.textContent = label;
+    el.addEventListener('click', () => { action(); returnFocus(); });
+    return el;
+  }
+  const record = button('Record take', () => recording ? finish() : begin());
+  const replay = button('Replay take', () => playing ? stopReplay() : play());
+  const controls = document.createElement('div');
+  controls.style.cssText = 'display:flex; flex-wrap:wrap; align-items:center; gap:4px';
+  controls.append(record, replay, clock);
+  box.append(hint, controls, info);
+  panel.append(box);
+
+  let live = false, valid = false, limb, name, recording, saved, playing;
+  let playable = true;
+  let deadline, progress, animation;
+  const seconds = ms => (ms / 1000).toFixed(1) + ' s';
+
+  function refresh() {
+    record.textContent = recording ? 'Finish take' : 'Record take';
+    record.disabled = !recording && (!live || !valid);
+    replay.textContent = playing ? 'Stop replay' : 'Replay take';
+    replay.disabled = !playable || live || (!saved && !playing);
+    clock.hidden = !recording && !playing;
+  }
+  function stopClock() {
+    clearTimeout(deadline);
+    clearInterval(progress);
+    cancelAnimationFrame(animation);
+  }
+  function begin() {
+    if (!live || !valid || recording) return;
+    recording = createTakeTimeline(limb, performance.now());
+    info.textContent = 'Recording ' + name.toLowerCase() + '. Finish take keeps it and stops the camera. Stop camera cancels it.';
+    const showTime = () => { clock.textContent = seconds(Math.min(LIMIT_MS, performance.now() - recording.start)); };
+    showTime();
+    progress = setInterval(showTime, 100);
+    deadline = setTimeout(finish, LIMIT_MS);
+    refresh();
+  }
+  function finish() {
+    if (!recording) return;
+    const take = recording.finish(performance.now());
+    recording = null;
+    stopClock();
+    if (take) {
+      saved = {...take, name};
+      info.textContent = summary();
+    } else {
+      const reason = limb === 'armsAndKnees' ? 'Show at least one limb for two frames to keep a take.' : groupedLimbs[limb] ? 'A paired take needs two visible samples from each side.' : 'Too few visible samples for a take.';
+      info.textContent = reason + (saved ? ' Previous take available.' : '');
+    }
+    refresh();
+    onFinish();
+  }
+  function summary() {
+    if (saved.limb === 'armsAndKnees') {
+      const counts = ['left arm', 'right arm', 'left knee', 'right knee'].map((side, i) => saved.counts[i] + ' ' + side);
+      return saved.name + ' · ' + seconds(saved.duration) + ' · ' + saved.count + ' pose samples (' + counts.join(', ') + ').';
+    }
+    const sides = saved.counts.length === 2 ? ' (' + saved.counts[0] + ' left, ' + saved.counts[1] + ' right)' : '';
+    return saved.name + ' · ' + seconds(saved.duration) + ' · ' + saved.count + ' pose samples' + sides + '.';
+  }
+  function stopReplay() {
+    if (!playing) return;
+    const label = playing.label;
+    playing = null;
+    stopClock();
+    emit(null);
+    info.textContent = label ? 'Replay ended · “' + label + '”.' + (saved ? ' Last take · ' + summary() : '') : summary();
+    refresh();
+  }
+  function play(take = saved, label = '', interval) {
+    if (!playable || live || !take || playing) return;
+    const start = interval?.start ?? 0, end = interval?.end ?? take.duration;
+    if (!(0 <= start && start < end && end <= take.duration)) return;
+    const frames = take.frames;
+    let next = 0;
+    while (next < frames.length && frames[next].time < start) next++;
+    onReplay(take.limb);
+    playing = {start: performance.now(), next, label};
+    const span = interval ? ' · ' + (Math.floor(start) / 1000) + '–' + (Math.floor(end) / 1000) + ' s' : '';
+    info.textContent = 'Replaying ' + (label ? '“' + label + '” · ' : '') + take.name.toLowerCase() + span + ' with the camera off.';
+    refresh();
+    function tick() {
+      const elapsed = start + Math.max(0, performance.now() - playing.start);
+      clock.textContent = seconds(Math.min(elapsed, end));
+      // Use only acquired frames in [start, end). No previously held pose
+      // supplies an artificial sample at start, even during a tracking gap.
+      if (interval && elapsed >= end) { stopReplay(); return; }
+      let last;
+      while (playing.next < frames.length && frames[playing.next].time <= elapsed) {
+        last = frames[playing.next++];
+      }
+      if (last) emit(last.pose, take.limb);
+      if (elapsed >= take.duration && !last) stopReplay();
+      else animation = requestAnimationFrame(tick);
+    }
+    tick();
+  }
+  function interrupt(reason) {
+    if (recording) {
+      recording = null;
+      stopClock();
+      info.textContent = reason + (saved ? ' Previous take available.' : '');
+      refresh();
+    }
+    stopReplay();
+  }
+  function observe(pose, at = performance.now(), expiry = false, wrists, armGeometry) {
+    const previous = valid;
+    valid = !!pose;
+    recording?.observe(pose, at, expiry, wrists, armGeometry);
+    if (valid !== previous) refresh();
+  }
+  refresh();
+  return {
+    observe, interrupt, play,
+    get recording() { return !!recording; },
+    get hasTake() { return !!saved; },
+    get latest() { return saved; },
+    get savedName() { return saved?.name; },
+    setPlayable(value) { playable = value; refresh(); },
+    setCamera(active, side, displayName) {
+      if (active === live && side === limb) return;
+      if (!active || limb !== side) valid = false;
+      live = active;
+      limb = side;
+      name = displayName;
+      hint.textContent = recordHint + (limb === 'armsAndKnees' ? ' Only visible movements enter the take.' : groupedLimbs[limb] ? ' Show each side at least twice.' : '');
+      refresh();
+    },
+    clear() {
+      interrupt('Take cancelled.');
+      saved = null;
+      info.textContent = '';
+      refresh();
+    },
+    get playing() { return !!playing; }
+  };
+}

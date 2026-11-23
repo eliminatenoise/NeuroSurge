@@ -57,6 +57,7 @@
  */
 
 import { BRAIN_LIVE, liveBloomGlsl } from './ns-brain-live.mjs';
+import { AREA_HALO, haloTissueGlsl } from './ns-area-halo.mjs';
 import { RAW_LOOK, rawLightDir, rawShadeGlsl } from './ns-raw-look.mjs';
 
 /** Display choices (see the BB and BB2 reports for what was tried).
@@ -371,7 +372,11 @@ export const BRAIN_KEYS = Object.freeze({
   pressS: 0.2, pressHoldS: 0.07, pressDark: 0.45, pressCss: 4, pressShare: 0.3,
   // 18 November (MAP): the lit key's frame in its own colour (frameWhite 0.3 -> 0.1): the white-hot frame turned the
   // whole lit key white under the bloom; the neon glow is saturated now.
-  frameCss: 2.2, frameShare: 0.12, frameGain: 2.0, frameWhite: 0.1, pulse: 0.22, pulseHz: 1.1,
+  // 21 November 2026 (ns-area-halo AREA_LIT; the owner: "Right now, there's essentially no glow"): frameGain 2.0 -> 0.
+  // The lit block's light along its borders is now the area's own colour at the screen's full brightness (AREA_LIT's
+  // rim); the frame's extra 2 x of it went past white per channel, where the screen cuts each channel off, so an azure
+  // key's frame showed cyan-white and an orange key's yellow, and with the bloom pass it was a second white halo.
+  frameCss: 2.2, frameShare: 0.12, frameGain: 0, frameWhite: 0.1, pulse: 0.22, pulseHz: 1.1,
   ringHz: 0.9, ringW: 0.16, ringGain: 1.1, ringSpan: 1.5, ringReliefMm: 9,
   focusDim: 0.5, focusInS: 0.12, focusOutS: 0.45
 });
@@ -682,6 +687,52 @@ export const BRAIN_FLESH_RAW = Object.freeze({
 });
 /** The cortex look in force: BRAIN_FLESH_RAW under the raw look's switch (RAW_LOOK.on), else BRAIN_FLESH. */
 export const BRAIN_FLESH_LOOK = RAW_LOOK.on ? BRAIN_FLESH_RAW : BRAIN_FLESH;
+/** 21 November 2026 (the owner, Message 177: "have the whole brain light up slightly, faintly, with whatever color
+ * area is being picked"; a browser hunt, H25: on the matte brain the whole cortex turned lilac or grey-blue). The pick
+ * tint was a light ADDED to the cortex: 6 % of the area's saturated glow colour. The cortex is a pale pink (OKLCH chroma
+ * about 0.05) with little blue, and the matte light leaves much of it in shade, so the same added light turned its hue
+ * by 15 degrees where it faced the light and by 25 to 30 in shade: a recolouring, not a faint light. Now it is a GAIN on
+ * the cortex's own colour, the same share in light and shade (so the same faint change everywhere), worked out in OKLab
+ * from the crown colour: lightness up by `lift` (it lights up), and the colour moved `chroma` toward the area's own hue
+ * (a faint cast of that colour), its chroma never under `keepChroma` of the cortex's own (a cool colour on the pink does
+ * not grey it). The change of the crown colour is about 0.02 in OKLab (lift and cast together): seen side by side,
+ * never a different colour. Display choices. */
+export const BRAIN_PICK_LOOK = Object.freeze({ lift: 0.014, chroma: 0.012, keepChroma: 0.85 });
+const okOfLinear = (c, o) => {
+  const l = Math.cbrt(Math.max(0, 0.4122214708 * c[0] + 0.5363325363 * c[1] + 0.0514459929 * c[2]));
+  const m = Math.cbrt(Math.max(0, 0.2119034982 * c[0] + 0.6806995451 * c[1] + 0.1073969566 * c[2]));
+  const s = Math.cbrt(Math.max(0, 0.0883024619 * c[0] + 0.2817188376 * c[1] + 0.6299787005 * c[2]));
+  o[0] = 0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s;
+  o[1] = 1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s;
+  o[2] = 0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s;
+  return o;
+};
+const linearOfOk = (L, a, b, o) => {
+  const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3, m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3, s = (L - 0.0894841775 * a - 1.2914855480 * b) ** 3;
+  o[0] = 4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s;
+  o[1] = -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s;
+  o[2] = -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s;
+  return o;
+};
+const pickRef = [0, 0, 0], pickOk = [0, 0, 0], pickG = [0, 0, 0], pickT = [0, 0, 0];
+/** The pick tint as a gain (BRAIN_PICK_LOOK): writes out[0..2] = the share x (the tinted crown / the crown - 1) per
+ * linear channel, for the cortex shader's `nsCol *= 1.0 + nsPickTint`. glowLinear: the picked area's glow colour
+ * (linear rgb); share 0..1 (0: none). A colour of little hue (an in-between area's near-white glow, OKLab chroma under
+ * 0.1) casts in proportion; one of none only lifts. Pure. */
+export function brainPickGainInto(out, glowLinear, share = 1, flesh = BRAIN_FLESH_LOOK, P = BRAIN_PICK_LOOK) {
+  const k = Number.isFinite(share) ? Math.max(0, Math.min(1, share)) : 0;
+  if (!(k > 0) || !glowLinear) { out[0] = out[1] = out[2] = 0; return out; }
+  for (let i = 0; i < 3; i++) pickRef[i] = srgbToLinear(flesh.crown[i]);
+  okOfLinear(pickRef, pickOk); okOfLinear(glowLinear, pickG);
+  const gc = Math.hypot(pickG[1], pickG[2]), c0 = Math.hypot(pickOk[1], pickOk[2]);
+  let a = pickOk[1], b = pickOk[2];
+  if (gc > 1e-4) { const t = P.chroma * Math.min(1, gc / 0.1) / gc; a += t * pickG[1]; b += t * pickG[2]; } // (a near-grey glow: a fainter cast)
+  const c1 = Math.hypot(a, b), keep = P.keepChroma * c0;
+  if (c1 < keep && c1 > 1e-9) { a *= keep / c1; b *= keep / c1; }
+  linearOfOk(pickOk[0] + P.lift, a, b, pickT);
+  for (let i = 0; i < 3; i++) out[i] = k * (Math.max(0, pickT[i]) / Math.max(pickRef[i], 1e-6) - 1);
+  return out;
+}
 /** The procedural vessel lines of 18 November (cortexVesselGlsl's parameters), kept for reference; BRAIN_FLESH.vessel is
  * null since the anatomical vessels (ns-vessels) replaced them. */
 export const PROCEDURAL_VESSELS = Object.freeze({
@@ -756,9 +807,15 @@ export const CORTEX_FLESH_HEAD = 'float nsFlH( vec3 p ) { p = fract( p * 0.1031 
  * nsFacing, nsG, vNsNear, nsClear, the rim uniforms and the varying vNsObj (atlas position, source mm) in scope). It
  * sets outgoingLight and diffuseColor.a. `light` is the view-space key light. hooks.albedo: GLSL run once the tissue's
  * colour nsAlb is made and before it is lit (20 November 2026: ns-brain-gap's inner parts and cut faces). Pure. */
-export function cortexFleshGlsl(light, o = BRAIN_FLESH_LOOK, live = BRAIN_LIVE, hooks = {}) {
+export function cortexFleshGlsl(light, o = BRAIN_FLESH_LOOK, live = BRAIN_LIVE, hooks = {}, halo = AREA_HALO) {
   const f = glslFloat, v3 = c => `vec3( ${c.map(f).join(', ')} )`, lin = c => v3(c.map(srgbToLinear));
   const B = live.bloom, P = live.beat;
+  // 21 November 2026 (ns-area-halo AREA_HALO; the owner: "Right now, there's essentially no glow"): the light of a lit
+  // or looked-at block on the tissue round it is the halo's now (the block's own shape and colour, gone when the
+  // contraction ends). The bloom keeps its swell, its dimple, its rosy flush and its ring; its own spill of the key's
+  // hue (a disc that faded over 0.8 s) and its light above white (seen only where the bloom pass runs) give way to it.
+  const haloOn = Boolean(halo && halo.on !== false);
+  const spill = haloOn ? 0 : B.spill, bloomGlow = haloOn ? 0 : B.glow;
   const R = o.raw || null, RL = R ? rawLightDir(RAW_LOOK) : null;
   // 20 November 2026 (BRAIN_FLESH_RAW): the raw look's light in place of the key light, wrap, fill, fold shade and scatter
   const lightGlsl = R ? `vec3 nsLk = vec3( ${RL.map(f).join(', ')} );
@@ -809,9 +866,10 @@ export function cortexFleshGlsl(light, o = BRAIN_FLESH_LOOK, live = BRAIN_LIVE, 
 	float nsRimF = pow( max( 1.0 - nsFacing, 0.0 ), nsRimPower ) * ( 1.0 - nsRimGroove * nsG );
 	${rimGlsl}
 	// 19 November 2026 (the owner: "can we also please have the whole brain light up slightly, faintly, with whatever
-	// color area is being picked"): the whole cortex takes a faint light of the picked area's colour (nsPickTint: that
-	// colour times its level, set by the scene; black when nothing is picked), a little more on the lit side.
-	nsCol += nsPickTint * ( 0.55 + 0.45 * nsDif );
+	// color area is being picked"): the whole cortex lights up faintly in the picked area's colour (nsPickTint: a gain
+	// per channel less 1, brainPickGainInto, set by the scene; 0 when nothing is picked; 21 November 2026: a gain, the
+	// same faint change in light and in shade, where an added light recoloured the matte cortex lilac or grey-blue).
+	nsCol *= 1.0 + nsPickTint;
 	// The tissue round a switched-on key takes the key's HUE and keeps its own light and shade (its brightness x the
 	// key's colour): the folds, the vessels and the wet highlights stay, so it reads as flushed tissue, not as a wash.
 	// Where the surface is seen edge-on the colour is held back (it smeared into a long pale stain there).
@@ -819,13 +877,15 @@ export function cortexFleshGlsl(light, o = BRAIN_FLESH_LOOK, live = BRAIN_LIVE, 
 	float nsLvZ = smoothstep( ${f(B.grazeLo)}, ${f(B.grazeHi)}, nsFacing );
 	float nsLvM = max( nsLvC.r, max( nsLvC.g, nsLvC.b ) );
 	float nsLvY = dot( min( nsCol, vec3( 1.0 ) ), vec3( 0.2126, 0.7152, 0.0722 ) );
-	nsCol = mix( nsCol, ( nsLvC / max( nsLvM, 1e-3 ) ) * ( ${f(B.spillGain)} * nsLvY ), ${f(B.spill)} * min( nsLvM, 1.0 ) * mix( ${f(B.grazeKeep)}, 1.0, nsLvZ ) );
+	nsCol = mix( nsCol, ( nsLvC / max( nsLvM, 1e-3 ) ) * ( ${f(B.spillGain)} * nsLvY ), ${f(spill)} * min( nsLvM, 1.0 ) * mix( ${f(B.grazeKeep)}, 1.0, nsLvZ ) );
 	// the ring of a movement being switched on runs over the tissue in the key's colour
 	float nsLvPm = max( nsLvP.r, max( nsLvP.g, nsLvP.b ) );
 	nsCol = mix( nsCol, ( nsLvP / max( nsLvPm, 1e-3 ) ) * ( ${f(B.spillGain)} * nsLvY + 0.1 ), ${f(B.pulse)} * min( nsLvPm, 1.0 ) * mix( ${f(B.grazeKeep)}, 1.0, nsLvZ ) );
 	// ... and right next to the key (and on the ring) a little of it is above white (the scene's bloom turns that into
 	// a soft halo); none where the surface is seen edge-on
-	outgoingLight = min( nsCol, vec3( 1.0 ) ) + ( nsLvK * ( ${f(B.glow)} * nsLvA ) + nsLvP * ${f(B.pulseGlow)} ) * nsLvZ;
+	// 21 November 2026 (AREA_HALO): the pool of light of a lit or looked-at block, in its own colour, under white
+	${haloOn ? haloTissueGlsl('vNsObj', 'nsCol', 'nsFacing', halo) : ''}
+	outgoingLight = min( nsCol, vec3( 1.0 ) ) + ( nsLvK * ( ${f(bloomGlow)} * nsLvA ) + nsLvP * ${f(B.pulseGlow)} ) * nsLvZ;
 	diffuseColor.a = mix( ${f(o.alpha)}, ${f(o.rimAlpha)}, pow( max( 1.0 - nsFacing, 0.0 ), 4.0 ) ) * nsClr;
 }
 `;

@@ -166,8 +166,11 @@ test('the prompt is three chunks: the count, the one line, how to skip', () => {
   assert.equal(prompt.hidden, true, 'no line: no pill, whatever else is passed');
 });
 
-test('audit S14: the left wrist\'s two side bends, which move nothing on the game arm, count as moving nothing', () => {
-  assert.equal(NG.armActionMoves('wrist_radial_deviation', { armLatch: {} }), false);
-  assert.equal(NG.armActionMoves('wrist_ulnar_deviation'), false);
+// 21 November 2026 (browser hunt of update 62, H8): restated. Audit S14 had the left wrist's two side bends, which moved
+// nothing on the game arm, count as moving nothing; the game arm's wrist bends sideways now (ns-rig wrist_dev).
+test('audit S14, restated (H8): the left wrist\'s two side bends move the game arm and count as moving it', () => {
+  assert.equal(NG.armActionMoves('wrist_radial_deviation', { armLatch: {} }), true);
+  assert.equal(NG.armActionMoves('wrist_ulnar_deviation'), true);
   assert.equal(NG.armActionMoves('wrist_flexion', { armLatch: {} }), true);
+  assert.deepEqual(NG.ARM_ACTIONS_MOVE_NOTHING, []);
 });

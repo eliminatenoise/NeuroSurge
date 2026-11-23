@@ -119,7 +119,7 @@ try {
   await dialog.getByRole('button', {name:'Back to game'}).click();
   assert.equal(await page.evaluate(() => document.activeElement.id), 'ns-canvas');
   await page.keyboard.press('f');
-  await page.getByRole('textbox', {name:'Move the body'}).waitFor();
+  await page.getByRole('textbox', {name:'Command box'}).waitFor();
   await page.keyboard.press('Escape');
   await page.keyboard.press('m');
   await dialog.getByRole('button', {name:'Game pathways'}).click();

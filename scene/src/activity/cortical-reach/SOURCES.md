@@ -1,0 +1,5 @@
+# Cortical reach
+
+This is original trial 499 in C_20170912_COactpas, a macaque reaching session from Chowdhury, Glaser and Miller. The archive preserves handle positions and sorted area 2 spikes. Positive sort codes designate putative units in this session; there is no implied identity across animals or days. The handle is measured in centimetres on two encoder axes. Both displayed models use seed 17 and were fitted on earlier whole trials. The two events within this trial were held out together. The expected displacement is an offline forecast, and the measured endpoint comes from the later stored position. The visual cue supplies direction information only when it has occurred.
+
+The Dryad data deposit declares CC0. The NeuroTranslation inference implementation and weights are dedicated to the public domain under CC0 to the extent of the project's rights. [Data and authors](https://doi.org/10.5061/dryad.nk98sf7q7) · [Original study](https://doi.org/10.7554/eLife.48198) · [Forecast comparison](https://eliminatenoise.github.io/NeuroTranslation/papers/cortical-reach/)

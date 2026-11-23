@@ -164,8 +164,28 @@ export const LIGHT_BEAM = freeze({
   // of the picture, a quarter of the screen wide): a beam is drawn only while the middle of its key on the strip is in
   // front of the eye and within keyInView of the picture's half size from its middle (1 = the picture's edge). A
   // display choice: a beam must be seen to start at its area.
-  keyInView: 1.15
+  keyInView: 1.15,
+  // 22 November 2026 (LOOK2; hunt of update 64 H23: "Light beams to your own hands cross the face blocks as wide,
+  // bright bands"; Message 198, "a lot thinner and a lot less opaque ... they're obstructing the view"):
+  //  - maxHalfPx 4: the half width is also held to this many CSS pixels on the screen at every point along the beam
+  //    (beamHalfCapM). maxHalfM caps metres, which is thin at the key 6.7 m away (about 6.6 px a side) but not near the
+  //    eye: a cone to your own left hand crossed the face blocks 1.8 to 2.4 m away at 13 to 20 px across, and 16 to 36
+  //    px at the hand. Now at most 8 px across anywhere (a mirror beam at its key: 6.6 -> 4 px a side).
+  //  - ownPerLink 1: a beam to YOUR OWN body goes to the one muscle the movement drives most, not to each of them (up to
+  //    maxPerArea): Left hand drew five cones about 12 px apart to your forearm, a band about 30 px wide with about 2.8
+  //    times one cone's light where they overlapped. The mirror body keeps a cone per muscle (it is far, the cones are
+  //    thin there). 0 = no limit, as before.
+  maxHalfPx: 4, ownPerLink: 1
 });
+
+/** LIGHT_BEAM.maxHalfPx: a beam's half width hwM (metres) at a point depthM in front of the eye (along the view),
+ * held to maxHalfPx CSS pixels on the screen; mPerPx1: metres per CSS pixel at 1 m in front of the eye (2 tan(fovY / 2)
+ * / the view's CSS height). Not a number or no limit: hwM as it is. Pure. */
+export function beamHalfCapM(hwM, depthM, mPerPx1, maxHalfPx = LIGHT_BEAM.maxHalfPx) {
+  if (!(maxHalfPx > 0) || !(depthM > 0) || !(mPerPx1 > 0)) return hwM;
+  const cap = maxHalfPx * depthM * mPerPx1;
+  return hwM < cap ? hwM : cap;
+}
 
 /** LIGHT_BEAM.keyInView: whether a beam's key, at normalised picture place (x, y) (-1..1 across and up; behind: the
  * point is behind the eye), is in the picture enough to draw the beam. Pure. */

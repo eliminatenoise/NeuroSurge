@@ -109,18 +109,20 @@ try {
   await game.locator('#ns-canvas').focus();
   await game.keyboard.press('c');
   await game.waitForFunction(()=>document.querySelector('#ns-motion-camera video')?.srcObject,null,{timeout:20000});
+  await game.locator('#ns-motion-camera select').selectOption('bothArms');
   await game.evaluate(()=>{
     window.cameraTrack = document.querySelector('#ns-motion-camera video').srcObject.getVideoTracks()[0];
     window.poseProbe = [];
     window.poseProbeTimer = setInterval(()=>{
       const g = window.__nsQA.inspect();
-      window.poseProbe.push([Math.round(performance.now()),g.bodyJointTargets?.r_shoulder_abd,g.bodyDrawnJoints?.r_shoulder_abd,g.bodyDrawnJoints?.r_elbow_flex]);
+      window.poseProbe.push([Math.round(performance.now()),g.bodyJointTargets?.r_shoulder_abd,g.bodyDrawnJoints?.r_shoulder_abd,g.bodyDrawnJoints?.r_elbow_flex, g.limbs.ends.leftArm.end[1] - g.limbs.ends.leftArm.root[1]]);
     },180);
   });
   try {
     await game.waitForFunction(()=>window.poseProbe.some(([,target,drawn])=>target>125 && drawn>100) &&
       window.poseProbe.some(([,target,drawn])=>target>8 && target<35 && drawn>8 && drawn<40) &&
-      window.poseProbe.some(s=>s[3]>65),null,{timeout:70000});
+      window.poseProbe.some(s=>s[3]>65) && window.poseProbe.some(s=>s[2]>100 && s[4]>0.18) &&
+      window.poseProbe.some(s=>s[2]<40 && s[4]<-0.15),null,{timeout:70000});
   } catch (error) {
     throw new Error(await game.locator('#ns-motion-camera').innerText()+' '+JSON.stringify(await game.evaluate(()=>window.poseProbe.slice(-30))),{cause:error});
   }
@@ -129,7 +131,7 @@ try {
   await game.waitForFunction(()=>window.cameraTrack.readyState==='ended');
   assert.deepEqual(external,[]);
   assert.deepEqual(nonget,[]);
-  console.log(JSON.stringify({game:'normal launcher and C key',initialShoulder:initial,drawnShoulderRange:[
+  console.log(JSON.stringify({game:'normal launcher, C key, Both arms on one Chromium file camera',drawnLeftHandHeightM:[Math.min(...probe.map(s=>s[4])),Math.max(...probe.map(s=>s[4]))],initialShoulder:initial,drawnShoulderRange:[
     Math.min(...probe.map(s=>s[2])),Math.max(...probe.map(s=>s[2]))],targetShoulderRange:[
     Math.min(...probe.map(s=>s[1])),Math.max(...probe.map(s=>s[1]))],drawnElbowRange:[Math.min(...probe.map(s=>s[3])),Math.max(...probe.map(s=>s[3]))],samples:probe.length}));
 

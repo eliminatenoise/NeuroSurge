@@ -1,0 +1,9 @@
+:root { color-scheme: light dark; font: 1.0625rem/1.6 system-ui, sans-serif; }
+body { margin: 0; }
+main { max-width: 46rem; margin: 0 auto; padding: 2.5rem clamp(1rem, 5vw, 2rem) 4rem; }
+nav { display: flex; flex-wrap: wrap; gap: 0.4rem 1.2rem; }
+h1, h2 { line-height: 1.2; }
+a { text-underline-offset: 0.15em; }
+a:focus-visible { outline: 2px solid currentColor; outline-offset: 4px; }
+.play { display: inline-block; padding: 0.55rem 0.85rem; border: 1px solid; border-radius: 0.3rem; font-weight: 700; }
+li + li { margin-top: 0.45rem; }

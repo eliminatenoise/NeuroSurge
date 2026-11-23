@@ -38,6 +38,9 @@ try {
   if (raw) await page.route('**/packs/**', route => { report.assets.packsRefused++; return route.abort(); });
   const startMs = performance.now();
   await page.goto(url, { waitUntil: 'domcontentloaded' });
+  if (!new URL(page.url()).pathname.endsWith('/scene/example/preview.html')) {
+    await page.getByRole('link', { name: /^Play Full/ }).click();
+  }
   await page.waitForURL('**/scene/example/preview.html');
   const shell = page.locator('.ns-shell');
   async function waitShell(mode) {
@@ -89,8 +92,11 @@ try {
   checks.pauseLimbControls = await menu.locator('.ns-menu-move').innerText();
   assert.match(checks.pauseLimbControls, /1 \/ 2\s+choose left arm \/ left leg/);
   assert.match(checks.pauseLimbControls, /3 \/ 4\s+choose right leg \/ right arm/);
-  assert.match(checks.pauseLimbControls, /W S\s+move it forward or back/);
-  assert.match(checks.pauseLimbControls, /A D\s+move it left or right/);
+  // 21 November 2026 (hunt H22; the owner, Message 186: W and S move the limb "in a straight line from between proximal
+  // and distal joints", A and D are "moving between medial and lateral"; DESIGN-DECISIONS sections 145 and 186): the
+  // rows say what the keys do for a limb that points up or aside too, as the note under them already did.
+  assert.match(checks.pauseLimbControls, /W S\s+reach it out or draw it in/);
+  assert.match(checks.pauseLimbControls, /A D\s+swing it left or right/);
   assert.match(checks.pauseLimbControls, /Click limb\s+choose it/);
   // 20 November 2026: restated for the current rule (ns-app LIMB_KEYS.view, keepInFrameTurn; DESIGN-DECISIONS sections
   // 144 and 167). The owner, 19 November: "Perhaps the problem with the zoom in, zoom out fixes we look up and down is
@@ -116,10 +122,10 @@ try {
   assert.ok(await instructions.isVisible());
   checks.fullLimbControls = await instructions.locator('li').filter({ hasText: 'Press 1, 2, 3 or 4' }).innerText();
   assert.match(checks.fullLimbControls, /left arm, left leg, right leg or right arm/);
-  // 20 November 2026 (see above): the full words say when the view turns now, and that the look carries the limb in the
-  // eye view; and a look no longer turns the chest or bends the trunk (ns-app LOOK_BENDS_TRUNK).
-  assert.match(checks.fullLimbControls, /In the eye view the chosen limb goes with your view/);
-  assert.match(checks.fullLimbControls, /Your view turns only when the hand or foot would leave the picture/);
+  // The full instructions describe shoulder and hip movement and keep the pointer in the player's control.
+  assert.match(checks.fullLimbControls, /In the eye view, look a little up or down to move it at the shoulder or hip/);
+  assert.match(checks.fullLimbControls, /Use the pointer to keep the limb in view/);
+  assert.doesNotMatch(checks.fullLimbControls, /Your view turns only|camera turns automatically/);
   assert.doesNotMatch(checks.fullLimbControls, /your view turns to it/i);
   const fullInstructions = await instructions.innerText();
   assert.match(fullInstructions, /the head and neck turn, and past their reach the eyes turn further/);

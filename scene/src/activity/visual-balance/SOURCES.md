@@ -1,0 +1,13 @@
+# Head and sacrum travel after a visual rotation
+
+Steven M. Peterson and Daniel P. Ferris recorded people walking while a headset rotated their view clockwise or counterclockwise. Optical markers tracked the head and the sacrum. Scalp, eye, neck and leg electrodes supplied voltages on the same stored clock. The original acquisition appears in *Data in Brief*. The OpenNeuro dataset is available under CC0. [Study and methods](https://doi.org/10.1016/j.dib.2021.107635) · [OpenNeuro ds003739, v1.0.3](https://doi.org/10.18112/openneuro.ds003739.v1.0.3) · [CC0](https://creativecommons.org/publicdomain/zero/1.0/)
+
+The two NeuroTranslate models learned from 2,430 eligible visual rotations across 17 development participants. They see 160 marker positions per landmark, the scene’s rotation direction and eight successive summaries of eye and muscle voltages. The first model also receives scalp voltage summaries. The second learned without them. They predict how far each marker will travel along each recorded axis, in millimetres, over the next 32 samples at 256 Hz (125 ms). The last input falls 125 to just under 129 ms after the logged visual event. The axes describe side-to-side, vertical and front-to-back travel. Anatomical signs were not assigned.
+
+The local game runs both fitted models on a synthetic event. It bundles no participant time series. Changing the direction leaves the invented marker and voltage histories fixed. A head-travel edit offsets earlier sideways head positions, tapering to zero at the final observation. The scalp-amplitude control scales the voltage means and root-mean-square values by the same factor. The example has no measured future. The forecast opens independently of the game’s camera and body controls.
+
+The EEG uses the archive’s offline processing. Eye motion, muscle activity and movement can affect scalp voltage. A difference between two predictions on an invented event gives no measure of predictive accuracy or neural causation.
+
+Across 880 rotations from 6 people held out of training, the model with scalp voltage missed the sacrum by 7.80 mm and the head by 7.18 mm on average. Without scalp voltage the errors were 7.67 and 7.12 mm. Neither marker showed a reliable improvement from adding scalp voltage over both comparisons. Each participant counted equally. Giving the full model scalp readings from a different rotation of the same direction from the same part of the walk gave errors of 7.84 mm (sacrum) and 7.28 mm (head). The study used four one-sided, multiplicity-adjusted bootstrap bounds across the two markers and two comparisons.
+
+NeuroTranslation released the inference code and fitted parameters under CC0 to the extent of its rights. [CC0 1.0 Universal](../../../../LICENSE)

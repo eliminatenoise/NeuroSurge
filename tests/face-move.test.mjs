@@ -78,8 +78,10 @@ test('no NaN anywhere; the face at rest is exactly its resting geometry; the str
 });
 
 test('the strengths follow the face display joints (both sides of 0) and the leading mouth corner', () => {
+  // (21 November 2026, SEEMOVE: a shape is whole at its movement's end, 15 degrees; it was three quarters there)
   const w = FM.faceShapeWeights({ brow_raise: 15, eye_close: -20, smile: 20, upper_lip: -5, lip_purse: NaN });
-  assert.equal(w.browUp, 0.75); assert.equal(w.frown, 0);
+  assert.equal(w.browUp, 1); assert.equal(w.frown, 0);
+  assert.equal(FM.faceShapeWeights({ brow_raise: 7.5 }).browUp, 0.5);
   assert.equal(w.eyesWide, 1); assert.equal(w.eyesShut, 0);
   assert.equal(w.smileR, 1); assert.equal(w.smileL, 1); assert.equal(w.cornerDownR, 0);
   assert.equal(w.upperLipUp, 0); assert.equal(w.purse, 0); assert.equal(w.stretch, 0);

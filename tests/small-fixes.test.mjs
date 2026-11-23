@@ -109,7 +109,8 @@ test('S23: the floor does not read as ground under the bodies: no grout lines un
   assert.ok(ROOM.shade.brain[1] > 0, 'the brain keeps its shadow');
   // the shader text declares no variable with a GLSL reserved name (an `out` made the whole room program invalid)
   const { roomGlsl } = await import('../scene/src/ns-room.mjs');
-  assert.ok(!/\b(?:float|vec[234]|int|bool)\s+(?:out|in|inout|input|output|sample|filter|active|common|partition)\b/.test(roomGlsl()));
+  // (21 November 2026: both shader texts, the abyss the game draws and the room that ROOM.abyss.on false brings back)
+  for (const o of [ROOM, { ...ROOM, abyss: { ...ROOM.abyss, on: false } }]) assert.ok(!/\b(?:float|vec[234]|int|bool)\s+(?:out|in|inout|input|output|sample|filter|active|common|partition)\b/.test(roomGlsl(o)));
 });
 
 test('S15: face muscles are named side first in plain words, not by their file names', () => {
@@ -171,8 +172,22 @@ test('a movement with little travel still shows: straightening a nearly straight
   let st = frames(A, s, Math.ceil(GAZE_DWELL.latchS / H) + 1, () => look('rh_knee', 'rh_knee_extend')).s, far = 0;
   const start = s.bodyPos.knee_ext_L;
   assert.equal(st.bodyJerk.knee_ext_L[0], 0);
-  for (let i = 0; i < 30; i++) { st = A.stepGated(st, [], H).state; far = Math.max(far, Math.abs(st.bodyPos.knee_ext_L - 0)); }
-  assert.ok(far > 8, `the knee swings ${far.toFixed(1)} degrees about its end, where its own travel is ${Math.abs(start)}`);
+  // 21 November 2026 (SEEMOVE, ns-actions JOINT_LATCH backStop): the kick used to throw the knee back off its end PAST
+  // where it started (to about -17: a bend of 11.6 degrees, the largest movement "Straighten left knee" showed, so it
+  // read as "Bend left knee"). Now it slams into its end, is thrown back no further than where it was, and is driven in
+  // again: it still shows, the way it is named.
+  let arrivals = 0, atEnd = 0, was = st.bodyPos.knee_ext_L;
+  for (let i = 0; i < 30; i++) {
+    st = A.stepGated(st, [], H).state;
+    const k = st.bodyPos.knee_ext_L;
+    far = Math.max(far, Math.abs(k - start));
+    assert.ok(k >= start - 1e-9 && k <= 1e-9, `never past where it was nor past straight (${k.toFixed(2)})`);
+    if (k > -0.5 && was <= -0.5) arrivals++;
+    if (k > -1) atEnd++;
+    was = k;
+  }
+  assert.ok(far > 5.9, `the knee straightens its whole ${Math.abs(start)} degrees (${far.toFixed(1)})`);
+  assert.ok(arrivals >= 1 && atEnd >= 15, `a jolt into its end, then held there (${arrivals} arrivals, ${atEnd} of 30 frames at the end)`);
   const settled = frames(A, st, 300).s;
   assert.equal(settled.bodyPos.knee_ext_L, start, `and returns to where it was (${settled.bodyPos.knee_ext_L.toFixed(1)})`);
 });

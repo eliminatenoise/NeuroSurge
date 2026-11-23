@@ -16,16 +16,21 @@
  *     (ns-assembly-parts), without the manifests or the game's scripts. The launcher takes the SAME picture over
  *     (startAssembly shared: true), so there is one picture from the start of the load to the game. */
 import { startPackLoader } from '../src/ns-pack-loader.mjs';
+import { editionPacks } from './edition.mjs';
 import { createLoadBar } from '../src/ns-load-progress.mjs';
 import { showControlsCard } from '../src/ns-controls-card.mjs';
 
 /** About how many script files the page has fetched when the launcher starts (55 on 19 November 2026; 56 since the
  * loading picture's table of parts, ns-assembly-parts.mjs, on 20 November; 57 with the raw look's ns-raw-look.mjs; 58 with
- * the face movements' ns-face-move.mjs): the bar's
+ * the face movements' ns-face-move.mjs; 60 with the muscles seen side by side, ns-muscle-seen.mjs, and the areas' halo,
+ * ns-area-halo.mjs, both 21 November; the electrical map's modules are not counted: they are fetched at the first
+ * press of M, 22 November; 61 with the calm walk and the focus ring's ns-look-calm.mjs, and 62 with the limbs' pace,
+ * ns-limb-pace.mjs, both 22 November): the bar's
  * 'page' step is the share of them that has arrived, so it shows the scripts really coming in and stands still when
  * they stop. Only the bar depends on it; a wrong count makes that step end a little early or jump a little. */
-const PAGE_SCRIPTS = 58;
-const mode = new URLSearchParams(window.location.search).get('case') || 'boot';
+const PAGE_SCRIPTS = 62;
+const params = new URLSearchParams(window.location.search);
+const mode = params.get('case') || 'boot';
 const listeners = new Set();
 let last = null;
 const early = { loader: null, bar: null, startedAtMs: performance.now(), controlsCard: null, controlsCardAt: null, assembly: null, assemblyReady: Promise.resolve(null),
@@ -53,7 +58,7 @@ if (mode === 'boot') {
   // the guard (ns-load-guard, the page's first script) watches the bar's own record of the last real news
   try { if (early.bar && window.__nsGuard) window.__nsGuard.attach({ bar: early.bar, lastAdvance: () => early.bar.model.lastAdvance() }); } catch { /* the guard keeps its own clock */ }
   try {
-    early.loader = startPackLoader({ onProgress: (files, of) => {
+    early.loader = startPackLoader({ ...editionPacks(params), onProgress: (files, of) => {
       last = [files, of];
       if (early.assembly) early.assembly.stillComing(); // (the picture's tiers keep waiting for their files)
       if (listeners.size === 0 && early.bar) { const f = files / Math.max(1, of || 611); early.bar.set('files', f); if (f >= 1) early.bar.done('files'); }

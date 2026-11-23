@@ -1,0 +1,5 @@
+# Stretch and spikes
+
+The source is the healthy rat sensory fiber aff015, trial 1, from the muscle-spindle data released by Kyle P. Blum and colleagues. The first 100 ms supplies the first prediction. The 155 complete forecast intervals each last 20 ms. This panel retains measured native tendon force and actuator-position changes, binned spike counts, source timestamps, and development-trained models. The electrode recorded group Ia axonal activity in the dorsal root. The movement trace is a measure of apparatus position; file-specific force, length and voltage calibration remains unresolved. All trials from the illustrated fiber were excluded from its model’s training.
+
+The original data are dedicated to the public domain under CC0. The NeuroTranslation checkpoint, code and packaged numerical projections use CC0 to the extent of the project’s rights. [Dataset](https://doi.org/10.5061/dryad.vdncjsxsw) · [Original scientific paper](https://doi.org/10.7554/eLife.55177) · [Forecast study](https://eliminatenoise.github.io/NeuroTranslation/papers/muscle-spindle/) · [CC0 terms](https://creativecommons.org/publicdomain/zero/1.0/)

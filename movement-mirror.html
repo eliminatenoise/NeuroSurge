@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>NeuroSurge · Movement mirror</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="scene/src/joint/view.css">
+</head>
+<body class="joint-page">
+  <nav class="joint-nav" aria-label="Game views">
+    <a href="./">Full and Lite game menu</a>
+    <a href="/" data-local-model-link hidden>Checkpoint workbench</a>
+  </nav>
+  <main id="joint-mount">
+    <section data-start-local-model>
+      <h1>Movement mirror</h1>
+      <p>The movement mirror uses NeuroTranslate to forecast the position of a tracked point. Open the game with the local model launcher to use it.</p>
+      <p><a href="START.html#local-model">Open the local NeuroTranslate model</a></p>
+    </section>
+  </main>
+  <noscript>JavaScript runs the local tracker and movement mirror.</noscript>
+  <script type="module" src="scene/src/joint/entry.mjs"></script>
+</body>
+</html>

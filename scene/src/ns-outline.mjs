@@ -127,7 +127,15 @@ export const OUTLINE = Object.freeze({
  * first four, 1 at the two cheapest (their buffer is drawn at a half or less and stretched by the browser, which
  * softens the lines anyway). maxSsPixels: a supersampled target is never larger than this many samples (a 4K buffer then
  * keeps 1 sample) and never larger than the GPU's texture limit. */
-export const OUTLINE_AA = Object.freeze({ ssByLevel: Object.freeze([2, 2, 2, 2, 1, 1]), maxSsPixels: 16.7e6 });
+// 22 November 2026 (LOOK2; hunt of update 64 H24: "At picture quality Low the brain's outline and the arrows show pale
+// and dark specks that sparkle as the look moves"): ssByLevel [2, 2, 2, 2, 1, 1] -> 2 at every level. The levels the
+// last two now name are lite-0.7 and lite-0.6 (scale 0.7 and 0.6, not 0.5 / 0.4 as the comment above still says), and
+// at one sample per pixel the 1-px ink of the brain's outline (scaled with the heartbeat's swell on the screen) landed
+// a pixel inside the shell's edge in places, leaving its outermost pale pixels over the black: a broken pale line that
+// changed with every pixel the look moved. The reproducer's browser check: 2 x 2 ink with multisampling (ns-scene-three
+// antialiasFor, now on at Low too) makes Low as clean as High; either alone does not. Cost: at lite-0.6 the ID pass
+// draws 0.6 x 0.6 x 4 = 1.44 of the screen's pixels (the full level draws 4).
+export const OUTLINE_AA = Object.freeze({ ssByLevel: Object.freeze([2, 2, 2, 2, 2, 2]), maxSsPixels: 16.7e6 });
 
 /** Depth shading (soft ambient occlusion from the outline pass's own depths; display choices, see the O report).
  *  strength: the darkest a fully enclosed crevice gets (share of its light taken away); radiusM: the world radius of
@@ -141,6 +149,16 @@ export const OUTLINE_GROUPS = Object.freeze({
   lThigh: 9, lShank: 10, lFoot: 11, rThigh: 12, rShank: 13, rFoot: 14
 });
 export const OUTLINE_MIRROR_OFFSET = 16;
+/**
+ * 22 November 2026 (SEEMOVE, section 189; the owner: every movement clear from the start view, Message 204). The face's
+ * moving edges: a code of their own in the ID pass (15; the mirror body's 31), adjacent to no other group, so the ink
+ * line is drawn where the muscles that carry them border the rest of the face: the brow line (the forehead muscle's
+ * edge), the eyelid margins (the eyelids' part of the ring muscle round each eye) and the lips (their ring muscle).
+ * The face is about 40 px tall on the mirror body at the start view, where a move of 3 to 5 px reads on a dark line and
+ * not on a matte pink surface. Within the group (the two halves of one muscle) no line. ns-scene-three FACE_EDGE_INK
+ * chooses the muscles.
+ */
+export const OUTLINE_FACE_EDGE_GROUP = 15;
 /** Groups that join each other at a joint (same body): a boundary between them without a depth step is a muscle
  * parting (faint), not an overlap. Every other pair of groups is set apart by a strong line. */
 export const OUTLINE_ADJACENT = Object.freeze([
@@ -238,12 +256,14 @@ export function outlineGroupForBlend(blend, fallbackSegment = null) {
   return outlineGroupForShares(sums) || outlineGroupForBodySegment(fallbackSegment);
 }
 /** Adjacency table (size x size bytes, row = group code a, column = code b): 255 where a and b are in the same body and
- * are the same group or join at a joint, else 0. Codes 1..14 are your body, 17..30 the mirror body. */
+ * are the same group or join at a joint, else 0. Codes 1..14 are your body, 17..30 the mirror body (15 and 31: the
+ * face's moving edges, OUTLINE_FACE_EDGE_GROUP). */
 export function outlineAdjacency(size = 32) {
   const t = new Uint8Array(size * size);
   const set = (a, b) => { if (a < size && b < size) { t[a * size + b] = 255; t[b * size + a] = 255; } };
   for (const off of [0, OUTLINE_MIRROR_OFFSET]) {
     for (const g of Object.values(OUTLINE_GROUPS)) set(g + off, g + off);
+    set(OUTLINE_FACE_EDGE_GROUP + off, OUTLINE_FACE_EDGE_GROUP + off); // (22 November 2026: the face's moving edges)
     for (const [a, b] of OUTLINE_ADJACENT) set(OUTLINE_GROUPS[a] + off, OUTLINE_GROUPS[b] + off);
   }
   return t;
@@ -420,7 +440,38 @@ float viewDist( float d ) {
 }
 int groupOf( vec4 c ) { return int( c.r * 255.0 + 0.5 ); }
 int meshOf( vec4 c ) { return int( c.g * 255.0 + 0.5 ) * 256 + int( c.b * 255.0 + 0.5 ); } // 14 bits (flags removed)
+// 21 November 2026 (patchCoverageNear): a coverage sample shows an eye where the nearest eye is in front of the nearest
+// brain surface or strip (b and a are their nearness, 0 = none)
+bool eyeShown( vec4 c ) { return c.b > c.a; }
 `;
+/** 21 November 2026 (a browser hunt, H14: the dark ring of an eyeball behind the brain was drawn across the brain's
+ * surface): the coverage picture tells whether an eye is in front of the brain. No coverage draw writes depth (they
+ * are tested against the bodies' depth, which the edge and ink passes read afterwards), so each draw writes its
+ * NEARNESS instead: nsCovRange (x: the view distance where nearness is 0, y: 1 / the distance over which it goes to 1,
+ * set from the brain's bounding sphere) maps the fragment's view distance to 1/255 .. 1 (0 stays "none"); nsCov says
+ * what a draw writes: (r, g, b x nearness, a x nearness). The strip and the brain's surface write their nearness into a,
+ * the eyes theirs into b; combined by MAX, an eye is seen where b > a (eyeShown). At 8 bits a step is about a hundredth
+ * of the brain's size (about 1 mm). Patches a MeshBasicMaterial's shaders (r170); null when a hook is missing. Pure. */
+export const COVERAGE_NEAR_HOOKS = Object.freeze({ vertex: '#include <project_vertex>', fragment: '#include <dithering_fragment>' });
+export function patchCoverageNear(vertexShader, fragmentShader) {
+  if (typeof vertexShader !== 'string' || typeof fragmentShader !== 'string' || vertexShader.includes('vNsCovZ')) return null;
+  const H = COVERAGE_NEAR_HOOKS;
+  if (!vertexShader.includes(H.vertex) || !fragmentShader.includes(H.fragment)) return null;
+  return {
+    vertexShader: 'varying float vNsCovZ;\n' + vertexShader.replace(H.vertex, `${H.vertex}\n\tvNsCovZ = - mvPosition.z;`),
+    fragmentShader: 'varying float vNsCovZ;\nuniform vec4 nsCov;\nuniform vec2 nsCovRange;\n' + fragmentShader.replace(H.fragment, `${H.fragment}
+	{
+		float nsN = ( 1.0 + 254.0 * clamp( ( nsCovRange.x - vNsCovZ ) * nsCovRange.y, 0.0, 1.0 ) ) / 255.0;
+		gl_FragColor = vec4( nsCov.x, nsCov.y, nsCov.z * nsN, nsCov.w * nsN );
+	}`)
+  };
+}
+/** The coverage range (patchCoverageNear) for a brain of bounding radius r whose centre is at view distance d: nearness
+ * runs over d + k r (0) to d - k r (1). Returns [far, 1 / length]. k 1.6 takes in the eyes in front of the brain. Pure. */
+export function coverageNearRange(d, r, k = 1.6) {
+  const far = d + k * r, len = Math.max(2 * k * r, 1e-6);
+  return [far, 1 / len];
+}
 /* EDGE PASS (supersampled): the class of the boundary next to this sample, drawn on the nearer side (4 strong, 3
  * silhouette, 2 inner step, 1 parting; 0 none; + 8 = a bold line round a slim piece; + 16 = the brain's outline, + 32
  * the outline of its eyes and nerves, 20 November 2026). Output: (class + flags, mesh high (+ 128 = the strip's
@@ -459,7 +510,7 @@ void main() {
 	bool stripEdge = false, brainEdge = false, eyeEdge = false;
 	if ( uStripOn > 0.5 ) {
 		vec4 cv = texelFetch( tStrip, p, 0 );
-		bool sC = cv.r > 0.5, bC = cv.g > 0.5, eC = cv.b > 0.5;
+		bool sC = cv.r > 0.5, bC = cv.g > 0.5, eC = eyeShown( cv );
 		if ( sC || bC || eC ) {
 			for ( int i = 0; i < 8; i ++ ) {
 				ivec2 o = i == 0 ? ivec2( 1, 0 ) : i == 1 ? ivec2( - 1, 0 ) : i == 2 ? ivec2( 0, 1 ) : i == 3 ? ivec2( 0, - 1 ) :
@@ -469,8 +520,8 @@ void main() {
 				int gq = groupOf( texelFetch( tId, q, 0 ) );
 				bool open = gq == 0 || g != 0;
 				if ( sC && cq.r < 0.5 && gq == 0 ) stripEdge = true;
-				if ( bC && cq.g < 0.5 && cq.b < 0.5 && open ) brainEdge = true;
-				if ( eC && cq.b < 0.5 && open ) eyeEdge = true;
+				if ( bC && cq.g < 0.5 && ! eyeShown( cq ) && open ) brainEdge = true;
+				if ( eC && ! eyeShown( cq ) && open ) eyeEdge = true;
 			}
 		}
 	}
@@ -614,7 +665,7 @@ void main() {
 		if ( uStrip.z > 0.5 ) {
 			vec4 cv = texelFetch( tStrip, min( ps[ i ], uSize - 1 ), 0 );
 			if ( cv.r > 0.5 ) { st[ i ] = true; strip ++; }
-			if ( uBrain.y > 0.0 ) { bc[ i ] = cv.g > 0.5; ec[ i ] = cv.b > 0.5; if ( bc[ i ] || ec[ i ] ) cov ++; }
+			if ( uBrain.y > 0.0 ) { bc[ i ] = cv.g > 0.5; ec[ i ] = eyeShown( cv ); if ( bc[ i ] || ec[ i ] ) cov ++; }
 		}
 		vec4 c = texelFetch( tId, min( ps[ i ], uSize - 1 ), 0 );
 		gs[ i ] = groupOf( c ); ms[ i ] = meshOf( c );
@@ -843,11 +894,26 @@ export function createOutlinePass({ THREE, renderer, enabled = true } = {}) {
   stripScene.matrixWorldAutoUpdate = false;
   // 20 November 2026 (Message 207): the coverage picture holds three things, one per channel, combined by MAX (none
   // writes depth): r the strip, g the brain's surface, b its eyes and nerves.
-  const covMat = colour => new THREE.MeshBasicMaterial({ color: colour, side: THREE.DoubleSide, depthTest: true, depthWrite: false, toneMapped: false, fog: false,
-    blending: THREE.CustomBlending, blendEquation: THREE.MaxEquation, blendSrc: THREE.OneFactor, blendDst: THREE.OneFactor });
-  const stripMat = covMat(0xff0000);
+  // 21 November 2026 (a browser hunt, H14): b and a carry NEARNESS (patchCoverageNear): b the nearest eye there, a the
+  // nearest brain surface or strip, so an eye counts only where it is in front of the brain (eyeShown); the outline of
+  // an eyeball behind the brain was drawn across the brain's surface.
+  const covNearRange = { value: new THREE.Vector2(0, 0) };
+  const covMat = (colour, write) => {
+    const m = new THREE.MeshBasicMaterial({ color: colour, side: THREE.DoubleSide, depthTest: true, depthWrite: false, toneMapped: false, fog: false,
+      blending: THREE.CustomBlending, blendEquation: THREE.MaxEquation, blendSrc: THREE.OneFactor, blendDst: THREE.OneFactor });
+    const u = { value: new THREE.Vector4(write[0], write[1], write[2], write[3]) };
+    // the scene may chain its own vertex rule onto this (the living brain): it calls this first or after, either works
+    m.onBeforeCompile = shader => {
+      const p = patchCoverageNear(shader.vertexShader, shader.fragmentShader);
+      if (!p) return;
+      shader.vertexShader = p.vertexShader; shader.fragmentShader = p.fragmentShader;
+      shader.uniforms.nsCov = u; shader.uniforms.nsCovRange = covNearRange;
+    };
+    return m;
+  };
+  const stripMat = covMat(0xff0000, [1, 0, 0, 1]);
   const strip = { mesh: null, source: null, m: new Float64Array(16).fill(NaN), shown: false };
-  const brainMat = covMat(0x00ff00), brainPartMat = covMat(0x0000ff);
+  const brainMat = covMat(0x00ff00, [0, 1, 0, 1]), brainPartMat = covMat(0x0000ff, [0, 0, 1, 0]);
   const brain = { group: null, surface: null, parts: [], shown: false, key: new Float64Array(0) };
 
   const reg = [];            // { src, group, mirror, serial, iid, gid, show, flip, dbl, m: Float64Array(16) }
@@ -867,7 +933,8 @@ export function createOutlinePass({ THREE, renderer, enabled = true } = {}) {
   const stats = { sources: 0, drawn: 0, draws: 0, ms: 0, frames: 0, skipped: 0, rebuilds: 0, vertexCapacity: 0, indexCapacity: 0, geometries: 0, copiedVertices: 0 };
   const saveColour = new THREE.Color(), tmpColour = new THREE.Color();
   const localTmp = new THREE.Matrix4();
-  const now = () => (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now());
+  const locals = []; // the shown records with a userData.nsOutlineLocal map this frame (sync); their matrices are written when the passes are drawn
+  const now =() => (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now());
   const colourOf = r => {
     const g = r.group + (r.mirror ? OUTLINE_MIRROR_OFFSET : 0), n = r.serial;
     const hi = ((n >> 8) & 63) | (r.flip ? 128 : 0) | (r.dbl ? 64 : 0);
@@ -998,6 +1065,7 @@ export function createOutlinePass({ THREE, renderer, enabled = true } = {}) {
   function sync(scene) {
     let changed = false;
     chain.clear();
+    locals.length = 0;
     let drawn = 0, copied = 0;
     const done = new Set();
     skinShown = 0;
@@ -1047,14 +1115,20 @@ export function createOutlinePass({ THREE, renderer, enabled = true } = {}) {
           done.add(e);
           if (r.gid !== e.gid) { batch.setGeometryIdAt(r.iid, e.gid); r.gid = e.gid; batch._visibilityChanged = true; changed = true; }
           // (20 November 2026: a mesh whose material moves its vertices by one affine map, the heart's beat, gives that
-          // map as userData.nsOutlineLocal, a Matrix4 in its own frame, so its lines follow what is drawn)
+          // map as userData.nsOutlineLocal, a Matrix4 in its own frame, so its lines follow what is drawn. The map is
+          // put on whenever the passes are drawn (render, `locals`), but a change of the map alone is no change: the
+          // heart beats on every frame, and following it drew the ID, edge and ink passes and the hidden-things pass
+          // on every frame of a still view (a review of Body updates 60 and 61). Between two drawn frames the line
+          // keeps the swell it was drawn with, at most 3 % of the heart.)
           const Lm = s.userData && s.userData.nsOutlineLocal && s.userData.nsOutlineLocal.isMatrix4 ? s.userData.nsOutlineLocal : null;
-          const M = Lm ? localTmp.multiplyMatrices(s.matrixWorld, Lm) : s.matrixWorld;
-          const w = M.elements, k = r.m;
+          r.local = Lm;
+          if (Lm) locals.push(r);
+          const w = s.matrixWorld.elements, k = r.m;
           let moved = false;
           for (let i = 0; i < 16; i++) if (k[i] !== w[i]) { moved = true; break; }
           if (moved) {
             for (let i = 0; i < 16; i++) k[i] = w[i];
+            const M = Lm ? localTmp.multiplyMatrices(s.matrixWorld, Lm) : s.matrixWorld;
             batch.setMatrixAt(r.iid, M);
             const flip = M.determinant() < 0, dbl = m.side === THREE.DoubleSide;
             if (flip !== r.flip || dbl !== r.dbl) { r.flip = flip; r.dbl = dbl; batch.setColorAt(r.iid, colourOf(r)); }
@@ -1282,11 +1356,14 @@ export function createOutlinePass({ THREE, renderer, enabled = true } = {}) {
     const pxcm = (bufH / pr) / (2 * Math.tan((fov * Math.PI) / 360)) / 100;
     if (inkUni.uTaper.value.x !== pxcm) { inkUni.uTaper.value.x = pxcm; changed = true; }
     if (edgeUni.uSlim.value.x !== pxcm * pr * ss) { edgeUni.uSlim.value.x = pxcm * pr * ss; changed = true; } // supersampled samples per centimetre at 1 m
+    if (globalThis.__nsShadeProbe === true) force = true; // QA only (qaIdPicture): this frame's ID picture is drawn
     if (changed || force || (!inkOff && !composite.visible)) {
       const prevTarget = renderer.getRenderTarget(), prevAlpha = renderer.getClearAlpha(), prevAuto = renderer.autoClear;
       renderer.getClearColor(saveColour);
       renderer.setClearColor(0x000000, 0);
       renderer.autoClear = true;
+      // the meshes with a map of their own (the heart's beat) as they are drawn on this frame (sync: `locals`)
+      for (const r of locals) if (r.iid >= 0 && r.local) batch.setMatrixAt(r.iid, localTmp.multiplyMatrices(r.src.matrixWorld, r.local));
       passTo(target, idScene, camera);
       const info = renderer.info && renderer.info.render;
       stats.draws = info ? info.calls : 0;
@@ -1303,6 +1380,7 @@ export function createOutlinePass({ THREE, renderer, enabled = true } = {}) {
       const tq = gpuBegin();
       if (stripOn.value) {
         // colour cleared, the ID pass's depth kept: the strip is marked only where it is in front of every body
+        setCoverageRange(camera);
         renderer.setRenderTarget(stripTarget);
         renderer.clear(true, false, false);
         renderer.autoClear = false;
@@ -1325,6 +1403,18 @@ export function createOutlinePass({ THREE, renderer, enabled = true } = {}) {
     brainComposite.visible = brain.shown;
     stats.ms = now() - t0;
     return true;
+  }
+  /** 21 November 2026 (patchCoverageNear): the nearness range of the coverage picture, from the bounding sphere of the
+   * brain's surface (else the strip's) as drawn now. */
+  const covCentre = new THREE.Vector3();
+  function setCoverageRange(camera) {
+    const src = brain.surface ? brain.surface.src : strip.mesh ? strip.mesh : null, g = src && src.geometry;
+    if (!g) return;
+    if (!g.boundingSphere) g.computeBoundingSphere();
+    const w = brain.surface ? brain.group.matrixWorld : strip.mesh.matrixWorld;
+    covCentre.copy(g.boundingSphere.center).applyMatrix4(w).applyMatrix4(camera.matrixWorldInverse);
+    const r = coverageNearRange(-covCentre.z, g.boundingSphere.radius * w.getMaxScaleOnAxis());
+    covNearRange.value.set(r[0], r[1]);
   }
   /** The motor strip for its silhouette ink: one geometry in the local frame of `source` (an Object3D whose world matrix
    * and visibility it follows: the brain group). null removes it. */
@@ -1416,6 +1506,17 @@ export function createOutlinePass({ THREE, renderer, enabled = true } = {}) {
       buffer: [bufW, bufH], supersample: ss, idTarget: [ssW, ssH], widthPx: Math.round(outlineWidthPx(pr) * 1000) / 1000,
       strip: Boolean(strip.mesh), stripShown: strip.shown, brain: Boolean(brain.group), brainShown: brain.shown, brainAlpha: inkUni.uBrain.value.y, gpu: { sumMs: Math.round(gpuT.sum * 1000) / 1000, n: gpuT.n, lastMs: gpuT.last === null ? null : Math.round(gpuT.last * 1000) / 1000, timer: gpuT.ext === undefined ? null : Boolean(gpuT.ext) }, skinnedProxies: skinShown, skinBatch: { members: sb.members, rebuilds: sb.rebuilds } };
   }
+  /** 21 November 2026 (QA only; section 188, measuring the colours of touching muscles as drawn): the ID picture as it
+   * stands (read back from the graphics card: slow, never called by the game) and each drawn code's source mesh.
+   * Returns { w, h, ss, data (RGBA bytes, bottom row first), meshes: Map serial -> mesh } or null. */
+  function qaIdPicture() {
+    if (!target || !ssW || !ssH) return null;
+    const data = new Uint8Array(ssW * ssH * 4);
+    renderer.readRenderTargetPixels(target, 0, 0, ssW, ssH, data);
+    const meshes = new Map();
+    for (const r of reg) meshes.set(r.serial, r.src);
+    return { w: ssW, h: ssH, ss, data, meshes };
+  }
   function dispose() {
     if (batch) { batch.dispose(); batch = null; }
     skinIdMat.dispose(); // 18 November 2026: the skinned proxies share their sources' geometry (not disposed here)
@@ -1433,5 +1534,5 @@ export function createOutlinePass({ THREE, renderer, enabled = true } = {}) {
    * body), 0 when not registered. */
   function setAfterId(fn) { afterId = typeof fn === 'function' ? fn : null; force = true; }
   function groupOf(mesh) { const r = bySource.get(mesh); return r ? r.group + (r.mirror ? OUTLINE_MIRROR_OFFSET : 0) : 0; }
-  return { composite, stripComposite, brainComposite, stripMaterial: stripMat, brainMaterials: [brainMat, brainPartMat], setBrain, setStripLive, setStrip, register, setGroup, setSize, setQuality, render, invalidate, setInk, setEnabled, setClip, setOcclusion, state, dispose, setAfterId, groupOf, get enabled() { return on; }, get idLive() { return idLive; }, get supersample() { return ss; } };
+  return { composite, stripComposite, brainComposite, stripMaterial: stripMat, brainMaterials: [brainMat, brainPartMat], setBrain, setStripLive, setStrip, register, setGroup, setSize, setQuality, render, invalidate, setInk, setEnabled, setClip, setOcclusion, state, dispose, setAfterId, groupOf, qaIdPicture, get enabled() { return on; }, get idLive() { return idLive; }, get supersample() { return ss; } };
 }

@@ -22,6 +22,8 @@
  *           { type: 'resume' }, { type: 'pause' } (from uiCommand / `data-ns-ui` buttons). Each carries timeMs when known.
  *           ns-actions createActivity().step accepts every one of these events directly (instructions, pause,
  *           orbit and Reset body live in the activity state).
+ *           21 November 2026 (EMAP): { type: 'emap' } (the map key, EMAP_CODE = M) asks for the electrical map on or
+ *           off (ns-emap; a page command like 'detail': ns-app toggles it through bindDom's options.onEmap).
  *           R4-arm: { type: 'detail' } (the information key, DETAIL_CODE = R) asks the information panel to show or hide
  *           its More detail section. It is a page (panel) command, NOT an activity event: do not pass it to
  *           ns-actions step (which refuses unknown types); ns-app opens or closes the panel section instead (bindDom
@@ -96,7 +98,8 @@ export const GRASP_KEY_LABEL = 'Space';
  * the press counts: Shift can be let go once F or the button is down (the hold or the turn goes on), so it never has to
  * be held for long.
  * Why Shift (design decision, alternatives weighed):
- *  - It is free: no control uses it (W/A/S/D, Space, E, the information key, Esc and the mouse), and a plain Shift has no browser or
+ *  - It is free: no control uses it (W/A/S/D, Space, E, the information key R, the map key M, the number keys, the
+ *    left and right arrows, Esc and the mouse), and a plain Shift has no browser or
  *    page meaning on the canvas. Ctrl / Meta (Cmd) start browser chords and release every key (CHORD_MODIFIER_CODES;
  *    Ctrl+click is a right click on macOS), and Alt alone opens the browser menu bar on Windows and Linux.
  *  - It is ONE rule for every control, which a timing gesture cannot be: a quick second click already restarts
@@ -141,6 +144,17 @@ export const DETAIL_CODE = 'KeyR';
 /** The information key's label for the Esc page controls list and the key cap ("R"). */
 export const DETAIL_KEY_LABEL = 'R';
 
+/** 21 November 2026 (EMAP, section 192; the owner: "let's try an electrical mapping view, like you see in functional
+ * neuroscience, connectomic live maps, dynamic maps"): the map key (KeyboardEvent.code, layout independent): M shows
+ * the electrical map over the picture and hides it again (ns-emap; ns-app toggleEmap). No other control uses M (W/A/S/D,
+ * Space, E, R, the numbers, the arrows, Shift, Esc and the mouse), and a plain M means nothing to the browser (it is
+ * prevented, so a browser's find-as-you-type cannot take it; Ctrl / Meta chords and Alt + M are left to the browser).
+ * Not auto-repeat (holding M toggles once), not inside a text field. A UI key like the information key, not one of
+ * CONTROL_CODES: it moves nothing, changes no camera and no control, and releases no held key. */
+export const EMAP_CODE = 'KeyM';
+/** The map key's label for the Esc page controls list and the key cap ("M"). */
+export const EMAP_KEY_LABEL = 'M';
+
 /** R5-input (R22, D18): the view key (KeyboardEvent.code, layout independent): E asks to switch between the first-person
  * view and the third-person view and back (the camera owner, ns-camera, does the switch). No other control uses it
  * (W/A/S/D, Space, I, Esc and the mouse), a plain E has no browser meaning (it is prevented, so a browser's
@@ -169,8 +183,12 @@ export function moveKeyNumber(code) {
  * body-map order: a walk along the motor homunculus. UI keys like the movement keys; a held key repeats, but no faster
  * than AREA_KEY_REPEAT_MS, so each area on the way is seen. The app does the step (and only while playing). */
 export const AREA_CODES = Object.freeze(['ArrowLeft', 'ArrowRight']);
-/** The shortest time (ms) between two steps of a held area key. Display choice: about five areas a second. */
-export const AREA_KEY_REPEAT_MS = 180;
+/** The shortest time (ms) between two steps of a held area key. Display choice: about five areas a second.
+ * 22 November 2026 (LOOK2 second pass; the owner, Message 133: no flicker): 180 -> 270, about 3.7 steps a second with a
+ * usual 33 ms key repeat (one step every 297 ms). Each step moves the whole view by one block, and at 5 steps a second
+ * the view's own jump made pixels rise and fall 4 or more times a second (a check: hiding the look's glow during the
+ * walk changed nothing); below 4 steps a second no pixel can. */
+export const AREA_KEY_REPEAT_MS = 270;
 /** -1 (toward the screen's left) or +1 (right) for an area key, else 0. */
 export function areaKeyDir(code) {
   return code === 'ArrowLeft' ? -1 : code === 'ArrowRight' ? 1 : 0;
@@ -306,7 +324,7 @@ function checkSensitivity(v) {
  * Options: sensitivityRadPerPx (base, default 0.0038), pitchLimitDeg (default 80), sensitivity (multiplier, default 1)
  * and invertY (default false); the last two are the initial `state.look` and can be changed with setLookOptions.
  * @returns {{ state, initialState, keyDown, keyUp, blur, releaseAll, pointerMove, click, axes, drainEvents,
- *   escape, lockChange, uiCommand, toggleDetail, drainUiEvents, setLookOptions, lookOptions,
+ *   escape, lockChange, uiCommand, toggleDetail, toggleEmap, drainUiEvents, setLookOptions, lookOptions,
  *   toggleView, moveKey, areaKey, setLook, setPitchLimits, pitchLimits, pointerAt, pointerLeave, buttonDown, buttonUp, tap, buttonState,
  *   sensitivityRadPerPx: number, pitchLimitRad: number, sensitivity: number, invertY: boolean }}
  *   `state` is a fresh initial state (as createActivity exposes its initial state); initialState()
@@ -586,6 +604,12 @@ export function createControls({
     return pushUi(state, { type: 'detail' }, timeMs);
   }
 
+  /** 21 November 2026 (EMAP): the map key (EMAP_CODE): queue { type: 'emap' } on the UI queue. Like the More detail
+   * key it never touches the keys, the game queue or the reach axes. */
+  function toggleEmap(state, timeMs) {
+    return pushUi(state, { type: 'emap' }, timeMs);
+  }
+
   /** Return queued UI events in order and empty that queue in place (each event is delivered once). */
   function drainUiEvents(state) {
     const queue = state.ui;
@@ -639,9 +663,15 @@ export function createControls({
   /** R558 (Messages 55 and 56): an area key (AREA_CODES): queue { type: 'area', dir } on the UI queue, a REQUEST to move
    * the look one motor area along the strip toward the screen's left (dir -1) or right (+1). The app finds that area
    * and turns the look; the look itself is not changed here. Holds nothing down; never touches the game queue. */
-  function areaKey(state, dir, timeMs) {
+  function areaKey(state, dir, timeMs, { held = false } = {}) {
     if (dir !== -1 && dir !== 1) return state;
-    return pushUi(state, { type: 'area', dir }, timeMs);
+    // (22 November 2026, LOOK2, ns-look-calm AREA_WALK_QUIET: `held` marks a step of the key's auto-repeat)
+    return pushUi(state, held === true ? { type: 'area', dir, held: true } : { type: 'area', dir }, timeMs);
+  }
+  /** 22 November 2026 (LOOK2, ns-look-calm AREA_WALK_QUIET): a held area key came up: queue { type: 'areaUp' } on the UI
+   * queue. The app switches on the area the held walk stopped on. Holds nothing down; never touches the game queue. */
+  function areaKeyUp(state, timeMs) {
+    return pushUi(state, { type: 'areaUp' }, timeMs);
   }
 
   /** R5-input: set the look { yaw, pitch } (radians) the camera hands over on a view switch (ns-camera toggleView's
@@ -770,6 +800,7 @@ export function createControls({
     lockChange,
     uiCommand,
     toggleDetail,
+    toggleEmap,
     drainUiEvents,
     setLookOptions,
     lookOptions,
@@ -778,6 +809,7 @@ export function createControls({
     moveKey,
     moveKeyUp,
     areaKey,
+    areaKeyUp,
     setLook,
     setPitchLimits,
     pitchLimits,
@@ -1039,6 +1071,8 @@ function uiCommandOf(el, root) {
  *   - R4-arm: the information key (DETAIL_CODE, R) without Ctrl/Meta/Alt and not auto-repeat calls
  *     controls.toggleDetail (when present) and, when that reducer accepted it (returned a new state: a gating reducer
  *     can refuse it outside play), options.onDetail({ timeMs }). Game focus owns and prevents the shortcut.
+ *   - 21 November 2026 (EMAP): the map key (EMAP_CODE, M) works like the More detail key: without Ctrl/Meta/Alt and not
+ *     auto-repeat it calls controls.toggleEmap (when present) and, when that reducer accepted it, options.onEmap({ timeMs }).
  *   - R5-input: the view key (VIEW_CODE, E) works like the More detail key: without Ctrl/Meta/Alt, not auto-repeat, not
  *     on a native control or text field, it calls controls.toggleView and, when that reducer
  *     accepted it, options.onView({ timeMs }). Prevented; releases nothing; not a click.
@@ -1049,7 +1083,7 @@ function uiCommandOf(el, root) {
  *     options.arrowAt(xCss, yCss) (truthy when a 3D orbit arrow is drawn there; the scene's ray pick) makes a free-mouse
  *     press on an arrow an ARROW PRESS: no pointer-lock request, no drag-to-look and no click (stepArrowInput turns it
  *     into the orbit step / hold); a press anywhere else behaves as before.
- * options: { onLockChange(locked: boolean), onLockError(), onDetail({ timeMs }), onView({ timeMs }), arrowAt(x, y),
+ * options: { onLockChange(locked: boolean), onLockError(), onDetail({ timeMs }), onEmap({ timeMs }), onView({ timeMs }), arrowAt(x, y),
  *   dragTargetAt(x, y) returning a target name or a { target, ... } pick, onBeforeSafetyRelease(), sensitivity,
  *   invertY, dragToLook = true, uiRoot }
  *   onBeforeSafetyRelease is synchronous and runs before the safety reducer fetches its state; its owner may cancel
@@ -1073,7 +1107,7 @@ export function bindDom(target, controls, getState, setState, options = {}) {
     if (!controls || typeof controls[name] !== 'function') fail('controls_dom', `controls.${name} must be a function`);
   }
   if (options === null || typeof options !== 'object' || Array.isArray(options)) fail('controls_dom', 'options must be an object');
-  const { onLockChange = null, onLockError = null, onDetail = null, onView = null, onBeforeSafetyRelease = null, arrowAt = null, dragTargetAt = null, sensitivity, invertY, dragToLook = true, uiRoot = null } = options;
+  const { onLockChange = null, onLockError = null, onDetail = null, onEmap = null, onView = null, onBeforeSafetyRelease = null, arrowAt = null, dragTargetAt = null, sensitivity, invertY, dragToLook = true, uiRoot = null } = options;
   if (dragTargetAt !== null && typeof dragTargetAt !== 'function') fail('controls_dom', 'dragTargetAt must be a function that returns a drag target or null');
   const canDrag = dragTargetAt !== null && typeof controls.dragStart === 'function' && typeof controls.dragMove === 'function' && typeof controls.dragEnd === 'function';
   /** R558: the item a new press would drag: asked of the game with the pointer's place, or (null, null) for the
@@ -1108,6 +1142,7 @@ export function bindDom(target, controls, getState, setState, options = {}) {
   if (uiRoot !== null && typeof controls.uiCommand !== 'function') fail('controls_dom', 'controls.uiCommand is needed for uiRoot');
   if (onLockError !== null && typeof onLockError !== 'function') fail('controls_dom', 'onLockError must be a function');
   if (onDetail !== null && typeof onDetail !== 'function') fail('controls_dom', 'onDetail must be a function');
+  if (onEmap !== null && typeof onEmap !== 'function') fail('controls_dom', 'onEmap must be a function');
   if (typeof dragToLook !== 'boolean') fail('controls_dom', 'dragToLook must be a boolean');
   const doc = target.ownerDocument;
   const view = doc ? doc.defaultView : null;
@@ -1248,6 +1283,17 @@ export function bindDom(target, controls, getState, setState, options = {}) {
       if (after !== before) { setState(after); call(onDetail, { timeMs: at }); }
       return;
     }
+    if (code === EMAP_CODE) {
+      // 21 November 2026 (EMAP): the electrical map on or off. Leave Alt chords to the browser.
+      if (e.altKey) return;
+      e.preventDefault();
+      if (e.repeat === true || typeof controls.toggleEmap !== 'function') return;
+      const at = eventTime(e);
+      const before = getState();
+      const after = controls.toggleEmap(before, at);
+      if (after !== before) { setState(after); call(onEmap, { timeMs: at }); }
+      return;
+    }
     if (code === VIEW_CODE) {
       // R5-input (R22): first person <-> third person. Not in a text field or on a page control (the page keeps it).
       if (e.altKey) return;
@@ -1286,7 +1332,7 @@ export function bindDom(target, controls, getState, setState, options = {}) {
         if (Number.isFinite(lastAreaKeyMs) && Number.isFinite(at) && at - lastAreaKeyMs < AREA_KEY_REPEAT_MS) { e.preventDefault(); return; }
       }
       const before = getState();
-      const after = controls.areaKey(before, areaDir, at);
+      const after = controls.areaKey(before, areaDir, at, { held: e.repeat === true });
       if (after === before) return;
       e.preventDefault();
       heldAreaKeys.add(code);
@@ -1317,7 +1363,11 @@ export function bindDom(target, controls, getState, setState, options = {}) {
   });
   on(view, 'keyup', e => {
     const code = e.code;
-    if (heldAreaKeys.delete(code)) return;
+    if (heldAreaKeys.delete(code)) {
+      // 22 November 2026 (LOOK2, AREA_WALK_QUIET): the release ends a held walk (the block it stopped on switches on)
+      if (typeof controls.areaKeyUp === 'function') apply(s => controls.areaKeyUp(s, eventTime(e)));
+      return;
+    }
     if (isChordModifier(code)) { releaseAll(e); return; }
     if (isReachCode(code)) { if (typeof controls.setReach === 'function') apply(s => controls.setReach(s, false)); return; }
     // 18 Nov (SMALL, M3): a movement key's release (a held key's movement stops there)

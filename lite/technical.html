@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="lite.css">
+<title>NeuroSurge Lite · Technical guide</title>
+</head>
+<body>
+<main>
+<nav aria-label="Game and guides"><a href="./">NeuroSurge Lite</a> <a href="../">NeuroSurge Full</a> <a href="simple.html">Simple guide</a></nav>
+<h1>NeuroSurge Lite · Technical guide</h1>
+<p><a class="play" href="../scene/example/preview.html?edition=lite">Play NeuroSurge Lite</a></p>
+<p>Use the same mouse, keyboard and movement controls as Full. Read the <a href="../PLAYER-GUIDE.md">player guide</a> for the shared controls. Both editions draw and move the same simulated anatomy.</p>
+<h2>Mesh assets</h2>
+<p>A mesh describes a surface with vertex positions and triangles. Lite uses Brotli, a lossless compression format, to download the five mesh packs. Unpacking them gives the same 611 mesh records and 1,048,620 triangles. The reference coordinates, material inputs and body rig, which sets how the joints move, are the same. The packs, index and rig occupy 5,995,969 bytes in Full and 4,999,707 bytes in Lite. When the browser cannot unpack Brotli itself, Lite loads a 142,385-byte local decoder. That brings the total to 5,142,092 bytes for those assets and the decoder.</p>
+<h2 id="local">Play from a local copy</h2>
+<p><a href="https://github.com/eliminatenoise/NeuroSurge/archive/refs/heads/main.zip">Download the repository ZIP</a> and extract it as a complete folder. With Node.js 18 or later installed, open the launcher for your system in <code>lite</code>. Use <code>Play NeuroSurge Lite on Windows.cmd</code>, <code>Play NeuroSurge Lite on macOS.command</code>, or <code>sh "Play NeuroSurge Lite on Linux.sh"</code> from that directory.</p>
+<p>Alternatively, from the extracted repository root run <code>node lite/launch.mjs</code>. If the browser stays closed, paste the printed local address into a browser with WebGL. Choose <strong>Play NeuroSurge Lite</strong> and leave the terminal open during play. Press <strong>Ctrl+C</strong> there to stop the server.</p>
+<p>The <a href="../CREDITS-AND-LICENCES.md">credits and licences</a> and <a href="../ASSET-ATTRIBUTION-INDEX.md">asset attribution index</a> identify the anatomy sources and their terms. See also the <a href="BROTLI-THIRD-PARTY.txt">decoder credits and licences</a>.</p>
+</main>
+</body>
+</html>

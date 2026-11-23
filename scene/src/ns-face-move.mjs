@@ -47,27 +47,34 @@
  *  fullDeg: the face display joints' full amplitude (ns-body FACE_FULL_DEG): a shape is whole at |joint| = fullDeg.
  *  otherCorner: the leading side's partner gets this share of a one-sided smile or pull-down.
  *  minMm: displacements under this (and normal changes under minN) are left out of the lists.
+ *  21 November 2026 (SEEMOVE: "shapes strong enough to read on a 40 px face", the mirror body's at the start distance):
+ *  the in-picture amounts about a quarter larger (brows up 13 -> 16 mm, a smile's corner 13 up / 8 out -> 15 / 10, a
+ *  corner down 13 -> 16, the lips stretched 9.5 -> 12, an upper lip 9 -> 11.5, a lower lip 9 -> 11.5, frown, wide eyes,
+ *  nose and nostrils likewise; closing the eyes is whole already): at the far end of what a face does, on purpose.
  *  The rest: each shape's amounts in millimetres at full strength (head frame: out = toward the subject's side, up,
  *  fwd = forward out of the face). browUp.ridgeFwd: the brows come this much forward per millimetre up, over the brow
  *  ridge (the frontal bone stands about 4 mm further forward 10 mm above the brows, measured on this skull). */
 export const FACE_MOVE = Object.freeze({
   on: true,
-  fullDeg: 20,
+  // 21 November 2026 (SEEMOVE): 20 -> 15. The map's face movements end at 15 degrees of their display joints (closing the
+  // eyes at 20), so every shape stopped at three quarters of its strength (the browser showed 0.75 at the peak). Each
+  // shape is whole at its movement's end now.
+  fullDeg: 15,
   otherCorner: 0.3,
   minMm: 0.02, minN: 0.002,
-  browUp: Object.freeze({ upMm: 13, ridgeFwd: 0.35, ringShare: 0.9, procerusShare: 0.75, lidShare: 0.22, temporalShare: 0.4, ridgeMm: 0.9, ridges: 3 }),
-  frown: Object.freeze({ inMm: 8.5, downMm: 10, bulgeMm: 2.2, lidMm: 1.8 }),
+  browUp: Object.freeze({ upMm: 16, ridgeFwd: 0.35, ringShare: 0.9, procerusShare: 0.75, lidShare: 0.22, temporalShare: 0.4, ridgeMm: 0.9, ridges: 3 }),
+  frown: Object.freeze({ inMm: 10, downMm: 12.5, bulgeMm: 2.2, lidMm: 1.8 }),
   eyesShut: Object.freeze({ closeAt: 0.3, squeeze: 0.1, browDownMm: 1.5, cheekUpMm: 1.2, bulgeMm: 0.9 }),
-  eyesWide: Object.freeze({ lidUpMm: 6.5, lowerDownMm: 2.5, browUpMm: 3.5 }),
-  noseWrinkle: Object.freeze({ upMm: 8, inMm: 2, bulgeMm: 2.4, ridges: 2, wingUpMm: 9, lipUpMm: 4.5, procerusDownMm: 2.5, cheekUpMm: 2 }),
-  nostrilFlare: Object.freeze({ outMm: 8.5, fwdMm: 1.5, septumDownMm: 4, bulgeMm: 1.4 }),
-  smile: Object.freeze({ outMm: 8, upMm: 13, backMm: 4, radiusMm: 32, coreMm: 4, bulgeMm: 2.2, cheekUpMm: 2.2, cheekRadiusMm: 17 }),
-  cornerDown: Object.freeze({ outMm: 2, downMm: 13, fwdMm: 0.5, radiusMm: 28, coreMm: 4, bulgeMm: 2 }),
-  purse: Object.freeze({ inShare: 0.36, gather: 0.14, fwdMm: 8, baseFwdMm: 1.5, bulgeMm: 1.2, fadeMm: 18 }),
-  stretch: Object.freeze({ outMm: 9.5, backMm: 3, thin: 0.2, bulgeMm: 1.6, fadeMm: 18 }),
-  upperLipUp: Object.freeze({ upMm: 9, fwdMm: 1.5, cornerShare: 0.25, topShare: 0.5, bulgeMm: 1.6, wingUpMm: 1.5, fadeMm: 15 }),
-  pout: Object.freeze({ upMm: 7, fwdMm: 10, chinUpMm: 7, chinFwdMm: 4, bulgeMm: 2.6, fadeMm: 15 }),
-  lowerLipDown: Object.freeze({ downMm: 9, fwdMm: 1.5, bulgeMm: 1.5, fadeMm: 15 })
+  eyesWide: Object.freeze({ lidUpMm: 7, lowerDownMm: 3, browUpMm: 4.5 }),
+  noseWrinkle: Object.freeze({ upMm: 10, inMm: 2, bulgeMm: 2.4, ridges: 2, wingUpMm: 11, lipUpMm: 4.5, procerusDownMm: 2.5, cheekUpMm: 2 }),
+  nostrilFlare: Object.freeze({ outMm: 10.5, fwdMm: 1.5, septumDownMm: 4, bulgeMm: 1.4 }),
+  smile: Object.freeze({ outMm: 10, upMm: 15, backMm: 4, radiusMm: 32, coreMm: 4, bulgeMm: 2.2, cheekUpMm: 2.2, cheekRadiusMm: 17 }),
+  cornerDown: Object.freeze({ outMm: 2, downMm: 16, fwdMm: 0.5, radiusMm: 28, coreMm: 4, bulgeMm: 2 }),
+  purse: Object.freeze({ inShare: 0.36, gather: 0.14, fwdMm: 10, baseFwdMm: 1.5, bulgeMm: 1.2, fadeMm: 18 }),
+  stretch: Object.freeze({ outMm: 12, backMm: 3, thin: 0.2, bulgeMm: 1.6, fadeMm: 18 }),
+  upperLipUp: Object.freeze({ upMm: 11.5, fwdMm: 1.5, cornerShare: 0.25, topShare: 0.5, bulgeMm: 1.6, wingUpMm: 1.5, fadeMm: 15 }),
+  pout: Object.freeze({ upMm: 9, fwdMm: 10, chinUpMm: 8, chinFwdMm: 4, bulgeMm: 2.6, fadeMm: 15 }),
+  lowerLipDown: Object.freeze({ downMm: 11.5, fwdMm: 1.5, bulgeMm: 1.5, fadeMm: 15 })
 });
 
 /** The shapes, the display joint each follows and on which side of 0 (ns-body FACE_DISPLAY_IDS; upper_lip has no

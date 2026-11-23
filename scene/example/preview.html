@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; media-src 'self' blob:; font-src 'self'; object-src 'none'; base-uri 'none'">
 <title>NeuroSurge — Experimental preview</title>
 <link rel="stylesheet" href="./neurosurge.css">
 <link rel="stylesheet" href="./loading-r302.css">
@@ -11,13 +11,22 @@
 <link rel="stylesheet" href="./preview.css">
 <link rel="stylesheet" href="./assembly.css">
 <link rel="stylesheet" href="./quiet.css">
+<link rel="stylesheet" href="./guide-cues.css">
+<link rel="stylesheet" href="../src/joint/view.css">
 <link rel="stylesheet" href="./action-chat.css">
 <link rel="stylesheet" href="./activity-map.css">
 <link rel="stylesheet" href="../src/hand-search/hand-search.css">
 <link rel="stylesheet" href="../src/hand-search/hand-replay.css">
 </head>
 <body>
-<aside class="preview-note" aria-label="Preview status">Simulated activity · experimental preview · <a href="../../PREVIEW-NOTES.html" target="_blank" rel="noopener">notes and credits</a> · <button type="button" class="ns-chat-open" id="ns-chat-open" aria-haspopup="dialog" disabled>F · Move by words</button> · <button type="button" class="ns-chat-open" id="ns-camera-open" disabled>C · Use camera</button> · <button type="button" class="ns-chat-open" id="ns-activity-open" aria-haspopup="dialog" disabled>M · Activity map</button></aside>
+<aside class="preview-note" aria-label="Game links and controls">
+  Simulated activity · <a href="../../">Game editions</a> · <a href="../../PREVIEW-NOTES.html" target="_blank" rel="noopener">Notes and credits</a>
+  · <button type="button" class="ns-chat-open" id="ns-chat-open" aria-haspopup="dialog" disabled>F · Command box</button>
+  · <button type="button" class="ns-chat-open" id="ns-camera-open" disabled>C · Follow movement</button>
+  <button type="button" class="ns-chat-open" id="ns-original-camera" hidden>Record a limb take</button>
+  · <button type="button" class="ns-chat-open" id="ns-activity-open" aria-haspopup="dialog" disabled>Recorded activity and forecasts</button>
+  <span id="ns-sequence-status" role="status"></span>
+</aside>
 <main id="ns-app" class="ns-app" data-ns-read="read"
       data-manifest-url="../../inputs/MESH-MANIFEST.json"
       data-packet-pov-demo-assets="../../packets/pov-demo-assets/"
@@ -26,32 +35,219 @@
   <canvas id="ns-canvas" class="ns-canvas" tabindex="0"
           aria-label="NeuroSurge game view. You move a simulated body and brain with game controls (no real stimulation or decoding)."
           aria-describedby="ns-game-keys"></canvas>
-  <p id="ns-game-keys" class="ns-sr-only">Press F to type a movement, or C for camera control of one arm or knee. Press M for the activity map. Press Escape for controls and settings.</p>
+  <p id="ns-game-keys" class="ns-sr-only">Press F to open the Command box. Type a movement or ask for recorded brain activity. <span id="ns-camera-key-help">Press C, then select Start camera to follow your movement.</span> Press M for the simulated electrical map. Press Escape for controls and settings.</p>
   <div id="ns-hud" class="ns-hud-root"></div>
   <div id="ns-shell-root" class="ns-shell-root"></div>
   <noscript><p class="ns-fatal">This game needs JavaScript and 3D graphics (WebGL) to run.</p></noscript>
 </main>
 <dialog id="ns-action-chat" class="ns-action-chat" aria-labelledby="ns-chat-label" aria-describedby="ns-chat-help">
   <form>
-    <label for="ns-chat-input" id="ns-chat-label">Move the body</label>
-    <p id="ns-chat-help">Bend or straighten either wrist, elbow or knee. Open or close a hand, or spread your fingers. Name the side. To watch recorded movement, try “Replay a forward jump”, “Replay a left-foot hop” or “Replay scoop and lift”. Choose <strong>Find hand recording</strong> to search with your own description.</p>
-    <input id="ns-chat-input" placeholder="Bend my right elbow" maxlength="500" autocomplete="off" autofocus>
+    <label for="ns-chat-input" id="ns-chat-label">Command box</label>
+    <p id="ns-chat-help">Enter a movement, recording or forecast, then press Enter.</p>
+    <input id="ns-chat-input" spellcheck="false" placeholder="Bend my right elbow" maxlength="500" autocomplete="off" autofocus>
     <menu>
       <button type="submit">Move</button>
+      <button type="submit" data-find-body>Find body recording</button>
       <button type="submit" data-find-hand>Find hand recording</button>
+      <button type="submit" data-grip-command>Preview grip</button>
+      <button type="submit" data-wrist-command>Forecast my wrists</button>
+      <button type="submit" data-match-reach>Match my arm reach</button>
       <button type="button" data-speak>Use voice</button>
       <button type="button" data-close>Cancel</button>
     </menu>
     <p role="status"></p>
+    <div data-body-results role="group" aria-label="Matching whole-body recordings" hidden></div>
+    <details><summary>Command examples</summary>
+      <p>Try “bend my right elbow” or “turn my left palm down”. You can also bend either knee, straighten a wrist, open a hand, or spread your fingers. To combine movements, type “bend my left elbow then straighten my left elbow”. You can join up to four movements. A new command or a movement key stops the remaining steps.</p>
+      <p>To see a lab recording, enter “jump forward” and choose a title. For the printer task, enter a hand movement and select <strong>Find hand recording</strong>. Enter “forecast a reach and its sensory feedback” to see a recorded reach and the nerve signals that followed.</p>
+      <p data-checkpoint-required hidden>Try “raise my right hand above my shoulder”. The game reports where the virtual wrist finished. The local NeuroTranslate model estimates where it will go next.</p>
+      <p data-start-local-model><a href="../../START.html#local-model">Open the local NeuroTranslate model</a> for movement goals and fingertip touch forecasts.</p>
+      <p>Type “show recorded brain activity” to compare finger cues from a human recording.</p>
+      <p>Type “generate walk” or “generate run” to see the model draw a stride in 3D. Type “forecast heel movement” to predict right heel travel and force on a plate. Try “forecast my usual walk” or “forecast fast walking without running” to compare two walking instructions. Type “forecast my balance” for head and pelvis movement after a visual rotation. Type “forecast muscle and movement” to see a leg voltage forecast alongside a path for the pelvis. Try “forecast my wrist lift” or “forecast my pelvis path” to compare a model trained on two studies with one trained on your chosen task.</p>
+      <p>To record a movement for replay, first close the Command box. <span id="ns-take-recorder-help">Press C to open the recorder, then select Start camera.</span> Allow video when asked. Choose a limb, select <strong>Record take</strong>, then <strong>Finish take</strong>. Open the Command box and type “replay my take”. To keep a take, open <strong>Named takes</strong> below. Try “replay take named warm up”.</p>
+      <p>After recording, type “forecast my wrists” to estimate the next half second of a wrist path. Choose a lead arm to try the shoulder model. Type “match my arm reach” to compare the path with eight recorded macaque reaches.</p>
+    </details>
   </form>
+  <details data-named-takes hidden>
+    <summary>Named takes</summary>
+    <p data-latest></p>
+    <ul aria-label="Saved takes"></ul>
+    <p>To replay part of a take, try “replay 0.5 to 1.5 seconds of take named warm up” or “replay last 1 second of take named warm up”.</p>
+    <div>
+      <label for="ns-take-name">Take name</label>
+      <input id="ns-take-name" spellcheck="false" maxlength="40" autocomplete="off" placeholder="Warm up">
+      <menu>
+        <button type="button" data-save>Save last take</button>
+        <button type="button" data-forget>Forget by name</button>
+      </menu>
+      <p role="status"></p>
+      <button type="button" data-confirm hidden></button>
+      <button type="button" data-cancel hidden>Keep existing take</button>
+    </div>
+    <fieldset data-compare-controls hidden>
+      <legend>Compare recorded angles</legend>
+      <label>First take <select data-first></select></label>
+      <label>Second take <select data-second></select></label>
+      <button type="button">Compare takes</button>
+      <p>Or enter “compare take named warm up with take named second try” in the Command box.</p>
+      <p role="status"></p>
+    </fieldset>
+    <section data-comparison hidden aria-labelledby="ns-comparison-title">
+      <h3 id="ns-comparison-title" tabindex="-1">Angles by capture time</h3>
+      <label>Joint <select></select></label>
+      <p data-angle-description></p>
+      <p>Each take starts at Record take. Times are rounded down to milliseconds. Half-second rows keep each take’s own times and gaps.</p>
+      <p>The range runs from the lowest to the highest visible reading. The frame count includes saved tracking losses. A timeout adds no frame. Movement between readings is unknown.</p>
+      <p>Change per second uses consecutive angle readings 50–250 ms apart. A positive rate means the angle grew. Gaps break the sequence. Camera perspective and tracking jitter affect the rates.</p>
+      <table></table>
+    </section>
+    <p>Named takes stay in this tab until you forget them or leave the page.</p>
+  </details>
+  <section data-grip-preview hidden>
+    <h2 id="ns-grip-title" tabindex="-1">Fingertip distance forecast</h2>
+    <p id="ns-grip-help">Give a fictional right hand an instruction. The model predicts how its four thumb-to-fingertip gaps will change.</p>
+    <label>Instruction <input data-grip-text maxlength="500" autocomplete="off" spellcheck="false" placeholder="Open the cover"></label>
+    <p role="status"></p>
+    <button type="button" data-retry hidden>Retry local model</button>
+    <div data-grip-results hidden>
+      <table><caption>Predicted change from the starting gap (mm)</caption>
+        <thead><tr><th scope="col">Thumb to</th><th scope="col">+0.5 s</th><th scope="col">+1.0 s</th></tr></thead><tbody></tbody>
+      </table>
+      <p>Negative brings the tips closer. Positive moves them apart. <span data-scale></span></p>
+    </div>
+    <label>Hand history and task
+      <select data-history><option value="printer">Small printer · almost steady</option><option value="camera">Camera · closing hand</option></select>
+    </label>
+    <p data-history-note></p>
+    <label>Show forecast
+      <select data-model-choice><option value="ordered">Hand, task and words</option><option value="context">Hand and task only</option></select>
+    </label>
+    <details><summary>Fingertip distance measurements</summary>
+      <p>HoloAssist recorded instructors guiding people through everyday tasks. The headset tracked the thumb tip and four fingertips. The two models learned from those optical distances, earlier changes in each gap, the task and instruction duration. Only the word model also uses the recognised categories in the first and second halves of the instruction.</p>
+      <p>In an internal check, 26 instructions had usable tracking at both times. Only 15 from three recording groups allowed a same-task comparison with another instruction. For the thumb–index gap, the average error with words was 7.96 mm at half a second and 6.56 mm at one second. Without words it was 7.99 and 6.28 mm. Each group counted equally. The check found no consistent gain from word order.</p>
+      <p>These examples use invented hand histories. Four distances can describe many poses. The study did not test whether the person followed the instruction or grasped an object successfully.</p>
+      <p><a href="../../assets/hand-search/hand-source-credits.html" target="_blank" rel="noopener noreferrer">HoloAssist authors and optical tracking</a> · <a href="../../assets/hand-search/CDLA-Permissive-2.0.txt" target="_blank" rel="noopener noreferrer">Data licence</a></p>
+    </details>
+    <button type="button" data-return>Back to game</button>
+  </section>
+  <section data-wrist-forecast hidden>
+    <h2 id="ns-wrist-title" tabindex="-1">Wrist path forecasts</h2>
+    <p id="ns-wrist-help">Choose a time in the take and compare each forecast with the wrist’s later path.</p>
+    <p data-source role="status"></p>
+    <button type="button" data-return>Back to game</button>
+    <button type="button" data-example>Try a synthetic example</button>
+    <button type="button" data-use-take hidden>Use last camera take</button>
+    <div data-wrist-results hidden>
+      <label>Time in take <output data-clock></output><input data-cutoff type="range" min="0" max="0" step="1" value="0"></label>
+      <button type="button" data-play>Replay at half speed</button>
+      <label>Forecast method
+        <select data-wrist-method>
+          <option value="auto">Automatic wrist forecast</option>
+          <option value="trend">Recent wrist direction</option>
+          <option value="leftArm">Model · left arm leads</option>
+          <option value="rightArm">Model · right arm leads</option>
+        </select>
+      </label>
+      <section data-role-model hidden>
+        <p>The model uses the last 0.467 s of visible arm movement. It learned from synthetic paths. In automatic mode it averages both possible lead-arm forecasts for each visible wrist. You can move either arm without choosing a lead or calibrating the model.</p>
+        <p data-role-status></p>
+        <canvas width="520" height="250" hidden role="img" aria-label="Wrist forecasts in the shoulder frame. Numbers are tabulated below."></canvas>
+        <p>Turquoise is left and amber is right. Squares mark the shoulders and dots mark the wrists at the cursor. Small and large rings show their predicted positions at +0.267 and +0.500 s. Crosses show later positions where available.</p>
+        <p>The horizontal axis runs toward the <span data-horizontal>right</span> shoulder. The other axis crosses it at a right angle toward the top of the image. Zero is the midpoint between the shoulders at the cursor. One unit is their median earlier separation in the image.</p>
+        <div data-role-values></div>
+      </section>
+      <div data-trend-results>
+        <p data-offsets-only hidden>This take contains wrist offsets only. The forecast follows each visible wrist’s recent direction.</p>
+        <div class="wrist-plots">
+          <figure><figcaption data-label="leftArm">Left wrist</figcaption><canvas width="240" height="240" data-plot="leftArm" role="img" aria-label="Left wrist trajectory and forecast"></canvas></figure>
+          <figure><figcaption data-label="rightArm">Right wrist</figcaption><canvas width="240" height="240" data-plot="rightArm" role="img" aria-label="Right wrist trajectory and forecast"></canvas></figure>
+        </div>
+        <p>Blue traces the past second. The dot marks the cursor. Amber rings predict the wrist position 0.267 and 0.500 seconds later. Crosses mark the later path where samples support it.</p>
+        <p data-scale></p>
+        <div data-side-readouts></div>
+      </div>
+    </div>
+    <details><summary>How the forecast works</summary>
+      <p>In Recent wrist direction, each position gives (outward, up) from that wrist’s own shoulder. One unit equals the height of the video image. The camera already reflects the right arm into the outward direction. Keep the lens facing you.</p>
+      <p>The direction estimate starts at the selected frame. It needs three consecutive visible samples spanning at least 90 ms in the past half second. For each axis it takes the median speed between sample pairs at least 30 ms apart. It continues that speed to each horizon. The comparisons use half that speed or hold the wrist still.</p>
+      <p>Error is the straight-line distance from the forecast to the later path, in image heights. If the target lies between two visible samples, the table labels the straight-line interpolation. A missing side or a gap over 250 ms breaks the trace and the fit. An interval beyond the last frame has no comparison.</p>
+      <p>The shoulder model uses a 30 Hz grid from 14/30 seconds before the cursor through the cursor. It interpolates only between neighboring captures up to 200 ms apart. Both shoulders fix the axes before the forecast. A hidden wrist or elbow blocks that arm. Later measurements use those same axes. Error is the distance between the model and the later wrist in projected shoulder widths.</p>
+      <p>Two ridge regressions each learned from 1,024 generated paths. One fit describes the lead arm in those examples and the other describes its partner. Automatic mode gives the two possible assignments equal weight in the same shoulder frame. The left-lead and right-lead settings let you inspect them separately. Handedness and forecast accuracy in people are unmeasured.</p>
+      <p>The camera estimates visible movement in a flat image. Hand intention, depth and brain activity are unmeasured. Camera images are neither saved nor uploaded.</p>
+    </details>
+  </section>
+  <section data-reach-study hidden>
+    <h2 id="ns-study-title" tabindex="-1">Match an arm reach</h2>
+    <p id="ns-study-help">Compare the last camera take with eight recordings from macaque C, one week after the training session.</p>
+    <label>Arm in take <select data-side><option value="rightArm">Right</option><option value="leftArm">Left</option></select></label>
+    <p role="status" data-match-status></p>
+    <button type="button" data-example>Try a recorded example</button>
+    <button type="button" data-use-take hidden>Use last camera take</button>
+    <div data-study-result hidden>
+      <label>Study reach <select data-case></select></label>
+      <canvas width="480" height="192" data-shapes role="img" aria-label="Two projected paths from their common starting point"></canvas>
+      <p data-shape-key></p>
+      <h3>Macaque hand in 3D</h3>
+      <canvas width="480" height="192" data-spatial role="img" aria-label="Recorded 3D hand-marker displacement from the first sample"></canvas>
+      <p data-coordinates></p>
+      <button type="button" data-play>Replay at ⅛ speed</button>
+      <label>Recording time <input data-sample type="range" min="0" max="29" value="0" step="1"></label>
+      <label>Rotate 3D view <input data-orbit type="range" min="-180" max="180" value="30"></label>
+      <p data-spikes></p>
+    </div>
+    <details><summary>How the paths are compared</summary>
+      <p>Face the lens. Each visible wrist is measured from its own shoulder in image heights. Outward motion is positive horizontal on either arm, so the right arm is reflected from the raw camera image. Up is positive vertical. The mirrored camera preview is for viewing only.</p>
+      <p>The optical hand marker has three study coordinates in shoulder-relative metres. We compare its X and Y to the two camera directions by convention. Camera depth is unknown. Matching keeps direction, subtracts each start and divides both axes by the largest distance from that start. We sample 30 equally spaced instants from start to finish and rank the root-mean-square point distances. Zero means identical normalized paths. The score has no units.</p>
+      <p>A camera query needs five visible samples over at least 200 ms, with no tracking loss between them or gap over 400 ms. It must move more than 2.5% of the image height. Matching excludes leading and trailing time without a visible wrist. Similarity describes the gesture. The electrode counts belong to the selected animal trial.</p>
+      <p>Chowdhury, Glaser &amp; Miller · September 14, 2017 · CC0. <a href="https://doi.org/10.5061/dryad.nk98sf7q7" target="_blank" rel="noreferrer">Recording</a> · <a href="https://doi.org/10.7554/eLife.48198" target="_blank" rel="noreferrer">Study</a></p>
+    </details>
+    <button type="button" data-return>Back to game</button>
+  </section>
+  <section class="word-motion" data-word-motion hidden>
+    <header>
+      <h2 id="ns-word-title">Generated movement</h2>
+      <button type="button" data-return>Back to game</button>
+    </header>
+    <p role="status" data-load></p>
+    <div data-player hidden>
+      <canvas aria-label="Generated 3D surface landmarks"></canvas>
+      <div class="word-transport">
+        <button type="button" data-play>Play</button>
+        <label for="ns-word-time">Time</label>
+        <input type="range" id="ns-word-time" min="0" max="24" value="0" step="1">
+        <output for="ns-word-time" data-time></output>
+      </div>
+      <label for="ns-word-angle">Rotate view</label>
+      <input type="range" id="ns-word-angle" min="-180" max="180" value="-31" step="1">
+      <details>
+        <summary>Inspect a body point</summary>
+        <label for="ns-word-point">Surface landmark</label>
+        <select id="ns-word-point"></select>
+        <p data-position></p>
+      </details>
+      <p>One word gives one 0.60-second movement of 18 surface landmarks. Positions are in millimetres from the starting pelvis. X points right of travel, Y forward and Z up.</p>
+      <p>The model learned from Carnegie Mellon University’s motion capture archive, funded by NSF EIA-0196217.</p>
+    </div>
+  </section>
 </dialog>
 <dialog id="ns-activity-map" class="activity-map" aria-labelledby="ns-activity-title">
   <header class="activity-head"><h1 id="ns-activity-title">Activity map</h1><button type="button" data-close autofocus>Back to game</button></header>
   <div class="activity-switch" role="group" aria-label="Map view">
     <button type="button" data-tab="recording" aria-pressed="true" aria-controls="ns-act-recording">Recorded wrist</button>
+    <button type="button" data-tab="cortex" aria-pressed="false" aria-controls="ns-act-cortex">Recorded cortex</button>
     <button type="button" data-tab="rat" aria-pressed="false" aria-controls="ns-act-rat">Rat brain activity</button>
     <button type="button" data-tab="spatial" aria-pressed="false" aria-controls="ns-act-spatial">Whole-body motion</button>
     <button type="button" data-tab="hand" aria-pressed="false" aria-controls="ns-act-hand">Hand search</button>
+    <button type="button" data-tab="gait" aria-pressed="false" aria-controls="ns-act-gait">Walking forecast</button>
+    <button type="button" data-tab="pace" aria-pressed="false" aria-controls="ns-act-pace">Walking instructions</button>
+    <button type="button" data-tab="balance" aria-pressed="false" aria-controls="ns-act-balance">Visual balance</button>
+    <button type="button" data-tab="muscle" aria-pressed="false" aria-controls="ns-act-muscle">Muscle and movement</button>
+    <button type="button" data-tab="target-reach" aria-pressed="false" aria-controls="ns-act-target-reach">Move a cylinder</button>
+    <button type="button" data-tab="contact-forecast" aria-pressed="false" aria-controls="ns-act-contact-forecast">Next-day brain activity</button>
+    <button type="button" data-tab="reach-feedback" aria-pressed="false" aria-controls="ns-act-reach-feedback">Reach and spikes</button>
+    <button type="button" data-tab="cortical-reach" aria-pressed="false" aria-controls="ns-act-cortical-reach">Cortical reach</button>
+    <button type="button" data-tab="spindle" aria-pressed="false" aria-controls="ns-act-spindle">Stretch and spikes</button>
+    <button type="button" data-tab="limb" aria-pressed="false" aria-controls="ns-act-limb">Wrist and pelvis</button>
     <button type="button" data-tab="shared" aria-pressed="false" aria-controls="ns-act-shared">Shared model</button>
     <button type="button" data-tab="game" aria-pressed="false" aria-controls="ns-act-game">Game pathways</button>
   </div>
@@ -92,7 +288,7 @@
       <div class="activity-traces" data-traces aria-label="Aligned recorded signals"></div>
       <div class="activity-times" aria-hidden="true"><span>−0.50 s</span><span>+2.50 s</span></div>
       <p class="activity-note">L and R in the EMG labels identify the two contacts over one right-forearm muscle site. Choose either contact or their signed difference. The dotted line in the traces marks the go cue. Movement artifacts and signals from nearby muscles can contribute to the voltages.</p>
-      <details data-model><summary>How far will the wrist move in a quarter of a second?</summary>
+      <details data-model><summary>Wrist-angle forecast at 250 ms</summary>
         <p>Choose a moment after the go cue. Each model sees the previous half-second of readings, ending a quarter-second before your chosen moment. The wrist sensor shows where the wrist actually went.</p>
         <div data-comparison hidden>
           <div class="activity-choices"><label>Forecast target <select data-target></select></label>
@@ -119,6 +315,310 @@
       <p>Jorge German Perez Blanco and Javier Mauricio Anteliz Ortiz. This excerpt selects one trial, subtracts each forearm contact pair, and converts device coordinates to degrees. <a href="https://doi.org/10.6084/m9.figshare.29666735.v3" target="_blank" rel="noopener">Original data</a> · <a href="https://doi.org/10.1038/s41597-026-07287-z" target="_blank" rel="noopener">Experiment</a> · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a></p>
     </details>
   </section>
+  <section id="ns-act-gait" aria-labelledby="ns-gait-title" hidden>
+    <h2 id="ns-gait-title" tabindex="-1">Right heel travel and plate force at 100 ms</h2>
+    <p>Two markers track the heel and forefoot. Eight sensors pick up electrical activity in the right leg muscles. This example invents those signals. A trained NeuroTranslate model uses them to predict heel travel and upward force on the plate under the right foot.</p>
+    <p role="status">Opening the local walking model…</p>
+    <div data-gait-ready hidden>
+      <label for="ns-gait-travel">Change both markers’ past X travel</label>
+      <div class="gait-input"><input id="ns-gait-travel" type="range" min="-3" max="3" step="0.5" value="0"><output for="ns-gait-travel" data-gait-change></output></div>
+      <p class="activity-note">Add or subtract up to 3 mm across the 24 earlier positions. Each marker keeps its original end position. The muscle inputs and time since right foot strike stay fixed.</p>
+      <table>
+        <caption>Predictions 100 ms ahead, with the original and adjusted histories</caption>
+        <thead><tr><th scope="col">Quantity</th><th scope="col">Original</th><th scope="col">Adjusted</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Heel travel along laboratory X</th><td data-original-x></td><td data-gait-x></td></tr>
+          <tr><th scope="row">Heel travel along laboratory Y</th><td data-original-y></td><td data-gait-y></td></tr>
+          <tr><th scope="row">Heel travel along Z (up)</th><td data-original-z></td><td data-gait-z></td></tr>
+          <tr><th scope="row">Upward plate force</th><td data-original-force></td><td data-gait-force></td></tr>
+        </tbody>
+      </table>
+      <p class="activity-note">Travel is the signed change from the last heel position. Force is the mean over a 10 ms window around the target time. The example has no measured outcome to compare against.</p>
+    </div>
+    <details>
+      <summary>Walking measurements used for training</summary>
+      <p>Adults walked barefoot at a slow metronome pace in a gait laboratory. Skin markers, right-leg muscle voltages and two force plates supplied the training measurements. The fit uses right-foot contacts with verified plate assignment. A camera take in this game supplies image-derived limb angles. It cannot supply the laboratory marker positions or muscle voltages used here.</p>
+      <p>On 203 examples from 25 people, with people held out by fold, the mean heel-position error was 1.37 mm and the mean absolute force error was 100 N. A model using just markers and timing achieved lower errors on both (1.25 mm and 90 N). These tests found no advantage from adding the muscle signals.</p>
+      <p>Céline Schreiber and Florent Moissenet, Rehazenter, Luxembourg. <a href="https://doi.org/10.6084/m9.figshare.7734767.v8" target="_blank" rel="noopener">Walking measurements (v8)</a> · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a></p>
+    </details>
+  </section>
+  <section id="ns-act-pace" aria-labelledby="ns-pace-title" hidden>
+    <h2 id="ns-pace-title" tabindex="-1">Pelvis and right heel forecasts at 100 ms</h2>
+    <p>Start with 21 invented marker positions for each landmark, 10 ms apart. Change the walking instruction while keeping those positions and the time since right foot strike fixed.</p>
+    <p role="status"></p>
+    <div data-pace-ready hidden>
+      <div class="activity-choices"><label>Walking instruction
+        <select><option value="4">As usual</option><option value="5">Fast but not running</option></select>
+      </label></div>
+      <table>
+        <caption>Predicted travel over the next 100 ms (mm)</caption>
+        <thead><tr><th scope="col">Landmark and direction</th><th scope="col" data-pace-cue></th><th scope="col">No instruction</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <p>The second model learned from the same histories without the walking instruction. Positive values mean forward, left or up along the direction shown. The example has no measured future.</p>
+    </div>
+    <details><summary>Source of the walking instructions</summary>
+      <p>Céline Schreiber and Florent Moissenet recorded adults walking barefoot in a gait laboratory. “As usual” and “fast but not running” describe whole trials. The recordings include neither speech nor word timing. Here the selected phrase supplies one of two condition codes.</p>
+      <p>Across 10 assessment participants, mean 100 ms error with the correct instruction was 5.02 mm for the pelvis and 5.74 mm for the right heel. Without the instruction the errors were 5.12 mm and 5.68 mm. Neither landmark showed a reliable improvement over the no-instruction model.</p>
+      <p>Four skin markers define the pelvis centre. One marker tracks the right heel. Forward follows the pelvis across the observed 200 ms. These forecasts use marker geometry and time from the annotated right foot strike.</p>
+      <p><a href="https://doi.org/10.6084/m9.figshare.7734767.v8" target="_blank" rel="noopener">Source walking measurements</a> · <a href="https://doi.org/10.1038/s41597-019-0124-4" target="_blank" rel="noopener">Study protocol</a> · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a></p>
+    </details>
+  </section>
+  <section id="ns-act-balance" aria-labelledby="ns-balance-title" hidden>
+    <h2 id="ns-balance-title" tabindex="-1">Head and pelvis forecasts after a visual rotation</h2>
+    <p>In a walking experiment, the scene in a headset tilted clockwise or counterclockwise. Two markers tracked the head and the sacrum, the bone at the back of the pelvis. Try an invented walk from the same kind of experiment.</p>
+    <p role="status"></p>
+    <div data-balance-ready hidden>
+      <div class="activity-choices">
+        <label>Scene rotation <select data-balance-direction><option value="1">Clockwise</option><option value="-1">Counterclockwise</option></select></label>
+        <label>Change past sideways head travel <select data-balance-travel><option value="-3">−3 mm</option><option value="0" selected>Original</option><option value="3">+3 mm</option></select></label>
+        <label>Scalp voltage amplitude <select data-balance-amplitude><option value="0.5">Half</option><option value="1" selected>Original</option><option value="1.5">One and a half times</option></select></label>
+      </div>
+      <table>
+        <caption>Predicted change in position over the next 125 ms (mm)</caption>
+        <thead><tr><th scope="col">Marker and axis</th><th scope="col">With scalp voltage</th><th scope="col">Without scalp voltage</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <p>Both models see the rotation, the markers and the eye and muscle signals. Only the first sees scalp voltage. The numbers follow the three axes in the recording. The invented walk has no measured future.</p>
+    </div>
+    <details><summary>What each input control changes</summary>
+      <p>The final observed marker position stays fixed. Changing head travel shifts earlier sideways head positions along a straight ramp. Changing scalp amplitude scales the mean and root-mean-square voltage in each of eight time bins. The eye, neck and leg signals stay fixed.</p>
+      <p>Both models learn from stored measurements. Their last input falls 125 to just under 129 ms after the rotation starts. They forecast movement 125 ms beyond that point. Movement and muscle activity can affect scalp voltage. These predictions cannot identify the nerve pathways behind a movement.</p>
+      <p>Across 880 rotations from 6 people held out of training, the model with scalp voltage missed the sacrum by 7.80 mm and the head by 7.18 mm on average. Without scalp voltage the errors were 7.67 and 7.12 mm. Neither marker showed a reliable improvement from adding scalp voltage over both comparisons.</p>
+      <p>Peterson and Ferris. <a href="https://doi.org/10.1016/j.dib.2021.107635" target="_blank" rel="noopener">Experiment</a> · <a href="https://doi.org/10.18112/openneuro.ds003739.v1.0.3" target="_blank" rel="noopener">Walking recordings (v1.0.3)</a> · <a href="https://creativecommons.org/publicdomain/zero/1.0/" target="_blank" rel="noopener">CC0</a></p>
+    </details>
+  </section>
+  <section id="ns-act-muscle" aria-labelledby="ns-muscle-title" hidden>
+    <h2 id="ns-muscle-title" tabindex="-1">Leg muscle and pelvis forecasts after a visual rotation</h2>
+    <p>In the experiment, electrodes picked up voltages over four muscles on each leg. A marker tracked the sacrum at the back of the pelvis. Here one model uses an invented history to forecast both signals over the next 125 ms.</p>
+    <p role="status"></p>
+    <div data-muscle-ready hidden>
+      <div class="activity-choices">
+        <label>Posture <select data-posture><option value="0">Standing</option><option value="1">Walking</option></select></label>
+        <label>Scene rotation <select data-direction><option value="1">Clockwise</option><option value="-1">Counterclockwise</option></select></label>
+        <label>Past leg voltage <select data-amplitude><option value="0.5">Half amplitude</option><option value="1" selected>Original</option><option value="1.5">One and a half times</option></select></label>
+      </div>
+      <table data-muscle-voltage-table>
+        <caption>Predicted root-mean-square (RMS) voltage over 125 ms, in microvolts (µV)</caption>
+        <thead><tr><th scope="col">Muscle</th><th scope="col">Left leg</th><th scope="col">Right leg</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <figure class="muscle-path">
+        <figcaption>Predicted sacrum displacement (mm)</figcaption>
+        <svg viewBox="0 0 372 150" role="img" aria-label="Predicted displacement along three axes from the last observed position to 125 milliseconds ahead. All 32 positions appear in the table below.">
+          <g data-path-axes></g><g data-path-lines></g>
+        </svg>
+        <ul aria-label="Predicted displacement at 125 ms"><li>Side to side <output></output></li><li>Vertical <output></output></li><li>Front to back <output></output></li></ul>
+      </figure>
+      <details><summary>Read all 32 predicted positions</summary>
+        <table data-path><caption>Displacement from the last observed position (mm)</caption>
+          <thead><tr><th scope="col">Time (ms)</th><th scope="col">Side to side</th><th scope="col">Vertical</th><th scope="col">Front to back</th></tr></thead><tbody></tbody>
+        </table>
+      </details>
+    </div>
+    <details><summary>Recorded measurements</summary>
+      <p>Steven M. Peterson and Daniel P. Ferris rotated the scene in a headset while participants stood or walked. Skin electrodes recorded surface muscle voltage. RMS summarizes its amplitude. Neither muscle force nor the amount of shortening was measured.</p>
+      <p>The game keeps the same invented movement history when you change posture or rotation. “Past leg voltage” scales all eight invented voltage histories together. The path starts at the last observed sacrum position and follows the source axes (ML, SI, AP). Their anatomical signs remain unresolved. The example has no measured future.</p>
+      <p>The joint model’s average errors across 1,759 recorded rotations from six people outside training were 9.50 µV and 1.96 mm. Separate muscle and movement models scored 9.45 µV and 1.94 mm on the same rotations. Training one model for both tasks gave no advantage on the two measures together.</p>
+      <p>The source recordings were processed offline. The forecast describes those laboratory tasks. It supplies no movement instruction.</p>
+      <p><a href="https://doi.org/10.1016/j.dib.2021.107635" target="_blank" rel="noopener">Peterson and Ferris experiment</a> · <a href="https://doi.org/10.18112/openneuro.ds003739.v1.0.3" target="_blank" rel="noopener">OpenNeuro recordings, version 1.0.3</a> · <a href="https://creativecommons.org/publicdomain/zero/1.0/" target="_blank" rel="noopener">CC0</a></p>
+    </details>
+  </section>
+  <section id="ns-act-target-reach" aria-labelledby="ns-target-reach-title" hidden>
+    <h2 id="ns-target-reach-title" tabindex="-1">Move a cylinder to a target</h2>
+    <p>Give the model the first fifth of a second of a recorded path and choose a destination. It predicts where the hand-held cylinder will go next. The two hands were recorded on separate trials.</p>
+    <p role="status" aria-live="polite"></p>
+    <div data-target-results hidden>
+      <div class="activity-choices">
+        <label>Hand <select aria-label="Transport hand" data-tr-side><option value="right">Right</option><option value="left">Left</option></select></label>
+        <label>Start the clock <select aria-label="Transport timing" data-tr-clock><option value="crossing">After 15 mm of movement</option><option value="acquisition">At the first optical sample</option></select></label>
+        <label>Recording’s destination <select aria-label="Recording destination" data-tr-original></select></label>
+        <label>Requested destination <select aria-label="Requested destination" data-tr-goal></select></label>
+        <label>Projection <select aria-label="Transport projection" data-tr-plane><option value="xy">Optical X and Y</option><option value="xz">Optical X and Z</option><option value="yz">Optical Y and Z</option></select></label>
+      </div>
+      <svg data-tr-plot viewBox="0 0 400 205" role="img" aria-label="Forecast of the next three object positions in the selected optical plane" style="width:100%;max-width:560px;display:block;background:#132b31;border-radius:8px"></svg>
+      <p data-tr-caption></p>
+      <table><caption>Displacement from the last input position, in centimetres</caption><thead><tr><th>Time</th><th>Forecast X / Y / Z</th><th>Recorded X / Y / Z</th></tr></thead><tbody></tbody></table>
+      <p>The model uses a numbered spatial target. The words typed in F are game controls. The experiment gave volunteers a visual target and a separate go sound.</p>
+      <p><a href="https://eliminatenoise.github.io/Interoceptomics/target-reach/" target="_blank" rel="noopener">Rotate a measured transport in 3D</a> · <a href="https://eliminatenoise.github.io/NeuroTranslation/papers/target-reach/" target="_blank" rel="noopener">Read the two timing comparisons</a></p>
+    </div>
+  </section>
+  <section id="ns-act-contact-forecast" aria-labelledby="ns-contact-title" hidden>
+    <h2 id="ns-contact-title" tabindex="-1">Recording from one electrode</h2>
+    <p>A macaque held a handle. Use a model fitted on the previous day to forecast how many electrical events an electrode records in the next tenth of a second. Each contact may pick up several cells.</p>
+    <p role="status" aria-live="polite"></p>
+    <div data-contact-results hidden>
+      <div class="activity-choices">
+        <label>Recorded event <select aria-label="Recorded event" data-phase><option value="0">Handle pushed</option><option value="1">Reach cue after a push</option><option value="2">Reach cue without a push</option></select></label>
+        <label>Time after event <select aria-label="Time after event" data-offset></select></label>
+        <label>Electrode contact <select aria-label="Electrode contact" data-contact></select></label>
+      </div>
+      <table><caption>Events at the selected contact in 100 ms</caption><thead><tr><th scope="col">Recording or forecast</th><th scope="col">Event count</th></tr></thead><tbody></tbody></table>
+      <p data-contact-history></p>
+      <p>Expected counts can be fractional. The first-day fits used windows after a push. The two reach conditions show what happens when the task changes.</p>
+      <p><a href="https://eliminatenoise.github.io/NeuroTranslation/contact-forecast/" target="_blank" rel="noopener">Explore all models</a> · <a href="https://eliminatenoise.github.io/Interoceptomics/contact-forecast/" target="_blank" rel="noopener">Rotate the recorded arm</a></p>
+    </div>
+  </section>
+  <section id="ns-act-reach-feedback" aria-labelledby="ns-reach-feedback-title" hidden>
+    <h2 id="ns-reach-feedback-title" tabindex="-1">Two reaches and their following sensory spikes</h2>
+    <p>A macaque moves a handle. Pause the recording five samples after the second go cue. The models can see the past 200 ms of movement, go cues and spikes in sensory cortex. How closely can they forecast the next movement and the spikes that follow it?</p>
+    <p role="status" aria-live="polite"></p>
+    <div data-feedback-results hidden>
+      <div class="activity-choices">
+        <label>Held recording <select data-workspace><option value="within">Later reach in workspace 1</option><option value="transfer">Reach in workspace 2</option></select></label>
+        <label>Tracked point <select data-marker><option value="hand">Hand</option><option value="elbow">Near the elbow</option><option value="handle">Handle</option></select></label>
+        <label>Time after last position <select data-sample></select></label>
+      </div>
+      <figure class="reach-distance">
+        <figcaption>Distance from the last observed position</figcaption>
+        <svg data-distance-chart viewBox="0 0 315 94" aria-hidden="true">
+          <g fill="currentColor" font-size="10"><text data-high x="6" y="10"></text><text x="23" y="74">0</text><text x="37" y="90">0 ms</text><text x="261" y="90">100 ms</text></g>
+          <path d="M38 12V72H288" stroke="#87969f" fill="none"></path><path data-cursor stroke="#a0aab1" stroke-dasharray="2 3"></path>
+          <polyline data-line="measured" stroke="#92cfff" fill="none" stroke-width="2.5"></polyline><polyline data-line="forecast" stroke="#ffbd80" fill="none" stroke-width="2.5" stroke-dasharray="5 3"></polyline>
+          <circle data-point="measured" r="3" fill="#92cfff"></circle><circle data-point="forecast" r="3" fill="#ffbd80"></circle>
+        </svg>
+        <div class="reach-key"><span>Recorded · solid</span><span>Forecast · dashed</span></div>
+      </figure>
+      <table data-motion-table><caption data-motion-caption></caption><thead><tr><th scope="col">Axis</th><th scope="col">Recorded</th><th scope="col">Forecast</th></tr></thead><tbody></tbody></table>
+      <h3>Spikes after the movement</h3>
+      <p>Electrodes in sensory cortex recorded spikes from 23 units. Select one to see its recorded count and two estimates. An expected count can be fractional.</p>
+      <div class="activity-choices">
+        <label>Recorded unit <select data-unit></select></label>
+        <label>Count interval after cutoff <select data-interval><option value="-1">Full 100–200 ms interval</option></select></label>
+      </div>
+      <table data-count-table><caption data-count-caption></caption><thead><tr><th scope="col">Source</th><th scope="col">Spikes</th></tr></thead><tbody></tbody></table>
+      <details><summary>Comparison of the two reaches</summary>
+        <p>The models learned from workspace 1. Both examples were held out. Workspace 2 is a different part of the reaching area for the same animal on the same day.</p>
+        <p>Across the held reaches in workspace 2, adding a movement forecast increased average count error. Neither workspace met the study’s criterion for an improvement. These recordings show when spikes followed movement. Establishing what caused them would take a separate experiment.</p>
+        <p>Chowdhury, Glaser and Miller recorded the reaches on 7 September 2017. Study DOI 10.7554/eLife.48198. Data released under CC0, DOI 10.5061/dryad.nk98sf7q7.</p>
+      </details>
+    </div>
+  </section>
+  <section id="ns-act-cortical-reach" aria-labelledby="ns-reach-title" hidden>
+    <h2 id="ns-reach-title" tabindex="-1">When the arm is moved</h2>
+    <p>A macaque holds a robotic handle through a perturbation and then reaches toward a visual target. Two fitted models forecast its next 100 ms. Both receive recent handle motion and the cues already available. One also reads earlier spikes from area 2 of the sensory cortex.</p>
+    <p role="status"></p>
+    <div data-reach-results hidden>
+      <div class="activity-choices"><label>Trial event <select data-reach-phase aria-label="Trial event"><option value="0">Arm perturbation</option><option value="1">Reach cue</option></select></label>
+      <label>Forecast begins <select data-reach-offset aria-label="Forecast begins"><option value="0">At the event</option><option value="5">50 ms later</option><option value="10">100 ms later</option><option value="15">150 ms later</option></select></label></div>
+      <p data-reach-cue></p><table><caption>Handle displacement over the next 100 ms (cm)</caption><thead><tr><th>Source</th><th>X</th><th>Y</th><th>Error</th></tr></thead><tbody></tbody></table>
+      <p data-reach-units></p><p>The source animal and recording day are the same as in training. This original trial came later and was held out as a whole, including both events.</p>
+      <p><a href="https://eliminatenoise.github.io/Interoceptomics/cortical-reach/" target="_blank" rel="noopener">Rotate the measured 3D arm</a> · <a href="https://eliminatenoise.github.io/NeuroTranslation/cortical-reach/" target="_blank" rel="noopener">Try the full comparison</a></p>
+    </div>
+  </section>
+  <section id="ns-act-spindle" aria-labelledby="ns-spindle-title" hidden>
+    <h2 id="ns-spindle-title" tabindex="-1">Stretch and spikes</h2>
+    <p>As an apparatus stretched a rat muscle, a sensory nerve fiber fired. Compare the next 20 milliseconds of detected spikes with a model’s forecast from the preceding 100 ms.</p>
+    <p role="status"></p>
+    <div data-spindle-results hidden>
+      <div class="activity-choices"><label>Forecast inputs <select data-spindle-model aria-label="Forecast inputs"><option value="all">Force, position and spikes</option><option value="history">Earlier spikes only</option><option value="mechanics">Force and position only</option></select></label></div>
+      <label for="ns-spindle-cursor">End of observed history <output data-spindle-time for="ns-spindle-cursor"></output></label>
+      <input id="ns-spindle-cursor" data-spindle-cursor type="range" min="0" max="1" step="1" value="0">
+      <div class="activity-transport"><button type="button" data-spindle-before>← Earlier</button><button type="button" data-spindle-after>Later →</button></div>
+      <table><caption>Next 20 ms</caption><thead><tr><th scope="col">Expected spikes</th><th scope="col">Measured spikes</th></tr></thead><tbody><tr><td data-spindle-expected></td><td data-spindle-observed></td></tr></tbody></table>
+      <p>Five earlier spike counts, oldest first: <span data-spindle-past></span>.</p>
+      <p data-spindle-mechanics></p>
+      <p>The measured count is a whole number. A fitted model estimates the average count under these conditions. The model trained on two other sensory fibers. All three share the same filename prefix. No trial from the illustrated fiber entered training.</p>
+      <p><a href="https://eliminatenoise.github.io/Interoceptomics/muscle-spindle/" target="_blank" rel="noopener">Rotate the spindle model</a> · <a href="https://eliminatenoise.github.io/NeuroTranslation/muscle-spindle/" target="_blank" rel="noopener">Compare the recording and invented inputs</a></p>
+    </div>
+  </section>
+  <section id="ns-act-limb" aria-labelledby="ns-limb-title" hidden>
+    <h2 id="ns-limb-title" tabindex="-1">Wrist and pelvis forecasts</h2>
+    <p>Two models see the same 625 milliseconds of invented muscle signals and motion. Choose how the models were trained and compare their forecasts for the next 125 milliseconds.</p>
+    <p role="status"></p>
+    <div data-forecasts hidden>
+      <div class="activity-choices">
+        <label>Model comparison <select data-models><option value="specialist">Both studies vs. this task only</option><option value="maps">Body-part maps vs. early/late maps</option><option value="scalp">With vs. without scalp</option></select></label>
+        <label>Movement task <select data-domain><option value="upper">Right hand grasps and lifts</option><option value="lower">Balance during a visual rotation</option></select></label>
+        <label data-balance-only>Posture <select data-posture><option value="0">Standing</option><option value="1">Walking</option></select></label>
+        <label data-balance-only>Scene rotation <select data-direction><option value="-1">Counterclockwise</option><option value="1">Clockwise</option></select></label>
+        <label>Earlier muscle amplitude <select data-amplitude><option value="0.5">Half</option><option value="1" selected>Original</option><option value="1.5">One and a half times</option></select></label>
+        <label>Earlier marker travel <select data-travel><option value="0.5">Half</option><option value="1" selected>Original</option><option value="1.5">One and a half times</option></select></label>
+      </div>
+      <p data-condition></p>
+      <div data-scalp-controls hidden>
+        <p>Both models see the same invented muscle and movement history. One also receives a changing signal from scalp electrodes. The reference model gets training averages and the same available sites.</p>
+        <div class="activity-choices"><label>Scalp signal size <select data-scalp-gain aria-label="Scalp signal size"><option value="0.5">Half</option><option value="1" selected>Original</option><option value="1.5">One and a half times</option></select></label>
+        <label>Scalp sites <select data-scalp-sites aria-label="Scalp sites"><option value="all">All three sites</option><option value="middle">Middle only</option><option value="sides">Left and right only</option></select></label></div>
+        <p data-scalp-sites-note></p>
+        <p><a href="https://eliminatenoise.github.io/Interoceptomics/cross-limb-movement/" target="_blank" rel="noopener">Replay a measured example</a> · <a href="https://eliminatenoise.github.io/NeuroTranslation/papers/cross-limb-movement/scalp-study/" target="_blank" rel="noopener">Compare results across people</a></p>
+      </div>
+      <p data-map-explanation hidden>One model picks an output map for the wrist or pelvis. The other blends two maps over the 32 forecast times. These examples use one fixed fit from the three-run study. <a href="https://eliminatenoise.github.io/NeuroTranslation/papers/cross-limb-movement/decoder-study/" target="_blank" rel="noopener">Compare the group results</a></p>
+      <table data-limb-rms><caption></caption>
+        <thead><tr><th scope="col">Muscle</th><th scope="col" data-first-model>Both studies</th><th scope="col" data-second-model>This task only</th></tr></thead><tbody></tbody>
+      </table>
+      <figure class="limb-path">
+        <figcaption data-path-caption></figcaption>
+        <p class="limb-key"><span data-first-model>Both studies</span><span data-second-model>This task only</span></p>
+        <div data-plots></div>
+      </figure>
+      <table data-limb-end><caption>Displacement at 125 ms (mm)</caption>
+        <thead><tr><th scope="col">Axis</th><th scope="col" data-first-model>Both studies</th><th scope="col" data-second-model>This task only</th></tr></thead><tbody></tbody>
+      </table>
+      <details><summary>Read the 32 positions from each model</summary><div data-path-tables></div></details>
+      <details><summary>Inputs to the forecasts</summary>
+        <p>Twenty time bins describe the earlier movement. Each contains the muscle signal amplitude and the latest marker position available by the end of the bin. Changing the two scales above adjusts those histories independently. Each marker path starts at its own last recorded position. The two experiments used different people and coordinate frames.</p>
+        <p>Skin electrodes pick up electrical activity over muscle. Root-mean-square (RMS) amplitude summarizes the size of that signal. A gap means the channel was unavailable. The invented examples have no measured future.</p>
+        <p data-assessment></p>
+        <p data-original-evidence>Path error averages the distance from each of the 32 measured positions. Muscle error averages the absolute difference across available channels. Each person counts equally. Learning from both studies showed no overall advantage on the four outcomes. These recordings cannot establish how changing a signal would move a person.</p>
+        <p><a href="https://doi.org/10.1038/sdata.2014.47" target="_blank" rel="noopener">Luciw, Jarocka and Edin’s grasp-and-lift experiment</a> · <a href="https://doi.org/10.1016/j.dib.2021.107635" target="_blank" rel="noopener">Peterson and Ferris’s visual balance experiment</a></p>
+      </details>
+    </div>
+  </section>
+  <section id="ns-act-cortex" aria-labelledby="ns-cortex-title" hidden>
+    <h2 id="ns-cortex-title" tabindex="-1">Cortex recordings during finger cues</h2>
+    <p>One participant saw a finger name, then a blank screen. Electrodes on the surface of their left cortex recorded electrical activity through both. The avatar’s motor strip shows a separate simulation.</p>
+    <div class="activity-choices cortex-choices">
+      <label>Finger cue <select></select></label>
+      <label class="cortex-spread"><input type="checkbox" data-cortex-spread> Show the middle half of trials</label>
+    </div>
+    <p class="activity-note" data-cortex-count role="status"></p>
+    <table><caption>Mean power change during the cue, relative to blank (dB). Bars run from −10 to +10 dB, with zero in the centre.</caption>
+      <thead><tr><th scope="col">Sampled area</th><th scope="col">12–20 Hz</th><th scope="col">70–110 Hz</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <p>Positive values mean more power during the cue. Each contact was compared with its own reading during the following blank. The participant chose when to move.</p>
+    <p><a href="https://eliminatenoise.github.io/Interoceptomics/recorded-cortex/" target="_blank" rel="noopener noreferrer">Explore the full 3D recording map (new tab)</a></p>
+    <details><summary>How the comparison was made</summary>
+      <p>The first 362 seconds of the Stanford recording provide 88 complete pairs. The middle second of each cue and following blank was sampled at 1,000 Hz. Each trial’s band-power change is 10 × log₁₀(cue power / blank power), averaged over contacts in the area. Each trial counts once toward the mean for its cue. The middle half spans the 25th to 75th percentiles across these trials.</p>
+      <p>Six named areas account for 42 of 46 contacts. Four contacts had no assigned area. No contacts sampled the temporal or occipital cortex. These averages describe the timing of the screen cue. They cannot establish the timing or cause of any individual finger movement.</p>
+      <p>Kai Joshua Miller deposited the original ECoG (electrocorticography) recordings. These summaries select the recording’s first 362 seconds, subtract the average across contacts, and compare spectral power during paired cues and blanks. The derived regional measurements carry the original share-alike licence.</p>
+      <p><a href="https://purl.stanford.edu/zk881ps0522" target="_blank" rel="noopener noreferrer">Stanford Digital Repository, version 11</a> · <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener noreferrer">CC BY-SA 4.0</a></p>
+      <p>Ethics statement: All patients participated in a purely voluntary manner, after providing informed written consent, under experimental protocols approved by the Institutional Review Board of the University of Washington (#12193). All patient data was anonymized according to IRB protocol, in accordance with HIPAA mandate. These data originally appeared in the manuscript “Human Motor Cortical Activity Is Selectively Phase- Entrained on Underlying Rhythms” published in PLoS Computational Biology in 2012 [Reference].</p>
+      <p>[Reference] Miller KJ, Hermes D, Honey CJ, Hebb AO, Ramsey NF, Knight RT, Ojemann JG and Fetz EE (2012). <a href="https://doi.org/10.1371/journal.pcbi.1002655" target="_blank" rel="noopener noreferrer">Human Motor Cortical Activity Is Selectively Phase-Entrained on Underlying Rhythms</a>. PLoS Computational Biology 8(9), e1002655.</p>
+    </details>
+    <script type="application/json" data-cortex-values>
+    {
+      "schema_version": 1,
+      "participant_count": 1,
+      "n_contacts_total": 46,
+      "n_contacts_assigned": 42,
+      "trial_counts": {"all": 88, "thumb": 18, "index": 19, "middle": 22, "ring": 16, "little": 13},
+      "bands": [{"id": "beta", "min_hz": 12, "max_hz": 20}, {"id": "high", "min_hz": 70, "max_hz": 110}],
+      "regions": [
+        {"code":0,"label":"Unassigned (source code 0)","n_contacts":4,"status":"undefined_code","by_cue":null},
+        {"code":1,"label":"Dorsal primary motor cortex","n_contacts":2,"status":"measured","by_cue":{"all":{"beta":{"mean_db":-5.671491,"q25_db":-9.637042,"q75_db":-2.109634},"high":{"mean_db":2.903525,"q25_db":1.528853,"q75_db":4.45759}},"thumb":{"beta":{"mean_db":-4.783808,"q25_db":-6.39339,"q75_db":-3.083091},"high":{"mean_db":3.002711,"q25_db":1.472897,"q75_db":3.522019}},"index":{"beta":{"mean_db":-7.234637,"q25_db":-11.409539,"q75_db":-1.613282},"high":{"mean_db":3.341762,"q25_db":1.968537,"q75_db":5.173921}},"middle":{"beta":{"mean_db":-4.492051,"q25_db":-8.665285,"q75_db":-1.057194},"high":{"mean_db":1.824212,"q25_db":0.860079,"q75_db":2.925383}},"ring":{"beta":{"mean_db":-6.899304,"q25_db":-10.746041,"q75_db":-2.413555},"high":{"mean_db":3.195491,"q25_db":2.483768,"q75_db":4.367876}},"little":{"beta":{"mean_db":-5.100816,"q25_db":-6.363318,"q75_db":-3.105099},"high":{"mean_db":3.592873,"q25_db":2.688886,"q75_db":5.254673}}}},
+        {"code":2,"label":"Rolandic (unspecified subdivision)","n_contacts":1,"status":"measured","by_cue":{"all":{"beta":{"mean_db":-3.628528,"q25_db":-6.159483,"q75_db":-0.734833},"high":{"mean_db":1.93623,"q25_db":0.139741,"q75_db":3.685732}},"thumb":{"beta":{"mean_db":-3.73521,"q25_db":-5.748695,"q75_db":-1.785377},"high":{"mean_db":4.399245,"q25_db":2.809297,"q75_db":5.163779}},"index":{"beta":{"mean_db":-5.172958,"q25_db":-7.929905,"q75_db":-1.971889},"high":{"mean_db":2.014292,"q25_db":0.366646,"q75_db":3.871907}},"middle":{"beta":{"mean_db":-2.89124,"q25_db":-6.088471,"q75_db":0.905499},"high":{"mean_db":0.734586,"q25_db":-0.913832,"q75_db":2.087802}},"ring":{"beta":{"mean_db":-2.432254,"q25_db":-4.348983,"q75_db":0.840836},"high":{"mean_db":0.956984,"q25_db":0.06943,"q75_db":1.810792}},"little":{"beta":{"mean_db":-3.943631,"q25_db":-4.888411,"q75_db":-1.966921},"high":{"mean_db":1.650588,"q25_db":-0.188886,"q75_db":3.042928}}}},
+        {"code":3,"label":"Dorsal primary somatosensory cortex","n_contacts":4,"status":"measured","by_cue":{"all":{"beta":{"mean_db":-4.455938,"q25_db":-7.240641,"q75_db":-1.832456},"high":{"mean_db":2.315341,"q25_db":1.182108,"q75_db":3.658643}},"thumb":{"beta":{"mean_db":-3.913636,"q25_db":-5.796253,"q75_db":-1.740808},"high":{"mean_db":2.527002,"q25_db":1.380722,"q75_db":3.108858}},"index":{"beta":{"mean_db":-5.260589,"q25_db":-8.281285,"q75_db":-2.886574},"high":{"mean_db":2.72359,"q25_db":1.810628,"q75_db":4.323129}},"middle":{"beta":{"mean_db":-3.517758,"q25_db":-5.95104,"q75_db":-0.971564},"high":{"mean_db":1.226199,"q25_db":0.491568,"q75_db":2.557852}},"ring":{"beta":{"mean_db":-5.196035,"q25_db":-7.294589,"q75_db":-3.600912},"high":{"mean_db":2.533698,"q25_db":1.832302,"q75_db":3.464053}},"little":{"beta":{"mean_db":-4.707591,"q25_db":-5.28358,"q75_db":-2.45323},"high":{"mean_db":3.000017,"q25_db":1.711503,"q75_db":4.242253}}}},
+        {"code":4,"label":"Ventral sensorimotor cortex","n_contacts":5,"status":"measured","by_cue":{"all":{"beta":{"mean_db":-1.093238,"q25_db":-2.498237,"q75_db":-0.008897},"high":{"mean_db":0.038896,"q25_db":-0.712746,"q75_db":0.722182}},"thumb":{"beta":{"mean_db":-1.320911,"q25_db":-2.087668,"q75_db":-0.683463},"high":{"mean_db":0.155319,"q25_db":-0.640283,"q75_db":0.781163}},"index":{"beta":{"mean_db":-1.103433,"q25_db":-2.935337,"q75_db":0.365548},"high":{"mean_db":-0.02649,"q25_db":-0.634975,"q75_db":0.503541}},"middle":{"beta":{"mean_db":-0.316712,"q25_db":-1.508514,"q75_db":0.997824},"high":{"mean_db":-0.007573,"q25_db":-0.769199,"q75_db":0.743776}},"ring":{"beta":{"mean_db":-1.791964,"q25_db":-2.959213,"q75_db":-0.865361},"high":{"mean_db":0.085447,"q25_db":-0.650014,"q75_db":0.671082}},"little":{"beta":{"mean_db":-1.217249,"q25_db":-2.524435,"q75_db":-0.020055},"high":{"mean_db":-0.005395,"q25_db":-1.020999,"q75_db":0.813115}}}},
+        {"code":6,"label":"Frontal (non-rolandic)","n_contacts":24,"status":"measured","by_cue":{"all":{"beta":{"mean_db":-0.768725,"q25_db":-1.658995,"q75_db":0.405629},"high":{"mean_db":0.238977,"q25_db":-0.184435,"q75_db":0.61051}},"thumb":{"beta":{"mean_db":-0.736512,"q25_db":-0.804015,"q75_db":0.262072},"high":{"mean_db":0.238091,"q25_db":-0.098494,"q75_db":0.787646}},"index":{"beta":{"mean_db":-0.4956,"q25_db":-1.333354,"q75_db":0.907117},"high":{"mean_db":0.120108,"q25_db":-0.276605,"q75_db":0.471197}},"middle":{"beta":{"mean_db":-1.339521,"q25_db":-2.88551,"q75_db":-0.481294},"high":{"mean_db":0.372313,"q25_db":0.027273,"q75_db":0.731861}},"ring":{"beta":{"mean_db":-1.013942,"q25_db":-2.021159,"q75_db":-0.182543},"high":{"mean_db":0.269483,"q25_db":-0.248376,"q75_db":0.470189}},"little":{"beta":{"mean_db":0.055256,"q25_db":-0.895178,"q75_db":1.306657},"high":{"mean_db":0.150744,"q25_db":-0.525427,"q75_db":0.639394}}}},
+        {"code":7,"label":"Parietal (non-rolandic)","n_contacts":6,"status":"measured","by_cue":{"all":{"beta":{"mean_db":-1.213886,"q25_db":-2.276728,"q75_db":0.06772},"high":{"mean_db":0.301947,"q25_db":-0.641044,"q75_db":1.114135}},"thumb":{"beta":{"mean_db":-0.413059,"q25_db":-1.129847,"q75_db":0.696583},"high":{"mean_db":0.470449,"q25_db":-0.66041,"q75_db":1.387844}},"index":{"beta":{"mean_db":-1.28654,"q25_db":-1.986978,"q75_db":-0.264554},"high":{"mean_db":0.271813,"q25_db":-0.583533,"q75_db":1.133335}},"middle":{"beta":{"mean_db":-1.046162,"q25_db":-2.217225,"q75_db":-0.000597},"high":{"mean_db":0.678234,"q25_db":-0.066458,"q75_db":1.596411}},"ring":{"beta":{"mean_db":-2.188032,"q25_db":-2.981552,"q75_db":-0.420863},"high":{"mean_db":0.226703,"q25_db":-0.652243,"q75_db":0.953252}},"little":{"beta":{"mean_db":-1.301431,"q25_db":-1.529536,"q75_db":-0.460039},"high":{"mean_db":-0.431505,"q25_db":-0.684331,"q75_db":0.166019}}}},
+        {"code":8,"label":"Temporal","n_contacts":0,"status":"no_contacts","by_cue":null},
+        {"code":9,"label":"Occipital","n_contacts":0,"status":"no_contacts","by_cue":null}
+      ],
+      "modality": "Subdural electrocorticography (ECoG), left frontoparietal recording",
+      "measure": "Within-trial cue / following blank band-power ratio in dB; + = greater cue power",
+      "quartiles": "25th and 75th percentiles of paired trial changes. One recording, descriptive spread.",
+      "prefix_rows_half_open": [0, 362000],
+      "recording_hz": 1000,
+      "hemisphere": "left",
+      "license": "CC BY-SA 4.0",
+      "source": "https://purl.stanford.edu/zk881ps0522",
+      "methods": "METHODS.md",
+      "source_manifest": "source-manifest.json"
+    }
+    </script>
+  </section>
   <section id="ns-act-rat" aria-labelledby="ns-rat-title" hidden>
     <h2 id="ns-rat-title">Rat brain activity on a W-shaped track</h2>
     <p>These recordings come from rat JS14. The human hand and wrist recordings elsewhere in the map come from separate experiments.</p>
@@ -144,7 +644,7 @@
     <div class="activity-route"><strong>Motor · efferent</strong><p data-motor></p></div>
     <div class="activity-route sensory"><strong>Sensory · afferent</strong><p data-sensory></p></div>
     <p data-muscles></p><button type="button" data-move>Try this movement in the game</button>
-    <p class="activity-note">Manual game controls move the avatar's limbs. F accepts a smaller vocabulary of named actions. C follows one arm or knee as it moves across the camera picture. The wrist recording and its forecasts cover one pointing task. These controls do not measure muscle force, decode a thought or deliver a biological movement.</p>
+    <p class="activity-note">Manual game controls move the avatar's limbs. F accepts a smaller vocabulary of named actions. C can follow both arms and both knees together where they show in the camera picture. The wrist recording and its forecasts cover one pointing task. These controls do not measure muscle force, decode a thought or deliver a biological movement.</p>
   </section>
 </dialog>
 <!-- The loading bar is on the page itself, so it is seen before any script has arrived; ns-load-progress takes it over. -->

@@ -60,7 +60,7 @@ try {
   assert.ok(initial.healthy);
   await page.locator('#ns-canvas').click({position: {x:600, y:500}});
   await page.waitForFunction(() => !!document.pointerLockElement);
-  const input = page.getByRole('textbox', {name:'Move the body'});
+  const input = page.getByRole('textbox', {name:'Command box'});
   await page.keyboard.press('f');
   await input.waitFor();
   await page.waitForFunction(() => !document.pointerLockElement);
@@ -70,7 +70,7 @@ try {
   assert.equal(await page.evaluate(() => window.testVideo.requests), 0);
   assert.equal(await page.evaluate(() => window.testSpeech.starts), 0);
   await page.keyboard.press('Enter');
-  assert.match(await page.getByRole('dialog').innerText(), /Try one movement with a side/);
+  await page.getByRole('dialog').getByRole('status').filter({hasText:'Try one movement with a side'}).waitFor();
   assert.equal((await state()).elbow, initial.elbow);
   await page.getByRole('button', {name:'Use voice'}).click();
   assert.equal(await input.inputValue(), 'Bend my right elbow');
@@ -91,7 +91,7 @@ try {
   assert.equal((await state()).mode, 'playing');
   assert.equal(await page.getByRole('dialog').count(), 0);
   const beforeKnee = await state();
-  await page.getByRole('button', {name:'F · Move by words'}).click();
+  await page.getByRole('button', {name:'F · Command box'}).click();
   await input.fill('bend left knee');
   await page.getByRole('button', { name:'Move', exact:true }).click();
   await page.waitForFunction(before => Math.abs(window.__nsQA.inspect().bodyDrawnJoints.knee_ext_L - before) > 15, beforeKnee.kneeLeft);

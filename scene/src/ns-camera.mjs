@@ -653,6 +653,39 @@ export function createCameraState({ view = 'first' } = {}) {
 
 const checkState = s => { if (!s || s.kind !== 'ns-camera-state') fail('camera_state', 'state must come from createCameraState / toggleView / syncView / stepCamera'); return s; };
 
+/** Sample the starting eye once. The playing camera never follows the animated anatomy. */
+export function createPlayerCamera(eye, initialLook) {
+  const startingEye = vec3(eye, 'starting eye position');
+  const stand = eyeDolly(initialLook);
+  // Leave room to raise either arm at normal desktop aspect ratios without changing the lens during play.
+  const backM = 0.46;
+  const forward = gazeDirection(initialLook.yaw, 0);
+  return Object.freeze({
+    first: Object.freeze(startingEye.map((value, i) => value + stand.offset[i] - backM * forward[i])),
+    centre: Object.freeze(followCentre(startingEye, LEVEL_AHEAD)),
+    distanceM: THIRD_PERSON.distanceM
+  });
+}
+
+/** Direct look from a fixed eye-view position, or a constant-distance orbit requested by the player. */
+export function playerCameraPose(state, camera, look, bodyLook = look) {
+  const s = checkState(state);
+  const { yaw, pitch } = lookOf(look, 'player look');
+  const thirdPerson = s.view === 'third';
+  const direction = gazeDirection(yaw, pitch);
+  const position = thirdPerson ? camera.centre.map((value, i) => value - camera.distanceM * direction[i]) : camera.first;
+  const progress = thirdPerson ? 1 : 0;
+  return {
+    view: s.view, progress, blend: progress, moving: false, firstPerson: !thirdPerson, thirdPerson,
+    position, yaw, pitch, direction, bodyLook, gazeLook: { yaw, pitch }, gazeRay: { origin: position, dir: direction },
+    silentGaze: s.arrived === true, fixedObserver: true, headInPlace: progress, faceGhost: 1 - progress,
+    overBrainSeeThrough: 1 - progress, nearM: FIRST_PERSON.nearM, fovScale: 1,
+    farExtraM: thirdPerson ? camera.distanceM : 0,
+    ...(thirdPerson ? { orbitCentre: camera.centre, boom: { distance: camera.distanceM, pushed: false, blocked: false },
+      viewFovYDeg: THIRD_PERSON.followFovYDeg } : {})
+  };
+}
+
 /**
  * Drive A: follow the controls' view mode ('first' | 'third', ns-controls viewMode). A change starts the ease from where
  * the camera is now (a quick E E turns the camera back mid-way, never jumps). The controls keep both looks.

@@ -18,6 +18,7 @@ import { showControlsCard } from '../src/ns-controls-card.mjs';
 import { createLoadBar } from '../src/ns-load-progress.mjs';
 import { installLoadGuard } from '../src/ns-load-guard.mjs';
 import { startPackLoader, readAll } from '../src/ns-pack-loader.mjs';
+import { editionPacks } from './edition.mjs';
 import { packKeyOfUrl } from '../src/ns-pack.mjs';
 
 // 17 November 2026 (user: "the field of view should be even wider, such that you can see everything from your eyes.
@@ -131,9 +132,15 @@ const FACE_COMPLETENESS_ERROR = 'ns:app_args: configured viewGraph requires the 
 const FRIENDLY_FACE_ERROR = 'The face anatomy could not finish loading. Reload the page to try again.';
 const params = new URLSearchParams(window.location.search);
 const mode = params.get('case') || 'boot';
-if ([...params.keys()].some(k => k !== 'case') || !['boot', 'stop-during-body', 'missing-face'].includes(mode)) {
-  throw new Error('R302 supports only the three declared case URLs; QA/quality/asset/config overrides are not permitted');
+const lite = params.get('edition') === 'lite';
+if ([...params.keys()].some(k => k !== 'case' && k !== 'edition') || !['boot', 'stop-during-body', 'missing-face'].includes(mode)
+    || (params.has('edition') && (!lite || mode !== 'boot'))) {
+  throw new Error('Unsupported game edition or test case');
 }
+const packProfile = editionPacks(params);
+document.title = lite ? 'NeuroSurge Lite' : 'NeuroSurge';
+document.body.dataset.edition = lite ? 'lite' : 'full';
+document.body.dataset.meshCompression = packProfile.codec || 'gzip';
 const app = document.getElementById('ns-app');
 const canvas = document.getElementById('ns-canvas');
 const hudRoot = document.getElementById('ns-hud');
@@ -184,7 +191,7 @@ const onPackProgress = (files, of) => { if (!loadBar) return; const f = (files +
 // early-load.mjs (first on the page) has usually started the packs already, while this script's own files travelled.
 const early = mode === 'boot' && window.__nsEarly && window.__nsEarly.loader ? window.__nsEarly : null;
 if (early) early.listen(onPackProgress);
-const packs = mode !== 'boot' ? null : early ? early.loader : startPackLoader({ onProgress: onPackProgress });
+const packs = mode !== 'boot' ? null : early ? early.loader : startPackLoader({ ...packProfile, onProgress: onPackProgress });
 if (assembly) assembly.feedFrom(packs); // (once per picture: early-load.mjs has usually done it already)
 if (mode !== 'boot') { try { document.querySelector('.ns-load.ns-load-early')?.remove(); } catch { /* none */ } }
 /** One more mesh file has been handed to the game (from a pack or fetched): the bar's "checking" step. */

@@ -138,6 +138,25 @@ export function quietPromptCount(guide) {
  * update({ tip, prompt, x, y, width, height, show }) writes the words that changed and places the tip beside the point
  * (x, y) in CSS pixels (the crosshair, or the free pointer), kept inside the view.
  */
+/**
+ * 22 November 2026 (SEEMOVE, section 189; an independent check: the tip beside the crosshair covered the palm and thumb
+ * of your own left hand at the hand's areas). Which side of the point the tip opens to: `right` (the tip to the LEFT
+ * of the point, as before: near the right edge, or on the left half of the picture for an area of the brain's right
+ * half) and `low` (above the point, near the bottom edge). With `avoid` (a box in CSS px: your own left hand) and the
+ * tip's size, a placement whose box would cover it is changed for the next of: the other height, the other side, both,
+ * the first that stays clear of the box and inside the picture; when none does, the usual one. Offsets as drawn (22 px
+ * across, 18 px down). Pure.
+ */
+export function tipSides({ x = 0, y = 0, width = 0, height = 0, side = null, tipW = 0, tipH = 0, avoid = null } = {}) {
+  const right = x > width * 0.72 || (side === 'left' && x > width * 0.3), low = y > height * 0.7;
+  const box = (r, l) => ({ x0: r ? x - 22 - tipW : x + 22, y0: l ? y - 18 - tipH : y + 18, x1: r ? x - 22 : x + 22 + tipW, y1: l ? y - 18 : y + 18 + tipH });
+  const ok = b => !(avoid && b.x0 < avoid.x1 && b.x1 > avoid.x0 && b.y0 < avoid.y1 && b.y1 > avoid.y0);
+  const inside = b => b.x0 >= 0 && b.y0 >= 0 && b.x1 <= width && b.y1 <= height;
+  if (!avoid || !(tipW > 0 && tipH > 0) || ok(box(right, low))) return { right, low };
+  for (const [r, l] of [[right, !low], [!right, low], [!right, !low]]) { const b = box(r, l); if (ok(b) && inside(b)) return { right: r, low: l }; }
+  return { right, low };
+}
+
 export function createQuietUi({ doc, root }) {
   const el = (tag, cls, parent) => { const e = doc.createElement(tag); e.className = cls; parent.appendChild(e); return e; };
   const layer = el('div', 'ns-quiet', root);
@@ -162,7 +181,11 @@ export function createQuietUi({ doc, root }) {
   promptSkip.setAttribute('aria-hidden', 'true');
   promptSkip.hidden = true;
   let tipKey = null, promptText = '', countText = '', skipText = '', placeKey = '', shown = true;
-  function update({ tip: model = null, prompt: words = '', count = '', skip = '', x = 0, y = 0, width = 0, height = 0, show = true, side = null } = {}) {
+  // 22 November 2026 (LOOK2 second pass; a check's profile: reading the tip's offsetWidth / offsetHeight on every frame
+  // while it avoids your hand forced a style and layout pass each frame, about 0.8 ms): the tip's size is measured once
+  // per content (tipKey) and per window size, and kept
+  let tipSize = null;
+  function update({ tip: model = null, prompt: words = '', count = '', skip = '', x = 0, y = 0, width = 0, height = 0, show = true, side = null, avoid = null } = {}) {
     if (show !== shown) { shown = show; layer.hidden = !show; }
     if (!show) return;
     const key = model ? model.key : null;
@@ -204,7 +227,14 @@ export function createQuietUi({ doc, root }) {
       // 19 November 2026 (side 'left'): the tip of an area on the LEFT half of the picture opens to the LEFT of the point,
       // away from the mirror body, which stands between the strip's two halves (it used to cover it). (Since the brain
       // was turned half a turn the left half of the picture is the brain's right half; the caller says which.)
-      const right = x > width * 0.72 || (side === 'left' && x > width * 0.3), low = y > height * 0.7;
+      // (22 November 2026: and off your own left hand's box, tipSides)
+      let tipW = 0, tipH = 0;
+      if (avoid) {
+        const sk = `${tipKey}|${Math.round(width)}x${Math.round(height)}`;
+        if (!tipSize || tipSize.key !== sk) { const w0 = tip.offsetWidth, h0 = tip.offsetHeight; tipSize = { key: sk, w: Number.isFinite(w0) ? w0 : 0, h: Number.isFinite(h0) ? h0 : 0 }; }
+        tipW = tipSize.w; tipH = tipSize.h;
+      }
+      const { right, low } = tipSides({ x, y, width, height, side, tipW, tipH, avoid });
       const pk = `${Math.round(x)}|${Math.round(y)}|${right ? 1 : 0}${low ? 1 : 0}`;
       if (pk !== placeKey) {
         placeKey = pk;
@@ -221,6 +251,6 @@ export function createQuietUi({ doc, root }) {
   }
   /** The tip goes away until the next update (the game was left for the Esc page: no frame, so no update, comes while
    * it shows, and the tip of the moment stayed drawn under the page). */
-  function hideTip() { tipKey = null; placeKey = ''; tip.hidden = true; }
+  function hideTip() { tipKey = null; placeKey = ''; tipSize = null; tip.hidden = true; }
   return { update, hideTip, dispose() { try { layer.remove(); } catch { /* gone */ } } };
 }

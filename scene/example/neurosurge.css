@@ -250,7 +250,9 @@ html, body {
 .ns-legend-item-leftarm .ns-legend-swatch { background: rgba(64, 109, 133, 0.95); border: 2px solid var(--ns-leftarm); }
 .ns-legend-item-other .ns-legend-swatch { background: rgba(172, 122, 120, 0.95); border: 1px solid var(--ns-other); } /* R558: the tissue-pink areas (was grey 105, 103, 97) */
 /* R4-polish: the switched-on swatch shows the lighter, warmer fill of a switched-on area inside its gold edge. */
-.ns-legend-item-activated .ns-legend-swatch { background: rgba(150, 138, 112, 0.95); border: 2px solid var(--ns-activated); }
+/* 22 November 2026 (LOOK2, section 198): a used area has no gold edge any more, only its darker shade (ns-colors
+   VISITED): the swatch is a darker tone with a faint edge (was rgba(150, 138, 112, 0.95) in a 2 px gold edge). */
+.ns-legend-item-activated .ns-legend-swatch { background: rgba(92, 84, 70, 0.95); border: 2px solid rgba(255, 255, 255, 0.18); }
 .ns-legend-item-dot .ns-legend-swatch { width: 8px; height: 8px; margin: 0 2.5px; border-radius: 1px; transform: rotate(45deg); background: #a8eefc; }
 .ns-legend-item-leftarm .ns-legend-text,
 .ns-legend-item-leftarm .ns-legend-short { color: var(--ns-leftarm); font-weight: 600; }
@@ -467,6 +469,8 @@ html, body {
   padding: 1px 7px;
   border-radius: 999px;
 }
+/* (21 November 2026: the HUD sets each label's translate inline from ORIENTATION_ALIGN, which follows the brain's half
+   turn; these four are the unturned brain's, kept for pages without it.) */
 .ns-orient-right { transform: translate(0, -50%); }
 .ns-orient-left { transform: translate(-100%, -50%); }
 .ns-orient-anterior { transform: translate(-50%, -100%); }
@@ -674,8 +678,26 @@ html, body {
 .ns-infopanel:has(.ns-infopanel-detail[open]) {
   pointer-events: auto;
   overflow-y: auto;
-  -webkit-mask-image: none;
-  mask-image: none;
+  /* 22 November 2026 (WORDS2, second pass; a check of section 197: the open card's foot line was cut through its
+     letters at every size): the open card fades at its foot like every other capped card, and its bottom padding is
+     the fade's height and a little more, so at the end of the scroll the last line stands clear of the fade. */
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 16px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 16px), transparent);
+  padding-bottom: 18px;
+}
+/* 22 November 2026 (WORDS2, hunt H12): while More detail is open the card scrolls, and the area's title stays at its
+   top, so a card scrolled to More detail (ns-app infoRevealScroll) or by the wheel still names its area. The title's
+   band reaches the card's inner edges (the negative margins equal the card's side padding) and is opaque, so no
+   scrolled line shows beside or through it. A sticky box stops at the card's padding, not its edge, so it stands
+   at -10 px (the card's top padding) to cover the scrolled lines there too; its top padding (6 px) less its top margin
+   (-3 px) is the 3 px margin it had, so at the card's top it stands where it did. */
+.ns-infopanel:has(.ns-infopanel-detail[open]) .ns-infopanel-title {
+  position: sticky;
+  top: -10px;
+  z-index: 1;
+  margin: -3px -12px 1px -13px;
+  padding: 6px 12px 3px 13px;
+  background: #0b1019;
 }
 /* R3-polish (body views, R3-player items 3/10, INTEGRATION 7.4): while the brain is out of view (looking down at the
    torso and legs, far right at the right arm, up at the face) the panel shrinks to a short card: title, part, signal
@@ -686,6 +708,12 @@ html, body {
 /* R3-fix (review F8 / m5): the short card shows its sentences in full (no clamp), so no sentence is ever cut mid-word. */
 .ns-scene-overlay[data-ns-brain-in-view="false"] .ns-infopanel:not(:has(.ns-infopanel-detail[open])) .ns-infopanel-plain { -webkit-line-clamp: unset; display: block; overflow: visible; }
 .ns-scene-overlay[data-ns-brain-in-view="false"] .ns-infopanel:not(:has(.ns-infopanel-detail[open])) .ns-infopanel-explanation { -webkit-line-clamp: unset; display: block; overflow: visible; }
+/* 22 November 2026 (UI3, ns-scene-three INFO_WHOLE; a check of update 67: at 800 x 600 every lead sentence was cut in the
+   middle of a word by its 3-line clamp, "tells your left thi..."): the card's lead sentence has no line clamp
+   (data-ns-lead="whole"), and the short card leaves it out whole when it does not fit (data-ns-lead="drop"). The
+   landscape short card's own rule below is stronger than the first line, so it is said again there. */
+.ns-infopanel[data-ns-lead="whole"] .ns-infopanel-plain { -webkit-line-clamp: unset; }
+.ns-app:not([data-ns-unfold="true"]) .ns-infopanel[data-ns-lead="drop"]:not(:has(.ns-infopanel-detail[open])) .ns-infopanel-plain { display: none; }
 .ns-scene-overlay[data-ns-brain-in-view="false"] .ns-infopanel { background: rgba(9, 13, 20, 0.72); }
 
 /* Face layer label (ghost) and inset frame. */
@@ -949,6 +977,7 @@ html[data-ns-glow="on"] .ns-scene-overlay[data-ns-brain-in-view="false"] .ns-inf
   /* R558 (hunt 2): the compact card also says when it shows the LAST area you looked at (one short line). */
   .ns-app:not([data-ns-unfold="true"]) .ns-infopanel:not(:has(.ns-infopanel-detail[open])) .ns-infopanel-viewed { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .ns-app:not([data-ns-unfold="true"]) .ns-infopanel:not(:has(.ns-infopanel-detail[open])) :is(.ns-infopanel-plain, .ns-infopanel-explanation) { flex: 0 1 auto; min-height: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+  .ns-app:not([data-ns-unfold="true"]) .ns-infopanel[data-ns-lead="whole"]:not(:has(.ns-infopanel-detail[open])) .ns-infopanel-plain { -webkit-line-clamp: unset; } /* (UI3, INFO_WHOLE) */
   .ns-app:not([data-ns-unfold="true"]):not(:has(> .ns-scene-overlay[data-ns-brain-in-view="false"])):not(:has(.ns-infopanel-detail[open])) .ns-hud .ns-panel-legend { visibility: hidden; }
   /* R558 (Messages 44 and 48): the short card shows each part whole or leaves it out. ns-scene-three fitInfoCard tries
      the card with everything and, while it runs over, marks one more part to leave out (data-ns-trim): 1 the lead

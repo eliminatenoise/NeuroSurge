@@ -1,12 +1,17 @@
 /** The room behind everything (ns-room): a dark place, not a void. The light along a line of sight (roomLight, the
- * shader's arithmetic in JavaScript), the view matrix of the loading picture, the dust, the light's small reactions. */
+ * shader's arithmetic in JavaScript), the view matrix of the loading picture, the dust, the light's small reactions.
+ * 21 November 2026 (the owner, Message 208): the game now draws the abyss (ROOM.abyss.on; tests/abyss.test.mjs), and the
+ * room is what ROOM.abyss.on false brings back. These tests keep the room as it was: they read the room's rule, ROOM
+ * with the abyss switched off (THEATRE). */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { ROOM, roomLight, srgbOf, roomGlsl, roomRayMatrix, roomGain, roomBeatStep, roomActiveStep, ROOM_ORDER } from '../scene/src/ns-room.mjs';
+import { ROOM, roomLight as roomLightOf, srgbOf, roomGlsl, roomRayMatrix, roomGain, roomBeatStep, roomActiveStep, ROOM_ORDER, isAbyss } from '../scene/src/ns-room.mjs';
 import { ASSEMBLY } from '../scene/src/ns-assembly-core.mjs';
 import { RAW_LOOK } from '../scene/src/ns-raw-look.mjs'; // 20 November 2026: the raw look's room
 
+const THEATRE = Object.freeze({ ...ROOM, abyss: Object.freeze({ ...ROOM.abyss, on: false }) });
+const roomLight = (eye, dir, st = {}, o = THEATRE, footM = 0) => roomLightOf(eye, dir, st, o, footM);
 const DEG = Math.PI / 180;
 const dirOf = (yawDeg, pitchDeg) => [-Math.sin(yawDeg * DEG) * Math.cos(pitchDeg * DEG), Math.sin(pitchDeg * DEG), -Math.cos(yawDeg * DEG) * Math.cos(pitchDeg * DEG)];
 const lum = c => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
@@ -50,7 +55,7 @@ test('the lamp heads are soft lights with no dark middle, and never in a level l
 test('it stays a dark picture: nothing but the lamp heads is brighter than a dark grey, and the far edges are the old space black', () => {
   let maxLow = 0, maxAll = 0;
   for (let yaw = -180; yaw < 180; yaw += 6) for (let pitch = -89; pitch <= 89; pitch += 2) {
-    const r = roomLight(EYE, dirOf(yaw, pitch), { shade, aura }, ROOM, 0.5), s = shown(r.colour);
+    const r = roomLight(EYE, dirOf(yaw, pitch), { shade, aura }, THEATRE, 0.5), s = shown(r.colour);
     for (const v of r.colour) assert.ok(Number.isFinite(v) && v >= 0);
     maxAll = Math.max(maxAll, s);
     if (pitch <= 30) maxLow = Math.max(maxLow, s);
@@ -125,7 +130,8 @@ test('the lit air round the brain and round a body seen from outside: a halo tha
 });
 
 test('the shader carries the same numbers and the draw order puts the room behind everything', () => {
-  const g = roomGlsl();
+  assert.equal(isAbyss(THEATRE), false);
+  const g = roomGlsl(THEATRE);
   assert.ok(g.includes('vec3 nsRoom( vec3 eye, vec3 dir )'));
   assert.ok(g.includes(String(ROOM.wallR * ROOM.wallR)) && g.includes(ROOM.floorY.toFixed(1)));
   assert.ok(!/NaN|undefined|Infinity/.test(g));

@@ -229,7 +229,7 @@ Not acted on: where your own body fades in (a band of about 12 cm), a half-faded
 
 **Decision.** This replaces decision 14's camera. The preview page now loads its own launcher, `scene/example/eye-view-r558.mjs`, whose camera sits at the atlas-derived eye point, with no backed-off camera and no whole-arm display rule. `OWN_BODY_SOLID` in the renderer switches off every see-through effect on your own body: the window at the crosshair, the look-down translucency, the window over the brain outline and the first-person plane rule. The body is opaque; the glass brain blends over it where the brain is nearer.
 
-**Limit.** Meshes within 0.12 m of the eye (the head and face) are not drawn around the camera in first person, because the camera is inside them. They are on the mirror body and on your own body in the view from behind (E). The earlier launcher, `display-b-r388`, is unchanged on its own page.
+**Limit.** Meshes within 0.12 m of the eye (the head and face) are not drawn around the camera in first person, because the camera is inside them. They are on the mirror body and on your own body in the view from behind (E). At the time, the earlier launcher, [`display-b-r388`](https://github.com/eliminatenoise/NeuroSurge/blob/b92902515d705470801e034651d82c2b37dc3f4f/scene/example/display-b-r388.html), stayed unchanged on its own page. Its playable page has since been retired.
 
 ## 21. Field of view: 120, then 90 degrees
 
@@ -1792,7 +1792,7 @@ These are display choices judged on pictures. The eyeballs say nothing about vis
 The user: “when we move our head around, the eyes also move ... The eyes attached to the brain, of course. And they move in accordance to our head direction. Even if that isn't necessarily accurate.” “can we also please have the whole brain light up slightly, faintly, with whatever color area is being picked?” “Currently, I can't see the models being built on the loading page, which they should be there, and the controls switch off halfway through. And the controls should stay visible the entire time while loading.” “the wrist/ankle being 3/4 up the height of the frame.”
 
 - **The brain's eyeballs turn with your look** (`updateBrainEyes`, `BRAIN_EYE_TURN` in `ns-scene-three.mjs`). Each eyeball is now its own mesh about its own centre. It turns by 0.7 of the look's turn from where the look started, at most 38 degrees either way, meant as a mirror would: look down and they look down (seen in pictures); look left and they should look to the left of the screen (the sign is set by reasoning: no picture confirmed it, because a look far enough to show it carries the eyeballs out of the frame). Written only when the look has changed. A picture of which way you are looking; not eye anatomy.
-- **The whole brain takes the picked colour, faintly** (`BRAIN_PICK_TINT`). While an area is looked at or switched on the cortex gets 6 % of that area's glow colour added, a little more on its lit side, eased in and out over about a fifth of a second. One uniform in the cortex shader; no new pass.
+- **The whole brain takes the picked colour, faintly** (`BRAIN_PICK_TINT`). While an area is looked at or switched on the cortex gets 6 % of that area's glow colour added, a little more on its lit side, eased in and out over about a fifth of a second. One uniform in the cortex shader; no new pass. (Since section 187 a gain on the cortex's own colour: the added light turned the matte cortex lilac or grey-blue.)
 - **The loading picture is back on** (`LOADING_PICTURE` true in the launcher). On a fast line it is short. It does not yet show the eyeballs joining the brain, which the user also asked for.
 - **The controls card stays for the whole load.** It no longer fades after five seconds whatever happens: it stays until the game is ready, then fades 1.5 s later, or later still so that it has been up for at least five seconds in all.
 - **The chosen limb's end stands three quarters of the way up the frame** when the view turns to it (`LIMB_KEYS.view.frameUp` 0.75; 0.6 this morning). The view still turns once and does not yet hold the limb there while the keys move it.
@@ -2549,9 +2549,11 @@ Not right, or not done:
   darker for each deeper storey, not in the game's group tones or steps.
 - The map colouring leaves some touching pairs on the same step where three or four muscles all touch (about 90 of the
   contacts, nearly all where a deep muscle lies under an outer one, but also the rectus femoris against the sartorius
-  near the hip); and the darkest steps go nearly black on the shaded side.
+  near the hip); and the darkest steps go nearly black on the shaded side (since section 187 a shade floor keeps them
+  dark red).
 - A muscle held in a posture glows faintly in its area's colour (the activity, not the used mark): on the darkest
-  tones an orange glow reads tan, as it does on the comic look's salmon.
+  tones an orange glow reads tan, as it does on the comic look's salmon. (The control mark's yellow did the same to a whole gripping forearm: it
+  glows in the muscle's own hue since section 187.)
 - The inner parts seen through the brain's gap keep their own darkening toward their outline (section 155).
 
 ## 169. Five small faults from a review of update 58 (20 November)
@@ -2952,7 +2954,8 @@ Not right, or not done:
 - Touching muscles still drawn nearly equal: 36 contacts, the heaviest the internal oblique against the transversus
   (mostly hidden under it) and the lateral gastrocnemius against the soleus; three steps cannot part every cluster
   where four or more muscles touch.
-- The optic nerves have no outline of their own; the brain's line is not drawn where an eyeball lies just beyond it.
+- The optic nerves have no outline of their own; the brain's line is not drawn where an eyeball lies just beyond it
+  (since section 187 it is, and an eyeball's line no longer shows through the brain).
 - The cost was measured with a timer on the graphics card, not as frame rate (above); the three screen composites are
   not in it.
 
@@ -3235,6 +3238,4204 @@ throttling stepped as at full quality. The other twelve browser tests, `?case=bo
 Limit. A key still waits for the head and the view, up to 4 s; a held key queues at most two steps, which can then go
 at once when the head is still. The arrow tip's hover still trails a step (and any look) by one frame.
 
+## 181. Every movement from the brain returns, unlit; a limb that rejoins its place glides (20 November)
+
+The user: "when you tap any area of the brain, you activate any area, it will contract, then return to its previous
+place. But in returning to its previous place, you won't see corresponding activity and muscle activation. It will just
+return." (Message 206) and "The limb should never get stuck." (207). A review of updates 60 and 61 (each finding
+confirmed by two further readers) found five places where sections 177 and 178 did not hold. Each was shown first, then
+fixed, then shown fixed.
+
+**What changed.**
+1. The neck no longer lights while the trunk moves. The neck's own glow reads the look's share of the head
+   (`lookShareOf`), so that a trunk movement from the brain lights nothing of its own on its way back. That share was the
+   eye's neck bend plus the held trunk bend, which is the look alone only while the neck takes up the whole trunk bend.
+   The bowed start posture leaves the neck 10 degrees of forward bend, so at any look more than about 40 degrees down
+   (the start look included) the share followed the trunk: "Bend trunk forward" switched on while looking down at your
+   belly lit both neck areas and the neck's extensors at about 0.85 through its whole return (and 0.9 while it
+   contracted, although the drawn neck did not move); "Lean trunk back" did the same at the start look. The share is now
+   the look's own neck bend with no held angle at all (`lookNeckFlexDeg` from `headPoseForLook`); with nothing held it
+   is what it was, so the head still lights as the look turns it.
+2. A trunk bend stopped at the brain or the mirror body returns. A forward bend that would bring your head into the
+   brain or the mirror body stops at the share that stays clear (section 42). The stop was written as a
+   `limbPose`, which since section 177 is the player placing the limb, so the trunk stayed bent for good and later
+   movements returned to that bend; only Reset body brought it upright. Its angle was also counted from the start
+   posture but taken as absolute, so the trunk was left 5 degrees further forward than the clear share. Now the stop is
+   an activity event of its own (`contractStop`; `trunkContactStop` in `ns-app.mjs`): the trunk is held at the clear
+   share, at its absolute angle, for the rest of its contraction (lit, as the contraction is), then returns to its place
+   like every movement. Only a contraction is stopped: a return is never held, so the trunk always gets back.
+3. The left arm comes back after a shoulder swing. The left shoulder area's four swings (section 175) turn the place
+   the hand is asked for about the shoulder; the hand's kept place is not turned, so the arm comes back to it. But on
+   every frame on which the swung place left the shoulder's range, the range-clamped swung place, turned back, was
+   written into the kept place, and the error built up over the contraction: with the left hand held well across the
+   body or behind and another limb chosen (the left hand then keeps its place), the arm ended 0.1 to 0.5 m from where it
+   had been and stayed there. Now a swing never moves the kept place (`freeHandKeptPlace`): without a key it is kept
+   exactly; a key still moves it, kept inside the shoulder's range on its own. Without a swing the rule is the one it was.
+4. A limb that rejoins its place glides all the way (section 178, item 6). The speed limit of a rejoin (`rejoinMps`,
+   1.2 m/s) was applied only on frames whose solve stayed well short of the place; the frame whose solve came near took
+   its whole answer at once, so a leg left lifted by the look came back at 20 mm a frame and then jumped 380 mm and
+   321 mm in its last two frames, and a short rejoin went in one frame. The limit now applies on every frame of a rejoin
+   (`rejoinShare`), and the rejoin ends only on a frame whose whole move is within it.
+5. A limb resting a little short of its place is not solved again on every frame. At a range end the keys leave the
+   place up to 20 mm beyond the limb's reach. The quarter-second reach test of item 6 in section 178 is only for a limb
+   waiting beyond its reach, but its rule ran for this limb on every still frame (about 0.03 ms each: work, not frame
+   rate). Now only a limb more than 40 mm short of its place is tried again (`holdRejoinDue`).
+
+**Shown before and after.** Node checks with the game's own rules (`tests/return-rules.test.mjs`, ten cases, keeps them)
+and the game in the browser (1600 by 900), the lead branch against this one:
+- Looking 66 degrees down and clicking your own left rectus abdominis ("Bend trunk forward"): the neck areas as drawn
+  went from 0.22 (the look's own level that far down) to 0.90 in the contraction and 0.87 in the return (27 of its 64
+  frames, about half a second, above 0.22) before; they stay at 0.22 throughout now.
+- The brain carried in close with S for 1.1 s, then "Bend trunk forward": before, the trunk stopped and its place became
+  0 degrees (the start posture is -5) for good; now it stops at -4.4, holds there for its contraction and returns, unlit,
+  to -5, its place never changing.
+- The left hand held across the body (D for 2.5 s with the left arm chosen), the left leg chosen, "Raise left arm
+  forward" switched on from the left shoulder area: before, the kept place and the drawn hand ended 145 mm away; now
+  0.0 mm (three runs). Offline, with the arm's own fit, the six held places and four swings of the review moved the kept
+  place up to 486 mm before and not at all now.
+- The left leg carried 1.43 m up by the look, the look brought back in three quick moves: before, frames of 20 to 53 mm
+  and then 380 mm and 321 mm (12.8 and 11.4 m/s by the browser's frame clock); now 33 to 46 mm frames all the way (1.0
+  to 1.6 m/s by the browser's clock; the limit uses the game's own frame time), the last two 27 mm and 3 mm.
+- The right arm driven by W or A to its end and let go: the old rule (this build with only that line put back) solved on
+  123 of 123 and 124 of 124 still frames; now on 0 of 124 (`qa().limbs.holdFrames.solves`, new for checks).
+Also: 481 unit tests, `?case=boot`, the 13 browser tests (all but `outside-compass`), and the frame table on a busy
+machine (load 13 to 15), this branch 60.1 / 59.1 / 60.1 / 59.4 and 60.0 / 59.9 / 60.0 / 60.0, the lead branch
+60.0 / 59.7 / 59.4 / 58.9 and 60.0 / 60.0 / 59.4 / 60.0.
+
+**Not done or left.**
+- The trunk's contact stop still acts one frame late: it compares the head as drawn last frame with the activity's
+  angle now, so the frame on which the trunk passes the clear share is drawn past it (seen: one frame at 5.8 degrees,
+  then held at -4.4). Unchanged from before; fixing it means testing after the step within the frame.
+- A trunk return is never stopped: if you move the brain into the head's way during the 0.4 s of a contraction, the
+  head passes through it on the way back.
+- A push from the chosen limb (`LIMB_PUSH`, section 139) during a swing still moves the left hand's kept place: the
+  pushed limb stays where it was pushed, by that rule. Seen twice when the look carried the chosen leg into the swung
+  hand (17 and 19 mm).
+- The look's own neck glow at a steep look down (0.22, the neck at its forward end) is unchanged.
+
+## 182. A still view is idle again; the face and the eyeballs agree with what is drawn (20 November)
+
+From a review of updates 60 and 61 (each fault confirmed by two skeptics, each shown before and after its fix):
+- Since section 176 the heart's outline followed its 3 % beat, and that counted as a change of the picture, so the
+  outline's passes and the whole light-blue glass pass ran on every frame even with the view and the bodies still. A
+  change of the heart's beat alone no longer counts; on every frame that redraws the outline the heart's line takes that
+  frame's swell. Measured, the graphics card's time per still frame: 6.6 to 2.6 ms at 1600 by 900; 11.3-13.9 to
+  9.8-10.0 ms at 1600 by 1000 with a pixel ratio of 2; 29.7 to 21.1 ms at 5120 by 2880 (31 to 43 frames a second). On a
+  still frame the heart's line keeps the last redrawn swell (the heart is inside the rib cage and not seen in play).
+- A lip movement (section 179) on the face muscles skinned on the graphics card never reached their processor copy, so the
+  crosshair and the mirror body's measures saw the face at rest (up to 11 mm off); now they see it as drawn.
+- With the eyes no longer glass (section 172), the processor and the graphics card disagreed about which hidden thing is
+  drawn where an eyeball lies between a body part and the brain's surface; the crosshair now takes what is drawn there.
+
+## 183. The right elbow bends fully without folding its muscles; S draws a hand across the chest in to the shoulder; the right wrist has a control (21 November)
+
+The user: "Any limited range of motion that's unnatural needs to be fixed ... We want full range of motion on all axes";
+"there's problems with some limbs, such as the right arm having a full range of motion, especially when you go left all the
+way and it's unable to cross the body, the torso"; earlier: "You probably overdid it with the internal or medial rotation
+with the arms", "arm movement range of motion can be limited when looking up whilst in internal rotation". The list of
+what was not done: "the right elbow at its full bend still folds its muscles; with the right arm across the chest, S leaves
+the hand where it is".
+
+**What each control reaches** (a browser script, 1600 by 900, each probe from a fresh start: the look carried far up,
+down, across and out, the keys held for seconds singly and in turn, the limb turn; the upper arm's direction read in the
+chest's own axes; the joint angles from the game). Before (the lead build) and after, where they differ. Ordinary adult
+ranges for comparison are textbook figures (AAOS), not measured on anyone.
+- Right arm: raised forward or out to the side to 176 degrees of elevation (look up; D and look up); brought across the
+  body at shoulder height to 64 degrees past straight ahead, the hand 34 to 35 cm past the midline (the look; A at lower
+  raises); elbow 0 to 145 (W, S); forearm turn the whole 160 (limb turn). Short of ordinary: the arm behind the trunk's line
+  with the arm low, 34 degrees (look down; ordinary 60; no key moves an arm back), behind the side line at shoulder height
+  17 (ordinary about 40); the upper arm's own turn -15 to 35 before (only the limb turn moves it; ordinary 70 in, 90 out),
+  -55 to 35 now (the keys, across the body; below). The wrist: no control placed it before; now a drag on the hand (below).
+  A press-and-drag on the upper arm moves the shoulder's raise and the upper arm's turn through their whole joint ranges
+  (section 125), including the 60 degrees back.
+- Left arm (its own rig): raised forward and out to 180, behind the trunk's line to over 60, across to 68 past straight
+  ahead (hand 32 cm past the midline), behind the side line at shoulder height over 80, elbow 0 to 145, forearm turn the
+  whole 160. Short: the upper arm's own turn -15 to 35 (the limb turn only; no drag turns it); the wrist has no control.
+  Nothing on the left arm was changed.
+
+**The right elbow at its full bend** (looked at in close pictures offline, posed with the game's rig and skin records, and
+on the mirror body brought near). Three faults, each with its own rule (`ELBOW_SKIN` in `ns-body.mjs`, used alike by the
+start-posture bake, `skinBodyPositions` and the scene's processor skin):
+- The far ends of the forearm's muscles kept a share of the upper arm's frame (the weights fall off slowly with the
+  distance to each bone: 6 cm down the forearm the long finger and wrist flexors followed the upper arm by 15 to 30 %; the
+  triceps 3 cm above the elbow followed the forearm by 35 %). At a deep bend such a vertex was pulled 2 to 4 cm toward the
+  other bone, so the forearm's flexors folded back into the crease and through the biceps. A vertex shared across the
+  elbow now hands its share to its own side's bone between 2 and 5 cm from the elbow; nearer the joint the weights are
+  as before (attachments on the epicondyles and the olecranon keep their bone).
+- The linear blend of two frames bent 145 degrees apart pulls a vertex shared half and half most of the way to the
+  joint's axis: the back of the elbow came to a pinched point of crumpled triangles. Shared vertices now turn about the
+  elbow's axis by their share of the bend, for half of the difference (all of it swelled the back of the elbow into a ball).
+- From 50 degrees of bend (full from 100) a vertex on the inner side that has crossed the plane halving the bend, from
+  the forearm's side or the upper arm's, is put back on its own side, smoothly; vertices shared about evenly are moved
+  less, so nothing tears. The forearm and the biceps then meet along that plane.
+Measured within 15 cm of the elbow at the game's own full bend (shoulder 24 forward, 18 across, elbow 145): triangles turned
+over 2477 to 1766, vertices across the halving plane on the inner side 5043 to 3944; for the long finger flexor,
+brachioradialis and brachialis the deepest vertex of one side across that plane 13, 31 and 13 mm to 0 (a test keeps this).
+The five muscles across the elbow that were skinned on the graphics card (brachialis and the triceps' heads) are now
+skinned on the processor, as the forearm's muscles already were, so the rules reach them.
+
+**S with the arm across the chest.** The arm may cross the chest only as far as it is raised, and the upper arm's own turn
+was not one of the joints the keys' solve moves, so bending the elbow swung the forearm out sideways (the hand ended
+56 degrees off its line, offline; in the browser the forearm lay out to the right). Now the keys' solve may also turn the
+upper arm about its length (`LIMB_CHAIN.rightArm.spin` in `ns-grasp.mjs`), and only there: round a bent elbow (from 20 to
+70 degrees of bend), with the hand's place in across the body from the elbow, and only for a step that pushes the
+shoulder's raise or sideways swing past what the range or the combined-range rule gives. Everywhere else W and S turn
+nothing (the user, Message 186: "they're not rotating internally or externally while moving"); from the start position S
+still folds the arm with the upper arm's turn untouched. Across the chest S now brings the hand in to 14 cm of the
+shoulder, 12 degrees off its line (offline), turning the upper arm inward to between -35 and -55 (in the browser,
+held or tapped; a person turns the upper arm inward to bring the hand to the other shoulder). **How the turn is shared with the limb turn:** the double tap of Space still sets the
+upper arm's turn to its two ends (35 out, 15 in); the keys turn it on from wherever it is when the hand has to reach in
+across the body, and the next limb turn starts from wherever the keys left it.
+
+**The right wrist.** A press on the right hand and a drag now bends the wrist: up toward the palm (to 80), down back (to
+70), left and right sideways (radial 20, ulnar 30). The hand is told from the forearm by the part pressed, or, where a
+forearm muscle's tendon lies over the hand, by the pressed point lying beyond the wrist. A press on the forearm still
+bends the elbow and turns the forearm. The Esc page says so in one sentence. Before, the wrist moved only with a motor
+area, whose movement returns (section 177), and the same press on the hand bent the elbow.
+
+**Checked.** 487 unit tests (new: the elbow's skin rules on three muscles; S across the chest with and without the turn;
+S from the start turns nothing; a straight arm swung across is never turned). `?case=boot` ok. All 13 browser tests but
+`browser-outside-compass` pass. Frame table 60.1 / 60.2 / 60.0 / 60.0 and 60.0 / 60.3 / 59.6 / 60.0 against the lead's
+60.1 / 60.0 / 59.5 / 60.0 in turn; during the limb turn the skin's time per frame is 1.8 ms against 1.4.
+
+**Not done, or not right.**
+- In the browser the mirror body's folded elbow still shows a ragged edge on its inner, near side, where the forearm's
+  flexors start on the humerus (the picture improves only a little); offline the elbow's tip and crease are clearly
+  cleaner. Triangles still turn over in the crease (1766 in the count above); a real fix needs better weights or a
+  smoothing of the posed surface, both tried and rejected here (sharper weights tore edges; smoothing broke on the
+  atlas's unwelded seams).
+- With the keys and the look the right arm still goes only 34 degrees behind the trunk's line (60 ordinary) and 17 behind
+  the side line at shoulder height: the look cannot aim behind the shoulder and no key swings the arm back. The upper
+  arm's drag reaches the whole 60.
+- The upper arm's outward turn past 35 degrees is reached only by a drag on the right upper arm; the left arm's upper arm
+  turns only with the limb turn (50 of the ordinary 160 degrees), and the left wrist still has no control.
+- The limb turn's inward end stays 15 degrees (the user found more inward turn overdone, Message 160).
+
+## 184. Switching movements on: only what you look at or click, and the movement you started (21 November)
+
+The user: "when you tap any area of the brain, you activate any area, it will contract, then return to its previous
+place. But in returning to its previous place, you won't see corresponding activity and muscle activation. It will just
+return." (Message 206) and "make sure there's clear movement for each brain activation area. And you can clearly
+identify what type of movement it is for each area." (204). A browser hunt of Body update 62, each fault reproduced by
+a second player, found eight places where switching movements on did not keep to that (H1 to H8). Each was reproduced
+on this branch first with the hunt's own scenario, fixed, and shown fixed with the same scenario.
+
+**While a movement carries the view, the look stays on the area that started it** (H1, H7; `CARRIED_LOOK`,
+`carriedLookStep` and stepFrame's `heldGaze` in `ns-app.mjs`). A neck or trunk movement from the brain moves the view:
+the eye rides on the head as the trunk bends and turns, and the eye view swings with a neck movement (section 171). The
+crosshair then slid over things the player never aimed at. During "Bend head forward" it lay on the brain's lower arrow,
+and a second click turned the whole brain 15 degrees for good (every later look then landed one area off). During "Lean
+back" it slid onto the trunk area's other spot, so the tip said "Bend to the right" while the card listed the lean-back
+muscles, and three clicks 0.5 s apart started three different movements (lean back, bend to the right, turn the right
+arm outward). Now, from the first frame of such a movement until it has returned and the view is the pointer's again,
+and as long as the player leaves the look where it was:
+- the look keeps naming the area and spot that started the movement: the tip and the card name the movement running;
+- a click repeats that movement, and taps no muscle and takes no limb that the moving view brought under the crosshair;
+- an arrow tip of the brain or the mirror body under the crosshair takes no hover and no press (also for the rest of a
+  neck swing after the player has moved the look).
+A look movement of the player's own, or an arrow key's step, ends the hold for the rest of that movement: the look is
+the player's again, as before. Nothing new switches on during the hold.
+
+**The neck's view dips once, without a flicker** (H1; `neckViewStep`'s `peak` and `smoothS`). "Bend head forward" has
+only 10 degrees of room in the bowed start posture, so its jerk took the neck to its end in one frame, the end's stop
+threw it back almost to the start, and it slammed in again: the view, which followed the neck exactly, went to its whole
+15-degree dip for one frame, back up for about 100 ms, and down again. While the neck contracts the view now keeps the
+furthest the neck has gone, and it eases onto its offset over 0.05 s: measured in the browser, 0, -7, -11, -13, -14, -15
+degrees over the first frames, held through the contraction, then back with the return. The drawn head still shows the
+jerk.
+
+**Choosing a limb switches nothing on** (H2; `gameLookSeq` / `lookByGame`). Key 2 or 3 or a double click turns the view
+just far enough to bring the chosen limb's end into the picture (section 144). Looking at the strip, that turn slid the
+crosshair down it, and the area it came to rest on switched on as if looked at: key 2 on "Left ankle" made the trunk lean
+back, the double click bent the left elbow. A frame on which the game turned the view by itself (to a newly chosen limb,
+or after a limb the keys move) while the player left the look alone now records what is under the crosshair silently,
+as a change of view does. In the browser: the turn still ends on "Left elbow", and nothing is lit and nothing moves.
+
+**An arrow key's step lights only its area** (H3; `feedHeadMove`'s `byGame`). The step turns the look about 4.6 degrees
+in one frame, and the glow of the player's own movement (section 82) read that as a fast turn of the head and a fast
+swing of the left arm: a neck area went nearly white and the mirror body's left shoulder blue for 0.05 to 0.2 s at every
+press (0.2 to 0.55 on every step of a 13-step walk). A step, and a turn the game makes by itself, now feed no glow of
+their own. On the same walk the other areas now stay at the look's own resting neck level (at most 0.06). A real look
+movement of the mouse still lights the head and the shoulder as before.
+
+**No beam after a contraction** (H4). The look's soft link to the muscles of the area it rests on was made on 18
+November, when a look only armed an area (`LOOK_ARMS`). Since a look switches the area on, that link took over the moment
+the contraction's own light ended, because the look still rested there: the same cone of light to the same muscles,
+about as visible as the contraction's, through the whole return and for as long as the look stayed. With the look
+switching areas on, an area's link is now its contraction's alone (`LOOK_ARMS.on` gates the soft link); the reverse link
+from a muscle under the crosshair stays. In the browser: links and beams 0 from the first frame of the return and at
+rest 6 s later, for the throat and the left forearm's turn.
+
+**No long frame as a trunk movement ends** (H5; `treeRaycast` in `ns-scene-three.mjs`). A trunk movement rewrites the
+processor copies of many body muscles; 150 ms after the last rewrite the next crosshair pick rebuilt the box tree of
+every rewritten mesh at once, before even testing whether the ray came near it (88 % of a 100 to 117 ms frame). A mesh
+whose tree exists but is out of date is now picked on its live vertices with the same exact test used while it is being
+rewritten, and its tree is rebuilt a few per frame (`stepPickTrees`). Measured with a frame timer only, both trunk areas,
+three clicks each, this branch and the lead in turns on a busy machine: worst frame 33.4 to 50 ms here, 100 to 116.8 ms
+on the lead; the count of 33 ms frames per click is the same (5 to 8).
+
+**The first arrow key goes its own way** (H6; `areaStepStartId`). With the look on no area, the walk started from the
+area nearest the crosshair whichever key was pressed; from the start view that was the throat area at the lower left, so
+the right arrow turned the view to the left. It now starts from the nearest area on the key's side of the crosshair
+(the nearest of all only when none lies on that side): from the start view the right key goes to the lower-right throat
+area, the left key to the lower-left one. Two of the other maintainer's browser tests stepped with the right key to
+reach the lower-left area; they are restated with dated notes (`browser-keyboard-aim`, `browser-punch-in`).
+
+**The left wrist bends sideways** (H8; `wrist_dev` in `ns-rig.mjs`). The "Bend left wrist toward the thumb" and "...
+toward the little finger" spots lit their area and muscles and moved nothing (section 177 listed it): the game arm's
+hand had one wrist axis. It now has the second: the hand turns at the wrist about the axis across the palm, after the
+flexion, to the commonly cited ends of 20 degrees toward the thumb and 30 toward the little finger (as the right wrist,
+Messages 14 and 15), contracts and returns like every other movement, and the mirror body's hand follows. The words on
+the card, the tip and the map say so; the "already there" dimming of these two spots and three unit tests that pinned
+"moves nothing" are restated.
+
+**Checked.** 491 unit tests (new: `tests/switch-on.test.mjs`: the neck view's dip on the slam-rebound-slam the hunt
+recorded, the hold's rules, the first arrow's side, the wrist's sideways bend on the placeholder rig and in the activity).
+`?case=boot` ok. All 13 browser tests but `browser-outside-compass` pass. Frame table, this branch and the lead in turns
+on a shared machine: 59.8 / 59.4 / 59.4 / 59.9 and 60.1 / 59.4 / 58.1 / 59.8 against the lead's 60.0 / 59.4 / 60.1 /
+60.0 (the lead's other runs in the same hour 52-60 in the moving cases). These are rules of this game's display; nothing
+in them is measured.
+
+**Not done, or not right.**
+- While the look is held, the tip by the crosshair names the movement running although the crosshair drawn in the
+  swung or carried picture is over something else for that moment; that is the choice made here (the tip names what a
+  click does).
+- After choosing a limb the crosshair rests, unlit, on whatever area the turn ended on; a small look movement inside that
+  area starts nothing (section 177's rule): the player looks off and back, or clicks.
+- From the start view the right key now lands on the lower-right throat area, which is the right end of the walk: a
+  second right press goes on to the lower in-between area and then stops; the walk runs left from there.
+- The left wrist's sideways bend is not part of the arm's hand-fit envelope (`ENVELOPE_GRID`, which keeps the hand in
+  the picture); it was not checked whether the hand can leave the picture during the 0.4 s contraction at looks where
+  the hand already sits at the picture's edge. Seen in the browser only at the start look, where it bends and comes back.
+- A trunk area clicked while its movement is under way repeats the movement, also when the player meant to click the
+  other spot the crosshair was drawn on; moving the look first gives the old behaviour.
+
+## 185. The limb keys never whip or spin the view; no pair of keys and no brush with your chest leaves a limb stuck; a push stops when the pusher stops (21 November)
+
+The user: "The limb should never get stuck" (Message 207); "Let's get rid of all zoom and punch-in effects" (197); the
+view shifts "so that those [limbs] ... stay within the frame" (167) without the three-quarter height (190); a limb that
+collides "will push them out of the way rather than going through them" (174). Five faults from the browser hunt of
+update 62 (H9 to H12, H24), each reproduced on this branch first with the hunt's own scenario.
+
+**The view's follow while the keys move a limb** (`followTurnStep`, `keepOutBy`; `LIMB_KEYS.view` `followFrom`,
+`followMinGain`, `followMaxDegS`, `keepBox`, `keepFree`). The follow worked out its turn as if the camera turned where it
+stands. The eye view's camera stands half a metre behind the eye and turns about the eye (section 140's stand-off), so for
+a hand near your own head a turn moves it in the picture by a quarter of what was asked, or the wrong way. Below the eye
+the eased follow kept asking: with the right arm drawn in and swung out, D alone took the look from 25 to 70 degrees down
+and the camera 44 cm up over your head, the brain gone (H9). Behind the eye a turn toward the hand pushed it further out:
+with the right arm raised overhead and the look to the left, D spun the view 120 degrees round to face behind you, an
+empty dark room (H24). With the hand left out of the picture by a look straight up, one W swung the view 80 degrees in a
+third of a second and the camera 58 cm (H9). Now:
+- only a wrist or ankle that is in the picture (or just past its edge, `followFrom` 1.1 of the half width and height, in
+  front of the camera) is kept there. One the player's own look has left outside is not fetched: the view stays where the
+  player put it, as the player guide says ("it turns only when the hand or foot would leave the picture");
+- each turn is measured from where the camera really stands: a trial look on each axis, the frame's own camera turned to it
+  and moved as the stand-off moves (`NC.eyeDolly`). An axis on which the end moves less than `followMinGain` (0.35) of the
+  turn, or the wrong way, does not turn at all (the end may then reach the edge of the picture or leave it);
+- the follow turns at most `followMaxDegS` (75) degrees a second, eased as before;
+- a turn of the follow never takes the brain's middle or the mirror body's middle out of `keepBox` (0.85) of the picture's
+  half width and height, nor further out than it is; an item already well out (`keepFree`) binds nothing. Where the end and
+  these cannot all be kept, the brain and the mirror body win.
+- the frame after a follow turn records the area under the crosshair silently, as a neck movement's swing does: an
+  automatic turn is not the player's look. (In the one case tried, the follow sweeping the crosshair 40 degrees across the
+  strip, nothing was switched on in the lead build either.)
+The look still carries the chosen limb, the camera still steps aside from a raised arm (section 166), and nothing zooms.
+
+**Two keys at once at one key's end** (H10). With the right arm at the end of its D swing, S + D moved the hand 0 to 4 mm
+in 2 s although S alone drew it in at once; the same with S + A at the A end. The pair asks for the sum of the two keys'
+ways; the swing being at its end, the joints can only go the reach's way, and that move is more than `keyFarDeg` off the
+sum, so the frame waited (`offWay`) on every frame. Now a pair that waits tries each key's own way, the reach (W / S)
+first, then the swing (A / D), each with the same cut as a single key (`keyTake` inside `stepLimbHold`; the reach or swing
+taken is in `qa().limbs.lastSolve.dbg.pair`).
+
+**A hand against your chest** (H11; in about one run in sixteen of the hunt's steps). The right arm folded and swung
+across the chest by A could end with its hand 3 mm inside the trunk's keep-out. W's step out along the limb's line went a
+little deeper (the line grazes the chest) and was refused on every frame; the place then stayed where the swing had left
+it, 22 mm off the hand, the keys' line latched onto it, and W, S and A moved nothing (only D did). Now a refused step that
+grazes the body slides over its surface (`keepOutSlide`: the step taken out to the keep-out's surface, as the look's carry
+already was, when what is left still goes the step's way within `keyOffDeg`); a step straight into the body still moves
+nothing (the hand stops at the body); and a refused frame puts the place on the hand itself, so the keys' line starts
+from where the hand is.
+
+**A push that goes on after the pusher has stopped** (H12; `stepLimbPush`, `pushApproach`, `pushGivesWay`;
+`LIMB_PUSH` `approachM`, `giveOffDeg`, `giveShare`). The left leg held D against the bent right leg at the end of its range;
+for the 1.3 s the key stayed down after the left leg had stopped, the right leg rose from 70 to 110 degrees at the hip,
+its foot 37 cm, knee to chest. Three faults: the mover counted as moving when its end moved 0.4 mm, and a key held at a
+range end jitters it by about a millimetre a frame; after a push the overlap left was stored as the overlap less the step
+whether or not the push had removed any of it, so the same overlap read as grown on the next frame and was pushed again;
+and the pushed leg, already at its sideways end, gave way upward. Now only the mover's own approach is pushed away (its
+point of contact must come at least `approachM`, 1 mm, nearer the other limb that frame, and no more than that is pushed),
+and a pushed limb gives way only along the push (its end within `giveOffDeg`, 50 degrees, of the push and at least
+`giveShare`, 0.3, of it); otherwise it is passed through, as a limb that cannot give way at all already was.
+
+**Measured** (1600 by 900, the hunt's scenarios on this branch; before = this branch before the change):
+- H9, the look straight up and W: before, the look swung from 88 up to 14 up and 81 to the right, 49 degrees in 200 ms,
+  the camera 586 mm; after, the view does not move (the hand moves 10 mm out of the picture, as it was).
+- H9, S, A, D, then W + A from the start: before, D took the look from -25.5 to -69.6 degrees, W + A swung it to 113 to the
+  right; after, the look stays at -25.5 (the pitch's measured share 0.14 to 0.19: 'weak'), the hand ends 8 % up from the
+  picture's bottom after D, and W + A takes it out of the top right; the brain and the mirror body stay.
+- H24: before, yaw 59 to 184 and pitch to -76, a dark room; after, the view stays at 61 / -31, the brain at the right edge.
+- The follow where it should act: the right arm's D from the start turns the view 27 degrees right (the brain's middle at
+  0.51 of the half width); after a look up, D turns it until the brain's middle reaches 0.84 and stops there.
+- The left arm drawn in and swung across (D, W, S, A): before (the lead build) the look went to -56 degrees; after, -25.5.
+- H10: S + D from the D end 3 mm before, 491 mm in 2 s after; S + A from the A end 0 mm before, 571 mm after.
+- H11: an offline copy of the hold's key rules on the game's own body (S 3 s, A 2 to 3.4 s, then each key 1.2 s, at 60, 50
+  and 40 frames a second) left W, S and A dead in 28 of 42 runs before and none after; there W slides out over the chest
+  on its first frames and moves 482 to 489 mm. In the browser the stuck runs are rare (the hunt: 4 of 64): in 12 runs of
+  the hunt's scenario on the lead build none stuck today; in 18 on this branch none stuck, and in 6 of them W slid over
+  the chest on one or two frames and then moved 484 to 490 mm.
+- H12: after, the right leg goes from 71 / 26 to 74 / 31 (hip flexion / sideways) while the left leg comes on, and does not
+  move again once it stops; a right leg at its sideways end (45) is passed through, where before it was pushed 6 degrees
+  further up. The steps that build the hunt's pose also changed: before, the right leg's A had already pushed the left
+  leg to its sideways end and back to -30 degrees at the hip by the same fault.
+- Section 178's sweeps, re-run: the eight trap poses 8 of 8 free; the look carrying each limb 420 px in eight directions
+  and back 32 of 32; random play of each limb with two seeds, 679 steps, none stuck and none with fewer than two keys
+  that move it.
+- Frame rates while the keys move the right arm and the view follows: this branch 56 / 60 / 60, the lead 54 / 56 / 59.
+  A first version that built the whole camera for each trial look ran at 40 / 48 / 49.
+
+**Checked.** 495 unit tests (new: `tests/limb-follow.test.mjs` on a camera built like the eye view's: no fetch of a hand
+out of the picture, a turn just far enough and never faster than `followMaxDegS`, no chase below or behind the eye, the
+keep rule; `tests/limb-pair-push.test.mjs`: the pair at the D end on the game's own body, the slide, the push's approach
+and give-way rules). `?case=boot` ok. All 13 browser tests but `browser-outside-compass` pass. Frame table 60.0 / 58.6 /
+60.2 / 59.9 and 60.0 / 59.2 / 60.1 / 60.0 against the lead's 60.1 / 58.0 / 56.1 / 57.8 between them (other browsers were
+running on the machine). Under reduced motion the follow skips its ease but keeps its speed limit, so a large catch-up
+is never one jump.
+
+**Not done, or not right.**
+- A hand that the follow cannot keep (near your head, where a turn hardly moves it) may now sit at the edge of the picture
+  or leave it while the keys move it; before, the view chased it. Bringing it back is the player's look.
+- A hand the player's look has left outside the picture is not brought back by the keys (the hunt's H24 asked that the
+  hand stay in the picture; there it was already outside, behind the camera).
+- The turn to a newly chosen limb (`stepLimbView`, 1 to 4 and the double click) still works out its turn as a camera that
+  turns in place; it is the activation package's ground this round (H2). `followTurnStep` could serve it too.
+- H9's side effect, the left shoulder's area and muscles shown blue while only the right arm moves, was not traced: it shows
+  as the view turns (also on the lead build, with no movement switched on) and looks like the crosshair's own mark.
+- With the right arm in the hunt's pose across the chest, W may still wait 0.1 to 0.2 s before it moves (the arm's own end
+  check, a millimetre deeper); A there still moves nothing (it would push the hand into the chest), D and W do.
+- At a range end with a key held a leg still creeps a few degrees in its other joint (the left leg 3 degrees of hip flexion
+  in 1.4 s at its inward end): the keys' rule takes a move under a twentieth of the keys' way whatever its direction.
+
+## 186. Words, labels, cards and the tutorial: each says what is there, where it is drawn (21 November)
+
+Faults from the browser hunt of Body update 62 (H13, H15 to H23), each reproduced by a second agent, reproduced again on
+this branch first, and shown fixed with the same scenario and pictures. Nothing here changes a control.
+
+**The strip's labels keep off the limb buttons** (H13, H23). With the look 16 to 20 degrees up the strip lies at the foot
+of the picture, and its labels were placed under the "1 Left arm ... 4 Right arm" bar: cut through by its edge, or lost
+behind its chips. The bar (a child of the HUD beside the cards, not a card) was never among the things the labels keep
+clear of; now it is, as drawn (`readHudRectsNow`; for the labels only, so the arrows keep their places). Swept from the
+start look to 27 degrees up at 1600 by 900 and 1280 by 720: no label touches the bar; at 18 degrees up "Left leg" and
+"Right leg" stand just above it beside their blocks.
+
+**A label names the area it sits on** (H17). At 800 by 600 "Left leg" and "Right leg" lay squarely on the blue and orange
+arm areas, 22 px from the arm areas' anchors and 113 px from their own; after a resize the two "Belly and back" did the
+same. Two causes. The arm labels' boxes were reckoned with their second line ("brain's right half"), which the short and
+the off reading levels do not draw: 124 by 38 px for a label drawn 96 by 26, too wide for the room between the brain's
+arrow and the mirror body, so they went out onto the face areas and the leg labels took the places left on the arm areas.
+Their boxes now follow the reading level (the app root's `data-ns-read`), and the two-line box is as wide as drawn (it was
+18 px too wide). And a label is no longer placed where another part's anchor is clearly nearer than its own: nearer than
+three quarters of the way to its own (`LABEL_LAYOUT.ownArea`, `ownAreaRatio` 0.75, in `declutterLabels`; the twin on the
+other half is the `side` rule's). The faults measured 0.19 (the leg labels above), 0.26 ("Belly and back"), 0.43 ("Right
+arm" on the yellow leg block looking 15 degrees up at 1600 by 900) and 0.56 (the arm labels on the face areas); a leg
+label just beside its own small block, a little nearer the big arm area's anchor (0.94), stays. The required left-arm
+label goes there only when nothing else is left, faded. At 800 by 600 the arm labels now sit on their own areas at every
+reading level; with the tutorial's line at the top the leg labels have no place by their blocks and are not shown (at the
+full level, where that line gives way to the cards, they stand above their blocks). Counted over eight window sizes, the
+three reading levels, the tutorial running and finished and six looks each (2 304 label places, `s-labstat.mjs` in the
+package's work folder), lead and here: labels shown 708 and 646; clearly nearer another part's anchor (the rule above) 174
+and 4 (the four: the required arm pair, faded, in one view, 390 by 844 looking down at the full level); nearer at all 212
+and 73; faded 67 and 92 (a required arm-label pair with no clean place on its own areas is now drawn faded there, where the
+lead drew it plainly on a neighbour's area).
+
+**The left / right / back words are drawn where they were placed** (H19). Since the brain was turned half round (section
+136) each word extends away from the brain the other way (`ORIENTATION_ALIGN`: "Brain's right half" to the left of its
+anchor, "Back" upward), but the style sheet still drew them the old way round, so every word was drawn mirrored about its
+anchor, beside the box that had been found clear: across the brain's turn arrows at 1600 by 900 and 1280 by 720, on the
+colour key at 800 by 600, under the arm labels from outside. The HUD now sets each word's offset from the same table.
+Drawn where they are tested, three more faults showed, now fixed: with the brain's front or back out of sight there was no
+midline, and a side word with no free place on its own side slid across the middle onto the other one (a line halfway
+between the two side anchors stands in); the words were never tested against each other; and in a small wide window the
+colour key and the status card, which stand where section 165's stack puts them, were not among the places the words keep
+off. Rested on 81 looks round each half's face areas at 800 by 600 with the full reading level: on the lead 40 looks put a
+word on a card, the key or the other word; now none. There the side words are not shown (no free place on their own side);
+"↑ Back" shows where it is clear.
+
+**The brain's up arrow stays on its top side** (H15). Let go of the mirror body after lifting it over the brain, and the
+arrows are planned again with it there: the brain's up arrow went 146 px down its centre line into the gap between the
+halves, beside the crosshair and just above the mirror body's down arrow. That depth was allowed for the brain's BOTTOM
+arrow, which goes up the strip's hollow (section 59); the top arrow now keeps the ordinary limit (`BRAIN_TIP_RULES`
+`inwardMaxFracBy`), and with no place on its centre line it moves along the top side past the mirror body, to where it
+stood before the carry. The arrows at the start look and from outside are unchanged (compared tip by tip with the lead at
+eight window sizes and three outside views).
+
+**Space on one of your limbs** (H16). Space there chooses the limb; nothing holds it. The grip card said "Nothing is held:
+put the crosshair on the brain, the mirror body or one of your limbs, then press Space", which the player had just done.
+It now says "Your right leg is chosen: W A S D and your look move it."
+
+**The tutorial's first step on an area that moves nothing** (H18). At 800 by 600 the first area a look up reached was the
+right half's Tongue, which has no movement in this body yet; the line stayed at "1/9 Look at a colour on the brain: a part
+moves", the strict tutorial counted nothing that followed, and nothing said why. After an area that moved nothing (the
+Tongue, a black in-between area, a turn the forearm has already made) the line says "Nothing moved: look at another
+colour" until an area that moves is switched on. (A few words more, shown only then.)
+
+**Under the Esc page** (H20, H21). The tutorial's line was hidden only by the game's own frame, which does not run while the
+game is paused, so it stayed, cut by the Esc card's edge; it now hides when the game stops playing. In a wide window the
+card ran to 16 px from the bottom and the "Simulated activity · experimental preview · notes and credits" line, which stands
+above everything, lay across its Space key at 800 by 600; the card now ends above that line in every window shape.
+
+**W, S, A and D in words** (H22). Message 186 and section 145: W and S move the hand or foot straight out along the limb and
+back in, A and D swing the limb. The Esc page's Move rows said "move it forward or back" and "move it left or right", and the
+full Controls rows "forward", "left/right" and "back/closer"; for a limb that points up or aside W does not move the hand
+forward. They now say "reach it out or draw it in" and "swing it left or right", as the note under them did; the same in the
+start page's short rows, the hint lines, the tutorial's W / S lines and the key card's titles ("Reach out", "Draw the hand
+in"). Root's `browser-player-focus` test is restated for the Move rows.
+
+Checked: the unit tests (new: `tests/hud-words.test.mjs`); `?case=boot`; the 13 browser tests (all but the outside
+compass, which needs the publish tree); the hunt's own scenarios on this branch before and after; the label sweep looking up
+at two window sizes; the overlay audit of section 165 (eight window sizes, three reading levels, the tutorial running and
+finished, six looks each) on the lead and on this branch: overlaps 99 and 77, those with an orientation word 21 and 0, with
+a strip label 14 and 6 (the six: a label touching a compass arrow, which the labels' layout gives way to, section 165); the
+frame table, four runs each alternating with the lead on a shared, busy machine: no case slower beyond the runs' own spread
+(this branch 47.8 to 60.1 frames a second, the lead 48.3 to 60.3).
+
+Not done or not right:
+- At 800 by 600 with the tutorial's line showing, the leg labels and "Belly and back" are not shown at the start look:
+  there is no place by their blocks that is clear of the line, the mirror body and the arm labels.
+- In the face views at 800 by 600 and from outside after R then E at 600 by 900, the side words ("Brain's right half",
+  "Right half") are not shown: no clear place on their own side. Before they were shown, on the cards or each other.
+- A label's area is judged by the label anchors, one point per part and half, with an allowance (0.75); a label beside the
+  edge of a big area can still be left out though it would be right, and one within the allowance can sit on the edge of a
+  neighbour. Fewer labels show (646 against 708 in the count above) and more required arm labels are faded (92 against 67):
+  looking 15 degrees up at 1600 by 900 both arm labels are faded on their own areas (the lead: one faded, "Right arm" plain
+  on the yellow leg block).
+- The Tongue still moves nothing (the area has no movement in this body); only the tutorial says so. The key card's
+  movement rows for W and S still describe the start pose ("The arm lifts forward (shoulder flexion)").
+- `PLAYER-GUIDE.md` already says W reaches out and S draws in, but the Controls list of `PREVIEW-NOTES.html` still says
+  "W/S move the left hand forward and back; A/D move it left and right" (the lead writes that page).
+
+## 187. Five faults of the look: the brain's eyeballs in a roll, the pick tint, a rod in the right fist, a lit forearm, a black forearm (21 November)
+
+A browser hunt of Body update 62 found these, each reproduced by a second agent (H14, H25 to H28); each was shown again on
+this branch, fixed, and shown fixed with the same scenario. The owner's matte look, the group tones and the outlines
+stay.
+
+**The eyeballs stay on the brain while it rolls (H14).** During a quick circle roll an eyeball sank into the brain, and its
+dark outline ring was drawn across the brain's surface. Two causes. The eyeballs' vertices were kept about each eye's
+own centre (so it can turn with your look), but the living brain moves every vertex of the brain by a rule of its rest
+position in the brain's own millimetres (`nsLiveMove`, the wobble and beat of section 89): an eyeball's vertices read as
+points next to the atlas's origin, about 1.5 m from the brain, so the wobble of a quick roll threw them tens of
+millimetres off the brain while the brain and the nerves moved a few (and every beat moved them about 4 mm). The
+vertices are now in the brain's millimetres like every brain mesh, and the turn with your look is a matrix about the eye's
+centre (`eyeTurnMatrix`); in the roll the moving and the held pictures agree. The second cause: the outline's picture of
+the brain and its eyes (section 176) held no depth between the brain's surface and the eyes, so the line round an eyeball
+behind the brain was drawn across it, in still views too. That picture now carries how near each is
+(`patchCoverageNear`, 8 bits over the brain's size, about a millimetre a step): an eye's line is drawn only where the eye
+is in front. Where an eyeball goes behind the brain, the brain's own line now crosses it (176 listed it as not drawn).
+
+**The pick tint is faint (H25).** Message 177's whole-brain light in the picked area's colour (`BRAIN_PICK_TINT`, section
+137) added 6 % of the area's saturated glow colour to the cortex. On the matte brain, pale and mostly in shade, that
+turned the cortex lilac on a violet area and grey-blue on a cyan one: its hue (OKLCH) moved up to 20 degrees where the
+brain faced the light and 15 to 150 in deep shade. It is now a gain on the cortex's own colour (`BRAIN_PICK_LOOK`, `brainPickGainInto` in
+`ns-brain-ink.mjs`), the same in light and shade: a little lighter (it lights up), a faint cast toward the area's own hue,
+and never greyer than 0.85 of the cortex's own colour. The change is a fifth or less of the old one in shade, and the hue
+moves at most 12 degrees anywhere. Across a muscle of your own body (the reverse link) a patch of the brain went from 104, 77, 77 to
+116, 81, 99 before and goes to 113, 82, 86 now; on the cyan thumb area the brain stays pink.
+
+**No rod out of the right fist (H26).** The thin grey rod at the curled right hand's thumb was the extensor indicis: its
+tendon runs into the index finger's extensor expansion over the middle and distal phalanges, but its skin candidates
+ended at the proximal phalanx (its hint), so in a fist that part stood straight out of the knuckle, up to 54 mm off the
+finger. The extensor indicis and the extensor digiti minimi now take their finger's middle and distal phalanges as
+candidates (`EXPANSION_RE` in `ns-body.mjs`; the little finger's extensor does not reach past its first phalanx, so only
+the index changes); the rig file is rebuilt. In a fist its tendon now lies on the finger like the extensor digitorum beside
+it.
+
+**A lit limb stays rose red (H27).** During a Space grip (and while a limb key moves a limb) the control mark of section
+139 (`PART_GLOW`) added the mark's warm yellow as light and as a broad rim; on the darkest rose tones, the forearm's
+flexors, that read as a flat tan or khaki, another material. In the raw look a marked muscle now glows in its own hue:
+the light added is its own colour at full brightness with 15 % of the mark's yellow, and the rim keeps more of the
+yellow, narrower (`PART_GLOW_RAW`). A gripping forearm measured 116, 75, 59 (hue 17) and now 115, 38, 42 (hue 357)
+against 90, 18, 28 at rest: lit rose muscle, with the hand areas' own cyan and yellow on the finger benders as before.
+The comic look keeps the old mark.
+
+**No black forearm in shadow (H28).** Section 168 listed it: the raw light's deepest shade, a quarter of the colour (0.15
+on a back face), left the darkest rose tones at 10 to 27 red, darker than the room. A muscle's shade is now kept, with a
+soft knee, from taking its colour under a small brightness (`RAW_LOOK.muscleFloor`, about 53, 13, 14 on the darkest
+tone, twice the room's light); the colour is only scaled, so the hue stays, and what faces the light is not changed. The
+lighter tones are hardly touched (the reference rose at the ambient shade 45 to 51 red). The raised right forearm's
+darkest points went from 27, 4, 5 to 53, 13, 14. Muscles only: the brain, the bones, the strip's black abyss and the
+room have no floor.
+
+**Checked.** 498 unit tests (eleven new, `tests/look-fixes-r26.test.mjs`). `?case=boot` ok. The 13 browser tests other than
+`browser-outside-compass` pass; `browser-punch-in` failed twice in ten runs on this branch, both while the machine's load
+was 27 to 29 (its movement had ended when the test read it), and passed the other eight; the lead passed six of six, three
+of them at that load. The eyes' fix was also looked at with the OpenGL back end. Frame table (frames a second, still /
+looking round / up and down / the limb turn, runs taken in turn with the lead's on a busy machine): this branch 60.0 /
+58.5 / 59.1 / 55.9, 60.0 / 58.9 / 60.0 / 59.9, 60.0 / 58.8 / 60.2 / 59.9, 60.1 / 59.2 / 60.1 / 60.0; the lead 60.1 / 59.5 /
+60.2 / 60.0, 60.0 / 59.2 / 57.8 / 44.4, 60.1 / 59.1 / 60.1 / 59.9, 60.0 / 59.6 / 35.5 / 43.0. The time the script spends
+drawing a still frame measured 2.9 to 5.1 ms here against 2.9 to 3.3 on the lead: a small cost cannot be told from the
+noise of the other browsers running at the time.
+
+**Not done, or not right.**
+- The pick tint is faint by design: side by side it shows, at a glance it may not. If it should show more, raise
+  `BRAIN_PICK_LOOK.lift` (the lighting up) before the cast.
+- In the deepest shade every dark muscle group now meets at the same dark red, so the groups differ there by little.
+- The eyeball's own turn with your look also turns the small move the brain's wobble gives it (a few millimetres at
+  most, at the eyes' largest turn); not seen.
+- The extensor indicis' entry in the fallback blends for meshes not yet loaded (`REFERENCE_MUSCLE_BLENDS`) is the old
+  one; nothing uses it while the source meshes are there.
+
+## 188. Touching muscles told apart on the screen, in light and in shade (21 November)
+
+The owner, Message 195: "The new look aesthetic you've provided in the recent most images is good. Apply it. But you
+need more clear contrast and differentiation between muscle groups." Message 202: "each muscle group, bundle, spindle,
+fiber, whatever you want to call it, activation group, should have its own sort of shading system, such that muscles
+next to each other can be obviously told apart, and you don't mix them up as one amorphous group." Section 168 gave each
+group a tone and each muscle one of three lightness steps; sections 176 and 187 left two things open: clusters of four
+or more touching muscles, and the deepest shade, where every dark group met at the same dark red. The work was done in
+two parts on the same day; the second measured the first again with its own views and went on from what was left.
+
+**Measured first, on the screen.** A check reads the colours DRAWN on both sides of every visible contact between two
+muscles (a QA probe, `globalThis.__nsShadeProbe`: for one frame the canvas and the outline pass's picture of which mesh
+is drawn where, `shadeProbe` in `ns-scene-three.mjs`, `qaIdPicture` in `ns-outline.mjs`; nothing runs without the flag).
+For every screen boundary between two muscles of one body the colour is taken 3 to 5 CSS px inside each side, past the
+ink line, so the line between them is not counted; the two are compared as an OKLab distance, and each pair of muscles
+gets the median over its boundary. A pair under 0.03 is drawn nearly equal (a fault), under 0.06 weak. Seventeen views a
+player meets are measured at 1600 by 900, the full picture: the start view and looks down, left and right; the view from
+outside; the mirror body held near, turned twice and tilted; the right arm raised by its keys, in shadow and looked up
+at; the left arm reached out and swung; the left leg lifted and swung. Before this section, in those views: 2 469
+contacts, 116 nearly equal, 483 weak; in the deepest shade nearly every dark group was one colour. The worst: the raised
+right forearm's flexors in shadow (flexor carpi radialis against pronator teres 0.006, against palmaris longus 0.013),
+the triceps' long and medial heads (0.018, both on the same step), pronator teres against flexor carpi radialis (0.02:
+the darkest tone's lower step was cut short by the clamp at 0.35), the pectoral's parts and the serratus (0.015 to
+0.03), the quadriceps' heads and the sartorius (0.025 to 0.04), and pairs that never touch at rest but lie side by side
+on the screen (the arm on the chest or on the hip, the calf over the thigh in the start view).
+
+**A second step, at the same lightness.** Each muscle takes, besides its lightness step, a warm step (`MUSCLE_STEP.warm`
+in `ns-colors.mjs`): a fuller rose (chroma x 1.4) or a quieter one (chroma x 0.7, hue 4 degrees toward crimson; on the
+two darkest tones x 0.75 and 8 degrees, because a quieter dark red reads brown), its lightness kept. The groups are told
+apart by lightness (section 168) and the warm step leaves it, so a muscle never takes another group's colour; every
+muscle colour stays in the one rose red, hue 10 to 28 degrees and chroma 0.08 to 0.19 (OKLCH). The steps are given out
+like the colours of a map (`assignMuscleSteps`), as pairs: touching muscles of one group must be 0.10 apart in the whole
+colour drawn (`drawnMuscleLab`), muscles of two groups 0.15 apart in lightness, as before, and 0.10 in the whole colour.
+The darkest tone's lower step is whole again (`minL` 0.35 -> 0.33). Tried and dropped, each drawn and looked at: a turn
+of hue of 8 degrees with the chroma (muscles read orange and pink, the candy code of section 168); a quieter step of x
+0.65 on every tone (the chest read grey-brown); a fuller second step (x 1.8: fire-engine red). A fibre texture or a
+pattern per muscle was not tried in the game: the clusters that failed are parallel-fibred (the forearm's flexors, the
+triceps, the quadriceps), so a texture along the fibres would not part them, and a striped or smooth pattern is the
+"rough or patchy" surface of Message 184.
+
+**The muscles seen side by side count too.** The steps were given out only from the muscles that touch in the drawn
+start posture (shared cells of the meshes). A table of the pairs the game's own pictures show side by side, from the
+seventeen views, counts as contacts as well (`MUSCLE_SEEN_CONTACTS`, `seenContactMap` in the new `ns-muscle-seen.mjs`:
+323 pairs, 163 of them not among the touching pairs). `tests/browser-muscle-shades.mjs` with `NS_SEEN_OUT=<file>` visits
+the views again and writes the table; a pair seen once is kept when the table is written again; after a change to the
+body it should be written again.
+
+**The steps survive the shade.** Section 187's floor kept a muscle's shade from taking its colour under one luminance,
+so every dark muscle in the deepest shade met at the same dark red (the raised forearm's flexors 0.007 to 0.013 apart).
+The floor now keeps the colours' ratios (`RAW_LOOK.muscleFloorKeep` 1, `muscleFloorRef` in `ns-raw-look.mjs`): it is one
+floor on the shade for every muscle, the old floor of the darkest tone over that tone's luminance, so the darkest tone
+in its deepest shade is exactly as in section 187 (about RGB 53, 13, 14) and every other muscle keeps its step there.
+The cost, not small (an earlier version of this section called it a little lighter): the shade never goes under about
+0.16 of the colour, so the deepest shade of every colour lighter than the darkest tone is lifted about twice in the
+screen's numbers. Where the surface turns fully away from the light: the reference rose 51, 19, 18 -> 87, 37, 35, the
+pale tone 59, 31, 30 -> 110, 63, 61, the tendon white 53, 54, 55 -> 101, 103, 104 (2.9, 3.6 and 3.7 times the light; on
+a back face more). The shaded side of the light groups is that much flatter. The darkest tone's lower step goes the
+other way, 58, 6, 14 -> 41, 3, 7. `muscleFloorRef` stays 0.0621: a lower one lifts every muscle further (0.031: the rose
+121, 54, 51) and flattens the shading of all of them. The lit side and the room are not changed. In the shader the floor
+is now a constant (a division less per muscle fragment).
+
+**After the first part** (the second part's own measurement of it, the same seventeen views): 2 444 contacts, 29 nearly
+equal (116 before), 231 weak (483). The contacts in shade before, matched pair by pair: 550, of them nearly equal 54 ->
+5 and weak 152 -> 70. The first part's own table, from its timed views, read 2 472 -> 2 451 contacts, 118 -> 25 and 495
+-> 256: confirmed. From the pictures (the whole body from the start view, the mirror body held near, the view from
+outside, the raised right arm in shadow, before and after side by side): touching muscles were plainly parted, in light
+and in shade, but two things were not right. The largest muscles had taken the quieter step (the chest's sternocostal
+part read a dusky wine-rose, the least rose of the colours, and so did two of the forearm's flexors), and 71 of the 164
+muscles had taken the fuller one, which was nearly free.
+
+**Why 29 were left: the light (second part).** The probe now also records the light on each side of every contact (the
+shade factor: the drawn luminance over the muscle's resting colour's). Between the two sides of a contact the one light
+differs by a factor of 1.6 at the median (2.4 at the 75 % mark, 3.6 at 90 %), and a lightness step of 0.08 is cancelled
+by a factor of about 1.45. So where the muscle with the lighter step is the less lit one, the step is gone on the
+screen: flexor carpi radialis (light 0.84) against flexor digitorum superficialis (one step lighter, light 0.55) was
+0.014 to 0.026 along 7 to 93 px in six views; 16 of the 28 worst contacts had the same warm step on both sides.
+
+**The steps follow the light the pictures show** (`MUSCLE_STEP.light` { goal 0.09, weight 8 } in `ns-colors.mjs`;
+`seenLightMap` in `ns-muscle-seen.mjs`). Each pair of the table of seen pairs now also carries up to six samples of the
+light on its two sides, [light on the first muscle, light on the second] in hundredths of the full light, one per view,
+the longest contacts first, a view left out when its light is nearly that of one already kept (997 samples for 299
+pairs; a sample over 1.1 is dropped: there the boundary lies on a muscle's white tendon end). `assignMuscleSteps` scores
+a seen pair, besides the rules above, by the distance of its two colours AS DRAWN under each of those lights (colour x
+light, which in OKLab is the colour's vector x the cube root of the light): the mean squared shortfall from
+`light.goal`, x `light.weight`. So a lightness step goes the way the light goes, and where the light falls both ways (a
+left and a right muscle share one colour, Message 15) the pair takes a warm step instead. Counted before it was built,
+from the recorded lights (each probed contact's screen distance predicted for any choice of steps; the prediction's
+error against the measured distances is 0.014 to 0.018 rms): with the lights 4 nearly equal and 103 weak where the first
+part had 20 and 225; and held out, the lights taken from half of the views and the contacts counted in the other half,
+four splits summed: 35 nearly equal and 319 weak against 40 and 450. So the lights help most in the views they come
+from, which are the views a player sees first and most; what they do in other views was then measured on the screen
+(below). Tried and dropped, each counted the same way: a term for the distance two colours keep when the light makes
+their lightness equal (their chroma over their lightness: 19 to 26 nearly equal against 20, 218 to 279 weak against
+225); a quieter step that costs more the more of a muscle is seen (more nearly equal contacts in the held-out views); no
+quieter step on the dark tones (52 against 40 held out).
+
+**Every warm step has a cost** (`MUSCLE_STEP.warm.cost` 1e-4 -> 0.03, `costLow` 0.01 -> 0.03). With the lights and the
+old costs the body was drawn and looked at: 74 muscles on the fuller step, the chest crimson (RGB 141, 7, 30), the whole
+body redder than the group tones the owner approved. Now a muscle takes a warm step only where a long contact needs it:
+25 muscles the quieter one, 30 the fuller one, 109 of 164 their group's own colour (the first part: 28, 71 and 65). The
+chest's sternocostal part was a rose red again (about RGB 169, 45, 43), not dusky (and see the check of the colours
+below). Counted on both sets of recorded lights (4 890 contacts): 24 nearly equal and 302 weak, against 29 and 298 with
+the fuller step free and 85 and 529 without the lights. The cost is paid in separation, and that is a choice of look,
+not a limit: held out (the lights from half of the views, the contacts of the other half, four splits summed, about
+9 800 contacts) the costs of the first part with the lights give 54 nearly equal and 604 weak with 115 muscles on a warm
+step; 0.01 and 0.01 give 66 and 680 with 82 muscles; the 0.03 and 0.03 chosen give 84 and 732 with 55 muscles; no lights
+145 and 1 024. Lower `warm.cost` and `warm.costLow` for more separation and a redder, duskier body.
+
+**The optimiser works from tables.** Every contact's term for each pair of candidate colours (9 x 9) is worked out once,
+and the search adds table entries; without lights the steps are those of before to the last muscle (compared on the
+game's 164 muscles: with the table of seen pairs, without it, with lightness alone: no difference). In Node, on a busy
+machine, 166 to 287 ms before and 35 to 100 ms after; in the game see "Checked".
+
+**The check itself.** The first part's browser test failed in the last run of its author. Two causes, both seen again.
+With the saved setting 'auto' the game lowers its picture when frames are slow, and on a busy machine it drew 1280 by
+720 at the cheap level half-way through the test: the same view then measures differently from run to run (150 contacts
+and none nearly equal in the start view at the full picture; 123 and 2 in a run that failed). And its views were reached
+by timed holds; the frame step is capped at 0.1 s, so with slow frames a hold moves less, and one read of what the
+crosshair is on can be a frame late (once the brain was taken instead of the mirror body). The test now fixes the full
+picture (the saved setting 'high') and says what was drawn, and reaches every view by the game's own state: the
+crosshair on the mirror body in two reads a few frames apart, the mirror body drawn in with S until its centre is 1.0 m
+from the eye, a limb key held until the limb's end has gone a set way or stops. The second cause of the failure was in
+the game: at the full picture the first part still had your own right flexor carpi radialis against flexor digitorum
+superficialis at 0.019 along 33 px with the mirror body held near; the lights mended it (0.165 there now, and 0.10 to
+0.18 in every view that shows the pair).
+
+**After the second part.** The same seventeen views, nearly equal / weak, before -> first part -> second part: all views
+116 / 483 -> 29 / 231 -> 18 / 150 of about 2 470 contacts; the start view 3 / 29 -> 0 / 17 -> 0 / 11; from outside 1 / 7
+-> 0 / 1 -> 0 / 3; the mirror body held near 9 / 44 -> 2 / 16 -> 0 / 9, turned 13 / 45 -> 1 / 22 -> 1 / 12; the raised
+right arm in shadow 16 / 41 -> 4 / 25 -> 2 / 11; the left leg lifted 7 / 30 -> 3 / 21 -> 2 / 11. The contacts in shade
+before, matched pair by pair (about 550): nearly equal 54 -> 5 -> 6, weak 152 -> 70 -> 42. The muscle pixels at the
+start view: hue 22.4 degrees on average with a spread of 4.1, chroma 0.100, before; 21.4, 3.6 and 0.108 after the first
+part; 20.3, 3.7 and 0.106 now. Of the 18 left, 7 are not contacts of two colours at all: where the inner sheet of the
+abdominal wall shows through the outer one in ragged patches (external against internal oblique, 0.004 to 0.02; six of
+the seven, the seventh the same at the hip), the picture of which mesh is drawn says "internal" and the colour drawn is
+the outer sheet's (the light there reads over 1.1); equal colours are the better picture there. The other 11 are
+contacts where the light differs by a factor of two or more the wrong way in that one view (the lifted left thigh's
+rectus femoris, fully lit, against the sartorius, one step lighter and less lit: 0.018 along 241 px; the chest against
+the front of the deltoid with the arm reached out) or where both sides lie in the deepest shade (the raised arm's
+brachialis against the short head of the biceps, 0.022). The activation flash, the lit white, the area colours, the
+outlines and the used mark are not changed (a used muscle still loses only lightness, now from its own colour); a
+display rule for teaching, nothing is measured.
+
+**Two looks outside the table** (down to the left and down to the right at your own body, at angles the seventeen views
+do not have; 299 contacts; measured on the lead's colours, the first part and the second): nearly equal 14 -> 7 -> 11,
+weak 55 -> 36 -> 32; 5 or 6 of each count are the abdominal wall's sheets showing through. So outside its views the
+second part is no better than the first in nearly equal contacts and a little better in weak ones, and one contact there
+is its own doing: with the look down and to the left, your right forearm at the right of the picture, its flexor carpi
+ulnaris against the flexor digitorum superficialis, 0.027 along 175 px. The seventeen views always show the two under
+very different light (0.15 to 0.5 against 0.5 to 0.9), so the steps gave them nearly one colour (a warm step apart, 0.03
+in equal light) and left the rest to the light; in this look the light on the two is nearly the same.
+
+**Not relying on the light alone: built, measured, left off** (`MUSCLE_STEP.light.even` 0). With `even` a pair with
+lights is also scored for the SAME light on both sides (its plain distance against `light.goal`, x `even`). With 2, on
+the screen: the forearm contact above 0.047, the two looks outside the table 8 nearly equal and 33 weak; but the
+seventeen views 21 nearly equal and 132 weak instead of 18 and 150, the contacts in shade 15 nearly equal instead of 6,
+and the largest muscles took the fuller step again (the chest and the front of the thighs crimson, the body redder than
+the group tones: drawn and looked at beside the other two). Which muscles take a warm step changes a good deal with
+every such setting; the one kept is the one whose pictures are nearest the group tones. The better mend for the forearm
+contact is more views in the table, those two looks among them.
+
+**Against the abyss of section 190.** The same afternoon the background became an abyss: the room (floor, pool of light,
+wall, lamps, shadows) is no longer drawn, and the background is one black of RGB 2, 2, 2 (`ROOM.abyss.black` in
+`ns-room.mjs`) with a faint light round the brain and the bodies. `RAW_LOOK.room` and the muscles' floor are not changed
+by it. (A first check here set the abyss's draft numbers on `RAW_LOOK.room` in a copy; section 190 did not land that
+way, so this was measured again on what landed: a copy of this branch with section 190's changes to `scene/` applied;
+nothing of them is in this change.) The raised right arm in shadow, two runs in the abyss: 167 and 159 contacts, 3 and 2
+nearly equal, 11 and 13 weak, in shade 3 of 59 and 4 of 55 nearly equal; in the present room, three runs: 169, 158 and
+162 contacts, 2, 2 and 1 nearly equal, 11, 14 and 11 weak, in shade 4 of 59, 0 of 52 and 3 of 56: the same within what
+one run differs from the next. The start view and the view from outside measure the same in both (150 contacts, none
+nearly equal, 11 weak; 68, none, 4). The muscles' edges against the background, about 2 900 samples (the colour 3 to 5
+CSS px inside the muscle against the background 5 to 7 px outside): in the abyss an OKLab distance of 0.30 and 0.34 at
+the median, 0.13 at the 5 % mark, 0.08 at the 1 % mark, 2 and 0 samples under 0.03, the background beside the arm about
+grey 5; in the present room 0.22 and 0.24, 0.06 and 0.07, 0.055, 1 and 3, the room about grey 22. So in the abyss the
+shaded muscles stay apart from each other as in the room and stand off the background better. The darkest muscles: the
+first part's floor keeps the ratios with the darkest TONE as its reference, so that tone's LOWER step in its deepest
+shade is about RGB 41, 3, 7, half the luminance of section 187's floor (53, 13, 14). In the room (13 to 22 grey) it was
+level with the background in luminance and told apart by its red and its ink line; in the abyss it is far above the
+black. The darkest twentieth of the muscle pixels of the arm in shadow (its darkest hundredth is mostly ink line): 36,
+7, 11 in the room and 35, 6, 11 in the abyss with these colours, 49, 8, 13 with the lead's in the room (about half the
+luminance; section 190 read 55, 6, 13 for the lead's colours by its own measure). The same view with the lead's colours:
+162 contacts, 16 nearly equal, 43 weak, in shade 13 of 69.
+
+**A check of the colours, and what changed (22 November).** An independent check, confirmed by a second reviewer, found
+the quieter warm step breaking the owner's colour rule (rose red; no pink, grey or brown): the big pale muscles a pale
+PINK (the rectus abdominis 246, 175, 172, where update 63 had 216, 120, 124; the tibialis anterior, the gracilis, the
+short head of the biceps), the dark ones a dusty MAUVE that went grey-brown in shade (the clavicular and abdominal
+pectoral and the palmaris longus 139, 75, 78, the pronator quadratus 105, 48, 55); and the fuller step drove the dark
+tones to the screen's limit, a blood crimson with the green channel at 0 to 8 (the flexor carpi radialis 141, 7, 30, the
+sternocleidomastoid 175, 8, 45; Message 22 asks for 'clinical', not 'bloody'). Changed in `MUSCLE_STEP`
+(`ns-colors.mjs`): a light colour's quieter step (`warm.lowLight` [-0.2, 0] above a drawn lightness of 0.64) loses less
+chroma and its hue never goes under the rose's 22 degrees (`warm.lowLightHue`): the pale pink 246, 175, 172 becomes a
+pale salmon 252, 172, 164, the 198, 131, 136 becomes 205, 128, 125. A dark colour's quieter step (`warm.lowDark` [-0.25,
+-8] -> [-0.12, -6], `warm.lowFrom` now compared with the lightness drawn, 0.56) is a wine red: 139, 75, 78 -> 145, 70,
+72, and the rose tones' darker step 152, 81, 87 -> 162, 73, 85. A fuller step stays under 0.85 of the most chroma the
+screen shows at its lightness and hue (`gamut`; the group's own chroma is never lowered): 141, 7, 30 -> 134, 28, 37,
+175, 8, 45 -> 166, 37, 53; on the darkest tone's lower step, where the screen has no room, the fuller step is the
+group's own colour. And `sameGoal` 0.1 -> 0.12 (below). Counted first on the recorded light (two sets of probes of the
+seventeen views and the looks outside them, about 10 700 contact instances) and drawn as swatches; dropped: `warm.low`
+[-0.2, -4] and `maxL` 0.78 as the check proposed (the pale pink stayed and the steps at the top of the range vanished),
+no quieter step at all (no pink, but 161 nearly equal with the crimson capped), `warm.high` [0.3, 0], a band of
+lightness outside which there is no quieter step (`warm.lowBand`, kept as an option, off), and quieter light steps
+turned 4 or 5 degrees toward salmon (the rose tones' light steps went tan). All drawn colours now keep a hue of 12 to 28
+degrees and a chroma at least 0.115 of their lightness (0.19 on the dark ones); the first part's had 56 of 1 539 colours
+under that.
+
+**The cost of the colour rule, on the screen.** Separation is paid for the colours. With the darker forearm flexors now
+nearly out of colours, the start view drew your right pronator teres against the flexor digitorum superficialis at 0.019
+along 20 px (both the darkest tone's lower step, 0.008 apart in equal light); `sameGoal` 0.12 parts them, but that pair
+flips with small changes (0.11 and 0.13 leave it), so it is a fragile mend. The browser test with the final colours: the
+start view 150 contacts, none nearly equal, 12 weak (the second part 0 and 11); from outside 70, none, 6 (0 and 4); the
+mirror body held near 175, 1, 18 (0 and 8 to 9); the raised right arm in shadow 161, 1, 21, in shade 0 of 50 nearly
+equal and 11 weak (169, 2, 11; in shade 4 of 59 and 13). The table run with the new colours and the earlier table,
+eighteen views: 2 535 contacts, 32 nearly equal, 245 weak (the second part, seventeen views: 18 and 150 of 2 472; the
+lead's colours 116 and 483). So the weak contacts are about two thirds more than with the second part's colours and
+about half as many as with the lead's.
+
+**The forearm contact outside the table, and the table.** The look down and to the left is now one of the views the
+table of seen pairs is written from, and the writer always keeps the view where the light on the two sides of a pair is
+most nearly the same (it kept the longest contacts before, and a pair the longer contacts showed only under very
+different light relied on that light). The humeral head of flexor carpi ulnaris against the flexor digitorum
+superficialis: 0.027 -> 0.061 along 175 px in that look, and in the other look 0.19; the two looks: 299 contacts, 9
+nearly equal (7 of them the abdominal wall's sheets showing through), 31 weak. The table: 339 pairs, 318 with light,
+1 027 samples. The raised right arm in shadow is now a third strict view of `tests/browser-muscle-shades.mjs`, with a
+count of the contacts in shade. A muscle the table names that the body does not have is counted (`seenUnknown` in the
+steps' report, the scene state's `muscleLook.stepWorst`): the browser test asserts it is 0, so a renamed or removed
+muscle cannot make the table fall away unseen; `seenWeight` 0 now switches the table off (it was read as 1).
+
+**Checked.** 523 unit tests pass (the lead's 517 and six in `tests/shades-r27.test.mjs`: the first part's four, two of
+them restated for the cost of a warm step, and two new ones: the light on the two sides of a pair, and the writer of the
+table). The browser test `tests/browser-muscle-shades.mjs` passes at the full picture (its last run on the final tree:
+the start view 150 contacts, none nearly equal, 11 weak; from outside 70, none, 4; the mirror body held near, stopped at
+1.00 m, 175, none, 8; a run before, with the mirror body stopped at 0.85 m, 178, 1 and 9). `browser-startup` and
+`browser-keyboard-aim` pass. `?case=boot` ok. The frame table, each run alone on the processor, this change and the lead
+in turns (frames a second, still / look / up and down / limbs turning): 59.5 / 37.7 / 43.0 / 44.6 and 59.9 / 30.9 / 40.5
+/ 46.8; 60.0 / 37.9 / 46.7 / 55.2 and 58.0 / 36.4 / 46.8 / 51.4: no slower. The steps at load (the touching cells, the
+tones and the steps together, `inspect().scene.glow.muscleLook.toneMs`), each build alone on the processor in the same
+run: 92 ms, the first part 208 ms (the first part read 83 ms for itself on a machine with its processors free; with
+seven browsers at once 640 ms were read here). No change to `ns-body.mjs`; no new script file (the count in
+`early-load.mjs` is the first part's 59). On 22 November, after the check of the colours: `tests/shades-r27.test.mjs` (6
+tests, now also the gamut limit, the light quieter step's hue, the unknown seen keys, `seenWeight` 0 and the kept
+equal-light view) and `tests/look-fixes-r26.test.mjs` (11 tests; its floor test now runs over every colour drawn, each
+group, storey, lightness and warm step, against section 190's black and the glow beside a body, with the bound that a
+deepest shade is at most 0.18 of its colour and at most 4 times section 187's) pass; the browser test passes with its
+three strict views; `?case=boot` ok. Not run again then: the whole unit suite, the other browser tests, the frame table
+(nothing per frame changed: the colours are given out at load).
+
+**Not done, or not right.**
+- The colour rule costs separation. The second part's colours had 18 nearly equal and 150 weak of 2 472 contacts in the
+  seventeen views; with the colours of 22 November the table run (eighteen views, the earlier table) had 32 and 245 of
+  2 535, and the browser test's four views with the final table 2 nearly equal and 57 weak of 556 (the second part 2 and
+  34 of 564 there). The seventeen views were not measured again as a whole with the final table. Nine colours a muscle
+  cannot part every pair under every light: a step that goes with the light in one view goes against it in another (the
+  lifted thigh above), and a left and a right muscle share one colour while the light falls the other way on the other
+  side.
+- The darkest group, the forearm's flexors, has the fewest colours now (on its lower step the screen has no room for a
+  fuller red). Your right pronator teres against the flexor digitorum superficialis in the start view is parted by
+  `sameGoal` 0.12, and that mend is fragile (0.11 and 0.13 leave the pair at 0.011 predicted).
+- The table now holds the look down and to the left too (the forearm contact there 0.061 along 175 px), so no view
+  outside it was measured with the final colours; in other poses the steps are as good as chance against the light
+  there. The limbs turned to their overside (Space tapped twice) were not measured at all: the double tap was not taken
+  by the game in the scripted run.
+- The pale group at its lighter step stays very pale: the gracilis, the short head of the biceps and the internal
+  oblique are a pale salmon 252, 172, 164 (L 0.82), only a little warmer than the 246, 175, 172 the check called pink;
+  the rectus abdominis now takes the pale group's darker, fuller step, a rose 237, 102, 112. A lower `maxL` would darken
+  the lighter step (0.78 as the check proposed: the pale group's lighter step nearly vanishes, and more contacts fail).
+- The fuller step on the dark tones is still a strong red (the sternocostal pectoral 134, 28, 37, the
+  sternocleidomastoid 166, 37, 53), redder than update 63's maroon (106, 23, 35); the dark quieter step is a wine red
+  (119, 47, 55; the long head of the triceps 139, 58, 67). The owner should judge how red is too red: `gamut` lower for
+  less.
+- The darkest tone's lower step in its deepest shade (about RGB 41, 3, 7) is darker than section 187's floor: the first
+  part's floor keeps the ratios from the darkest tone, not from its darkest step. Against the abyss of section 190 it is
+  well above the black, and in the pictures of the raised arm it reads as a very dark wine red held by its outline. A
+  lower `RAW_LOOK.muscleFloorRef` would lift it and flatten the shading of every muscle; it stays 0.0621.
+- A left and a right muscle share one colour (Message 15), so where a pair meets at the midline (the rectus abdominis,
+  the frontalis, the lips, the upper serratus posterior) the two halves are one colour; they are left out of the counts.
+- The light groups' shaded side and the tendons' are flatter than in section 168's pictures: their deepest shade is
+  lifted about twice (the floor that keeps the ratios, above).
+- The check measures mean colours; a pattern or a line between touching muscles would not show in its numbers. Its
+  pictures of which mesh is drawn are wrong where two sheets poke through each other (the abdominal wall above).
+- The probe and the table hold for the full picture at 1600 by 900. At the cheap picture level (drawn smaller) the first
+  part measured 3 nearly equal of about 150 with the mirror body held near; not measured again.
+
+## 189. Every movement of the strip moves from the start look, the way it is named, and rests at its end long enough to read (21 and 22 November)
+
+The user: "make sure there's clear movement for each brain activation area. And you can clearly identify what type of
+movement it is for each area. And make sure that the movement is as precise as possible with as many activation spots
+and encoded movements as possible without game destabilisation." (Message 204) "That goes both ways for when you're
+moving the body and the brain area is activating." (Message 205) Still standing: an activation contracts, then returns
+to where the part was, with nothing lit on the way back (Message 206); no zoom or punch-in of any kind (Message 197);
+neck movements exaggerated in every view (Message 200).
+
+All 142 movements of the body map were switched on one by one in the browser, on Body update 63 as published and on
+this branch, and the travel of the moved part was measured on screen, on your own body and on the mirror body, in the
+start view and in the outside view (how: "Measured", below). That found faults in update 63. Each is fixed here.
+
+**Twelve movements moved nothing when switched on from the start look (a tap on one of their muscles), and from the lower
+part of their areas.** From a look resting on their own spot, five of them already moved in update 63 ("Open left hand",
+"Straighten left little finger", both big toes' lift, the left small toes' lift; by an independent check, and the first
+helper's look sweep found the right small toes' lift moving from its spot too); six were dead from there as well (the
+left index, middle and ring finger's straighten, the left thumb's straighten and swing out, "Turn left palm up").
+- *Seven of the left hand* ("Open left hand", "Straighten left index / middle / ring / little finger", "Straighten
+  left thumb at the knuckle", "Move left thumb out from the palm"), whenever the look was more than 8 degrees under
+  level. The rule of 19 November that closes the fingers as you look down ("as we look down, the fingers close") drew,
+  per joint, the more closed of the look's pose and the pose the movement asked for. The closing begins 8 degrees
+  under level, and every left-hand area lies across that line (the looks of their spots run from 14 to 5 degrees under
+  level), so from the lower half of those areas the look's pose, the relaxed hand closed by less than 2 %, beat every
+  straightening: the movement's pose drive rose to 0.97 and no joint changed. A finger's width higher the same
+  movement worked. (Looking up past 8 degrees the opening rule cancelled every bend the same way.) Now the look's pose
+  is the place a movement starts from: `LOOK_HAND` and `lookHandPose` in `ns-actions.mjs` (rule `'under'`: per joint,
+  pose + (look's pose − rest) × (1 − the share of that joint the movements under way command)), called where
+  `ns-app.mjs` composes the left hand's pose. With nothing under way the hand is exactly where the look puts it, as
+  before; a movement at full drive is exactly at its own end, whatever the look; in between it is a straight blend, so
+  the joints stay inside their limits; the Space grip still wins. The old rule is kept as rule `'max'`.
+- *Four of the toes* ("Lift toes" and "Lift big toe" of each foot), whenever they were switched on while the look was
+  more than 8 degrees under level (the start look is 25 under): the same kind of rule for the toes drew the more curled
+  of the two. A toe movement now goes from the look's toe pose to its own end and back (`digitUnderMove` in
+  `ns-app.mjs`, pure); the Space grip's curl still wins.
+- *"Turn left palm up"*: the palm is up at the start, so the turn had nowhere to go. Like a body joint that is at the
+  stop its movement ends at (section 177: the right palm, the jaw), the left forearm now strikes its stop: it is thrown
+  38 of its 160 degrees off it and eased straight back (`strikeTurn` in `ns-actions.mjs`, with `JOINT_LATCH`
+  `stopBounceShare` / `stopBounceMaxDeg`). Not under reduced motion, as for the body. The card's words for a palm that
+  is already turned said "so nothing moves now"; they say "so it does not turn further" (`ns-text.mjs`).
+
+**Five movements (eight with both halves) were thrown the wrong way.** A movement with little room is kicked into its end
+so that it shows (section 177), and the kick then threw it back off the end past where it had started. With the game's
+own activity at 60 frames a second: "Straighten left / right knee" straightened 6 degrees and was thrown 11.6 degrees
+into a bend; "Straighten right elbow" 8 its own way, 9.8 the other; "Swing right arm in" 5 and 12.5; "Swing left / right
+thigh in" 7 and 4.7; "Bend head forward" 10 and 7.1. For the knee the wrong way was by far the larger movement on screen
+(33 px of bend on your body against 6 of straightening), so "Straighten" read as "Bend", its neighbour on the strip.
+`JOINT_LATCH.backStop: true` (`ns-actions.mjs`): the place a part starts from is a stop for the throw back; the part
+stops dead there and is driven in again. Not for a stop strike, which has no room on its own side.
+
+**No one-frame flash (22 November).** An independent check found that backStop made those movements flash: the kick
+(0.8 × the swing, at least 70 degrees, × omega) crossed the end inside the press frame, the end threw the part back and
+backStop stopped it dead where it had started, so the part stood at its end for one frame between two at its start
+("Straighten left knee" 6.0, 0.0, 0.3, 1.3 … 6.0 degrees frame by frame; your right arm in "Swing right arm in" 0, 42.7,
+0, 2.5 … 42.7 px). Before backStop the throw back past the start had hidden it. `JOINT_LATCH.kickRoomOmega` 1: with
+backStop on, a kick is at most the movement's room × omega. At 60 frames a second the part now covers 0.37 of its room in
+the first frame and arrives in the third (the knee 2.2, 4.5, 6.0 degrees), is thrown back about a third of the way and
+slams in again; a further press during the contraction no longer jumps it from its end to its start. Twenty-four joint
+movements were capped (the five, both ankles' "Pull foot up", "Swing thigh down and back", and the right hand's open,
+fingers' and thumb's straighten and thumb out), none with more than 30 degrees of room. At 30 frames a second the capped
+ones cover three quarters of their room in the first frame and arrive in the second, without turning back.
+
+**A movement rests at its end for 0.3 s more, unlit, before it returns.** `JOINT_LATCH.holdS` 0 → 0.3 (`ns-actions.mjs`).
+The lit contraction is 0.4 s as before (`driveS`): how long and how brightly an activation is lit is not changed here.
+In those 0.4 s the part slams into its end, is thrown back and slams in again, and the return began about 0.15 s after
+that: the part was within 80 % of its largest displacement for 0.40 s (the median of the 142; 16 movements for under
+0.3 s). With the hold it is 0.70 s. During the hold the part stands at its end with nothing lit, and the return is as
+before: unlit, to where the part was. Body joints, the game arm's movements and the left forearm's turn (its own note,
+`rotation.move`) hold the same way, under reduced motion too. A click during the hold is a further press. `holdS: 0`
+gives the behaviour before. (Tried and dropped: `driveS` 0.4 → 0.7, which also lit everything for 0.7 s.)
+
+**The eye view keeps its swing through a neck movement's hold.** The view's swing with a neck movement (section 171)
+eases back to the pointer once the neck has stood still for 0.35 s (`NECK_VIEW.settleS`, unchanged). At the 0.3 s hold the
+neck is still moving until about 0.35 s, so the view keeps its swing as it is; this was first written here as a fault, and
+it is not one (an independent check showed the view frame for frame the same with and without the rule below).
+`neckViewStep` (`ns-app.mjs`) does not count the stillness of a neck that is still in its movement (`how.contracting`:
+the contraction and the hold). It changes nothing at 0.3 s and keeps a longer hold right: at 0.45 s the view eased back
+up to 3 degrees during "Bend head forward"'s hold, at 0.6 s it was carried 9 degrees past the pointer when "Tilt head
+back" returned and 8 after a side tilt. Kept, with a test at both holds that fails without it. (Tried and dropped:
+`settleS` 0.8, which also delayed the view's return from a neck held by other means.)
+
+**Face shapes are whole at the movement's end, and about a quarter larger.** The map's face movements end at 15 degrees
+of their display joints and a shape was whole only at 20, so every face movement stopped at three quarters of its
+strength: `FACE_MOVE.fullDeg` 20 → 15 (`ns-face-move.mjs`). The amounts at full strength grew by about a quarter (brows
+up 13 → 16 mm, a smile's corner 13 up / 8 out → 15 / 10, a corner down 13 → 16, lips stretched 9.5 → 12, an upper or lower
+lip 9 → 11.5, frown, wide eyes, nose and nostrils likewise): exaggerated on purpose, at the far end of what a face does.
+
+**Two ranges of the left thumb, to match the right thumb.** The thumb's tip joint straightens to 20 degrees past straight
+(5 before), for "Straighten left thumb at the knuckle" (`thumb_mcp_extension`, which now also takes the tip joint
+there), and the thumb swings 15 out from the palm (0 before; the right thumb's −15), for "Move left thumb out from the
+palm" (`thumb_reposition`: it ended 12 units from the relaxed thumb's place, hardly a movement; now 27):
+`JOINT_LIMITS` and `ACTION_TARGETS` in `ns-actions.mjs`, `POSE_RANGES` and `ENVELOPE_GRID` in `ns-arm.mjs`. (Tried and
+dropped: a finger's "Straighten" to 30 past straight at the knuckle, like the right hand's fingers. Your left hand is
+seen palm up from above, so a finger tipped 30 degrees back went out of sight behind the palm: in pictures of the start
+view the finger vanished instead of straightening. A finger's "Straighten" ends as in the open hand, 10 past straight,
+as before.)
+
+**Your own left hand turns its face toward the eye for its movements (22 November).** An independent check found that
+"Straighten" and "Open" of your own left hand read as the fingers disappearing: the hand is seen from above along the
+forearm, palm up, so a straightened finger lies flat, pointing away from the eye. `LEFT_HAND_TILT` (`ns-app.mjs`): while
+the look rests on an area of the left hand or of one of its fingers, or while one of the hand's own movements is driven
+(its contraction and its hold at the end, 0.7 s; not its way back), the wrist is drawn tilted 15 degrees so the hand's
+face turns toward the eye; with the palm up that is a bend toward the palm (wrist flexion), with the palm down toward the
+back of the hand, in between by the forearm's turn. Eased in (time constant 0.12 s) and out (0.3 s), inside the wrist's
+range and the hand-fit envelope's levels; drawn only, nothing lit, latched or held. The side was chosen on pictures of
+the start view, 0.3 s into "Open left hand": without the tilt the opened fingers vanish, with it they spread as a fan,
+and the other way (extension) hides them further. Update 65 (a check of update 64): at 25 degrees, and wanted until the
+movement's note was dropped (about 1.9 s), the tilt read as an unlit "Bend left wrist" added to every hand movement, and
+the whole hand turned back by itself about 0.6 s after the finger had settled. Now 15 degrees, only while the movement
+is driven, out over 0.3 s: in the game's own activity at 60 frames a second the finger is at 22 % of its drive at 1.02 s
+with the tilt at 4.9 degrees, and at 5 % at 1.22 s with the tilt at 2.5; the hand turns back with the finger. In pictures
+of the start view at 0.3 s "Open left hand" still spreads as a fan, "Straighten left index finger" stands tall where
+"Bend" folds it short, and with "Straighten left thumb" the four other fingers stand up less than at 25. The tip beside
+the crosshair keeps off your own left hand's box on the screen when a placement is clear of it (`tipSides` in
+`ns-quiet.mjs`, with the box the region labels already keep off, `armAvoidShapes`, now worked out once a frame for both);
+before, it covered the palm and thumb at the hand's areas.
+
+**"Bend head forward" bows the upper body with the neck, seen from outside (22 November; Message 200).** `NECK_BOW`
+(`ns-app.mjs`): while the neck is bent forward beyond its start angle by its movement (nothing else holds it there), the
+upper body bows with it, 15 degrees at the neck's end, in proportion to how far the neck has come (its 10 degrees of
+room), and returns with it. It is drawn as the trunk's bend under the head (`headPoseForLook`'s `bowDeg`, in `bendDeg`,
+ns-body `lookBendDeg`), inside the trunk's range, and the left arm's shoulder follows it, so the arm stays on its
+shoulder. The eye never takes it: the camera stands where the activity's own angles put it (`eyeHeadPose`, which
+`headAttachment` uses). Update 65 (a check of update 64): the bow was drawn in the eye view too, where it did not do what
+was written here. "The mirror body moves 47.5 px in the start view" was measured with the camera at rest (both places
+put on screen through the camera before the view's dip); during the hold the eye view dips 15 degrees (section 171),
+the mirror body's head and trunk are then above the top edge, and the bow only lifted the cut-open top of your own rib
+cage (collarbones, upper ribs, lungs, great vessels) into the bottom of the picture for 0.7 s, shaking with the neck's
+spring (11, 15, 12.7, 11, 10 degrees and back within 0.2 s). Now the bow is drawn only from outside (`outsideOnly`, in
+proportion to the camera's way out of the eye, so it fades with the change of view) and eased (`easeS` 0.08 s, so the
+neck's spring does not shake the trunk; in the activity its largest step is under 3 degrees a frame and its dip at the
+top under 3 degrees), handed to the head pose by the frame (`neckBowStep`, the offset `neck_bow`); no other head pose
+(the eye, the hold, the camera trials) gets one. From outside at 0.4 s your skull comes up 89.9 px and the mirror body
+moves 24.9 px; in the eye view during the hold the pectorals show again where the open chest rose. The eye camera's place
+changes by 148 mm during the movement with the bow and without it: that is the eye view's own dip, a turn about the eye
+with the camera standing behind it. (Asked in the round: keep the bow out of the left shoulder's frame. Tried in a
+picture from outside at 0.4 s: the left arm's shoulder then stays behind while the bowed trunk's shoulder goes on, and a
+bone shows between them; the shoulder follows the bow as before. The hand's kept place no longer moves for it: the bow
+is not drawn in the eye view, where the look carries the hand, and the rule below counts the bow as part of the
+trunk.)
+
+**The chosen limb keeps its place through your own neck and trunk movements and through E (update 65; Message 206).**
+A check of update 64 found the left hand left moved after "Bend head forward" with the bow (16.5 mm, twice 31 mm, with
+Space during the hold 8.9 mm), and, on every build since the free hand, after "Bend trunk forward" alone (38 mm; neck then
+trunk 112 mm; the wrist ended at −12 against −9.6, its clamp at the hand's new distance). The cause is the view's hold of
+the chosen limb (LIMB_KEYS): it keeps the end where it is in the room while your trunk moves, and the pointer's look
+carries the end from its place in the picture. That place was taken with the camera as it stood before the movement;
+the first look during the movement (any look; the check set the same look again) used it with the moved camera and round
+the moved shoulder, so the end jumped (with a look turning, 105 to 236 mm in one frame) and stayed there when the trunk
+came back. `HOLD_BODY` (`ns-app.mjs`): the place keeps the trunk it was taken with (its reference: the trunk's held bend,
+turn and side bend and the neck's drawn bow, the shoulder's place and the bend of the limb then). While the trunk is not
+as in the reference (`holdBodySame`), a look carries the end in the reference: the line is drawn with the new look from
+the camera with the trunk as it was (a camera trial), round the shoulder as it was (`holdCarryPoint`, pure). The end so
+moves by the look's own turn only and otherwise stays where it is in the room, and when the trunk is back it stands
+where the same look would have put it with no movement: its place in the picture is kept. The reference is taken anew
+only while the trunk is at rest and the look still. The neck's own movements are not counted: they move neither the
+hold's camera (it stands on the look's own neck) nor the shoulders.
+
+A second check of this round found two faults of the place's camera. The first version also took the place again on
+every frame the neck or trunk moved, with no regard to the view, so after a neck or trunk movement seen from outside (E)
+the first look back in the eye view threw your left hand 330 mm in one frame, and it stayed there; and since update 63 a
+look turned outside did the same (316 mm). The place is now taken only from the eye view's camera: outside it is left as
+it was, and it is taken once on the first frame back in the eye view, before the look carries anything
+(`holdPlaceRule`, pure, which `stepLimbHold` follows; `holdReframe` takes nothing outside the eye view). That first
+version also stopped the look from carrying the limb for 1.65 to 1.93 s on every neck and trunk movement, which left a
+limb whose look turned in that time off its place for good (about 10 px a degree); that stop is gone.
+
+Measured in the browser, every bone of both bodies, start look: the check's eight sequences (then 5 s; the same with the
+bow switched off), before and after: neck then trunk 111.6 → 0 mm, neck then Space 8.9 → 0, trunk alone 38.3 → 0, Space
+alone 0 → 0, neck alone 16.5 → 0, trunk then neck 24.0 → 0, trunk then Space 20.4 → 0, neck twice 31.3 → 0 (the wrist
+ends at −9.6 every time; update 64 left 112.2, 38.3, 38.3 and 20.4). The second check's 47 sequences: a trunk movement
+with E at 0.2 s and back at 3 s, then a look: 0 mm (330 before); "Bend head forward" from outside, E back, a look: 0 mm
+(330); E, a look turned 4 degrees outside, E back, a look: 0 mm (316 here and in update 64; the end stays where it is in
+the room, since outside the look moves no limb). All twelve neck and trunk movements with the look turned 6 degrees
+during the movement: the end moves 86.9 mm with its place in the picture kept within 0.001 of the screen, as with no
+movement at all (86.9, 0.001), for the left arm; the legs and the right arm likewise (139.2, 146.2 and 82.3 mm, against
+139.2, 146.2 and 81.3 with no movement, places within 0.001); the largest one-frame step 23.3 mm, which the trunk's turn
+makes with no look too. Each movement alone: 0 mm for the left arm and the legs; the right arm 1.4 mm after "Bend trunk
+forward", as in update 64. W during "Bend trunk forward" moves the hand 11.8 mm (W alone 9.3; update 64 137).
+
+**Space and a change of limb during a trunk movement (update 66; Message 206).** A check of update 65 pinned down two
+older faults (both in update 64 as well). While Space holds the brain or the mirror body, your left hand is not held by
+the view and rides with your body; letting go during "Bend trunk forward" handed its place in the room back in one
+frame, a throw of 107.6 mm. Now it goes back to that place at most `HOLD_BODY.rejoinMps` (0.6 m a second, 10 mm a frame
+at 60 frames a second; `holdRejoinStep`, pure), and the place stays the goal of the hold meanwhile. And a limb chosen or
+let go while the trunk was bent kept the place the bent trunk gave it: "Bend trunk forward", the left leg chosen at
+0.3 s and the left arm again at 2.5 s, left your left hand raised 273 mm for good. Now the left hand let go while the
+trunk is not at rest stays held where it is in the room until the trunk is (and nothing holds Space or a drag; chosen
+again before that, it takes that hold back, its place to be taken anew); and an arm (its shoulder rides on the trunk) newly chosen while the trunk is
+not at rest is taken up by the view only when the trunk is at rest (`holdTakeUpWaits`, pure): until then it rides with
+your body, as an arm not chosen does. The legs are taken up at once, as before (their hips do not ride on the trunk).
+Measured (every frame at 60 frames a second, each sequence against the same inputs with no movement): Space let go during
+"Bend trunk forward": largest step 15.7 mm, the trunk carrying the hand while Space holds (107.6 before), back at its
+place 0.0 mm off; the left leg chosen during the movement and the left arm at 2.5 s: 0.0 mm (273.1); the right arm
+chosen at 0.3 s with the look turned 6 degrees during the return: it ends at its own place, 0.0 mm from where it
+started, with no step after it was chosen (before: 179.5 mm off with one step of 72.7), but 82.2 mm from the same
+sequence with no movement, since the look turned before the arm was taken up does not move it; the left leg chosen
+at 0.3 s with that look: 3.3 mm, as before. The round-3 check's 47 sequences and the eight left-hand sequences are as
+above; only these two changed.
+
+**Three more of the same kind (update 66, a check of round 5; update 65 had them too).** (1) The left hand kept held in
+the room was let go as soon as the trunk was at rest, also while Space (or a drag) still held something; it then stayed
+where the bent trunk had put it, 276 mm raised for good. It is now kept until nothing holds Space or a drag and it is
+back at its place (`holdKeptDrop`, pure): after Space it glides back at `rejoinMps` and is let go there. (Not done: giving
+the left hand its place in the room as its target while Space holds, which would also end its drift during Space and the
+glide; while Space holds, W / A / S / D move the left hand through its own place beside the shoulder, and that target
+would take them away.) (2) The right arm let go during a trunk movement kept the joint angles the hold had worked out for
+the bent trunk and ended 257 mm off for good. Its angles now go back to those it had when the trunk left rest, in step
+with the trunk's return (`holdArmBack`, pure, by `holdTrunkAway`, the trunk's distance from rest; the share never grows
+again), exactly those at rest, unlit. (3) While the right arm waits for the trunk to be taken up, the keys move it: its
+hold is taken for the frame of the keys only, and then it goes on riding with your body (taken up for good by the keys,
+as first tried, it was held in the room at the bent trunk's place and ended 145 mm off when the trunk came back). The
+left hand answers the keys while it waits anyway, through its place beside the shoulder. Measured as before, against the
+same inputs with no movement: the kept left hand with Space held until after rest, three ways (another limb chosen
+before Space, during it, the right arm instead): 275.8, 277.2 and 275.8 → 0.0 mm; the right arm chosen, the left arm
+chosen at 0.3 s of "Bend trunk forward": the right arm 256.9 → 0.0 mm, largest step 6.4 mm; W on the right arm waiting:
+it moves 5.5 mm (7.7 with no movement; before, 0). Everything else of that check is as before.
+
+**The right arm's way back takes the joints' places and leaves their movements alone (round 7; a check of round 6).**
+The way back of (2) took the arm's angles from where the joints WERE as the trunk left rest; with "Bend right elbow" still
+under way then, the elbow's 116.5 degrees became its place, and letting the arm go left it there for good (the right hand
+487 mm from the same inputs with no trunk movement). And it set every joint's place on every frame, which ends a
+movement of that joint at once, so "Bend right elbow" pressed while the arm went back lit and did not move. Now the
+angles are the joints' PLACES (the activity's `bodyGoal`, where a joint returns after a movement; never where a movement
+has it now), both when the trunk leaves rest and when the arm is let go; a joint whose movement or its return is under
+way was left out of the way back until the movement had ended (round 8 below: that was not without a jump); and a joint
+something else moved (the keys) goes on from where it is, the step taken again so that it meets the joint's place
+(`holdArmBack`, pure).
+Near rest and after it, what is left goes at most `HOLD_BODY.armBackDegS` (90 degrees a second), and the way back ends
+when nothing is left and nothing moves. Measured as before: the elbow movement under way as the trunk leaves rest, the
+arm let go at 0.4 s: 487 → 0.0 mm, the elbow back at its place (8 degrees); "Bend right elbow" pressed at 0.6 s or 1.0 s
+while the arm goes back: it bends to 145 degrees, as with no trunk movement (64.7 before), and the arm ends at its place;
+W on the right arm chosen again while it goes back: 232.2 → 7.7 mm from the same inputs with no movement (the keys' move
+is undone with the trunk's return: below). The round-3, round-4 and round-5 checks' sequences and the eight left-hand
+sequences are as before.
+
+**The way back sets places only; the limb turn and a second choice of the arm (round 8; a check of round 7).** Three
+narrow faults of that way back. (1) The joint left out while its movement ran kept its old place and step; at the
+movement's end the way back went on at the trunk's share as it was then, and the elbow jumped 62.7 → 11.9 degrees in one
+frame (the hand 245.7 mm) when "Bend trunk forward" was pressed three times and "Bend right elbow" once. (2) A limb turn
+(a double tap of Space) during the way back was undone on the right upper arm only (its turn back to 35 degrees instead
+of the −15 the turn gave it). (3) The right arm chosen again while one of its movements still ran was taken up with that
+joint bent and kept it bent (the hand 261 mm off). Now the way back sets the joints' places as places only: a new event
+of the activity, `limbPlace` (`ns-actions.mjs`), moves a joint's place (`bodyGoal`) and nothing else, so the joint springs
+there like any return, unlit, and a movement of it under way goes on and returns to the place as it is then; no joint is
+left out, so none is left behind. A joint the limb turn moves is the turn's while it runs and then the player's: it is
+dropped from the way back. The right arm chosen again waits until its way back is done (also once the trunk is at rest);
+the keys still move it a frame at a time. This also ends the old two-step return of an elbow movement pressed during the
+way back (back to the bent place, then a slow straightening): it returns straight to the place as it is then.
+
+**The face's two edge codes in the hidden-part pass (update 65).** Codes 15 and 31 (the face's moving edges) were no
+thing in the see-through pass (`ns-see.mjs`): its JavaScript rule and its graphics card rule disagreed for a part of the
+mirror body's head behind its lips or eyelids. They are the head's now in `seeThingOfGroup`, `nsLimbOf`, `nsThingOf` and
+`SEE_JOIN_MASKS` (joined to what the head joins).
+
+**The face's moving edges get the ink line (22 November).** The mirror body's face was in the outline pass as one group,
+so only its silhouette was inked, and its muscles are closed volumes with no open borders an outline could follow. The
+eyelids' part of the ring muscle round each eye (the eyelid margins) and the lips' ring muscle now have an outline code
+of their own (`OUTLINE_FACE_EDGE_GROUP` 15, 31 on the mirror body, in
+`ns-outline.mjs`; `FACE_EDGE_INK` in `ns-scene-three.mjs`), adjacent to no other group, so the raw look's one ink line
+(one near-black, one width) is drawn where they border the rest of the face, on the mirror body and on your head seen
+from outside. The outline follows the face's shapes: the processor's buffers of the upper face, and the jaw's skinned
+lips through their lift offsets (section 179's remark that the lips' outline would stay at rest is out of date). In
+pictures of the start view a smile tilts the dark lip line, a purse shrinks it to a small ring, closing the eyes changes
+the eye rings and opening the jaw stretches the lips' outline down; without the ink these read only by the lit muscle.
+No light, colour or shading of the face is changed, and nothing is added in the eye view (no lid or brow cue: the
+owner's no-blink rule). Update 65: the forehead muscle (the brow line) is out again. It is thin and the head's own parts
+poke through it in small spots; in a code of its own each spot became a strong line (the two codes do not join), so a
+check found the mirror body's forehead dotted dark in every frame, at rest too. In pictures of the start view the
+forehead is clean again and "Raise both eyebrows" reads by its light and the forehead's bulge.
+
+**Measured.** In the browser, at 1600 by 900, through the game's own checks interface with its fixed 60 frames a second
+clock (switched on, for the checks only, by rewriting the page's launcher on the way in; the served files are not
+changed). Each of the 142 movements is switched on at the start look by the game's own press event (what a tap on one of
+its muscles sends), with your body reset before each. Its travel is the largest distance on screen (CSS pixels) that
+any bone's centre of your body, and of the mirror body, moves from its place before the press, put on screen with two
+fixed cameras: the eye view at the start look ("start view") and the view over your shoulder at the start look
+("outside view"). A face movement moves the skin, not a bone: there the most-moved point of each face shape counts, on
+the mirror body's face (your own face is not drawn in the eye view and is turned away in the outside view). The part
+is sampled at its end four times in the 0.4 s of the contraction; 29 movements on the branch and 33 on update 63 (the
+faults, the stop strikes, the movements with little room, the neck, and one or two of every body part) were also
+followed frame by frame for 0.9 s and then to 2.1 s. Times and wrong-way angles come from the game's own activity run in
+Node at 60 frames a second. The machine was shared by seven jobs all evening, which is why the frames between the
+samples are not drawn (the bones' places do not depend on the drawing: checked on five movements, the same numbers to
+the decimal) and why a first sweep that switched each movement on by a look resting on its own spot was given up after
+19 movements on update 63. Those 19 agree with the press to a few pixels ("Straighten left knee" 32.8 / 29.9 px by a
+look, 32.8 / 30.3 by the press), except where the look itself is the fault: "Lift left big toe" moved 14.5 px from a look
+on its own spot, which is above the point where the toes' closing begins, and nothing when pressed at the start look.
+
+| what | update 63 | this branch |
+|---|---|---|
+| movements that move nothing from the start look, on either body, in either view | 12 | 0 |
+| movements thrown against their own way (largest angle) | 8 (knee 11.6, right arm in 12.5, right elbow 9.8, neck 7.1, thigh in 4.7 degrees) | 0 |
+| the part within 80 % of its largest displacement (median of 142) | 0.40 s | 0.70 s |
+| the area lit above half (every movement) | 0.33 s | 0.33 s |
+| under 12 px in the start view on both bodies, and no swing of the eye view | 58 | 50 |
+| under 12 px on the mirror body in the start view | 69 | 63 |
+| under 12 px in the outside view on both bodies | 78 | 73 |
+| rows the same to 0.3 px in all four columns | | 103 of 142 |
+
+The twelve that moved nothing, now (start view, you / mirror body, px): "Open left hand" 39.5 / 35.7; "Straighten left
+index / middle / ring / little finger" 38.2 / 28.5, 39.5 / 35.2, 38.6 / 35.7, 35.3 / 31.4; "Straighten left thumb at
+the knuckle" 22.8 / 9.2; "Move left thumb out from the palm" 18.8 / 9.4; "Turn left palm up" 30.9 / 16.1 (the twitch,
+38 degrees); "Lift left / right big toe" 14.3 / 15.0 and 14.4 / 14.9; "Lift left / right small toes" 7.1 / 11.5 and 7.2 /
+11.3. The wrong-way ones (your body, start view): "Straighten left knee" 32.8 px of bend before, 6.3 px of straightening
+now; "Straighten right elbow" 30.7 (a bend) → 10.6; "Swing right arm in" 113.9 (outward) → 43.3; "Swing left thigh in" and
+"Bend head forward" keep their own travel (56.1 px; 6.0 px on the mirror body, 18.2 px on your head from outside, and the
+eye view dips 15 degrees) without the throw the other way. The stop strikes, frame by frame: "Clench the jaw" 2.2 px on
+the mirror body and 4.3 on your jaw from outside (the jaw opens 11.7 degrees and shuts), "Lower the throat bone again"
+1.6, "Turn right palm up" 28.2 / 15.8, "Bring right fingers together" 7.6 / 4.1, as before. Every movement followed to
+2.1 s ended with every bone of both bodies exactly where it was (0.0 mm), nothing lit after the contraction's light, and
+the eye view back at the pointer (after "Tilt head back" 0.6 degrees of its swing were still easing out). No value was
+not a number. The table of all 142, before and after, is with the round's notes (`seemove-table.md`).
+
+Pictures, each opened: the start view at rest and 0.3 s after the press, update 63 beside this branch, cut round the
+moved part, for "Straighten left index finger", "Open left hand", "Lift left big toe", "Turn left palm up" (0.07 s),
+"Move left thumb out from the palm", "Straighten left knee" (0.083 s: the bend before, the straight knee now), "Raise
+both eyebrows", "Smile", "Purse the lips" and "Bend head forward"; the outside view for the knee, the index finger, the
+head and the eyebrows; and two full pictures of the look resting on a left-hand area.
+
+**Checked.** `tests/seemove.test.mjs`, sixteen tests: no movement of the map is thrown back past where its part started (and
+the knee, the right elbow and the right arm end exactly their own 6, 8 and 5 degrees away; without the rule the knee bends
+more than 10); moving a joint lights its own area and spot (116 directions); the look's closing or opening never cancels a
+hand movement (every one of the sixteen moves its joints at least 12 degrees at six looks, 5 for the fingers coming
+together; under the old rule the seven straightenings move 0), a movement at full drive ends at its own end whatever the
+look, half way it is half way, the grip wins, the limits hold; the fingers' and the thumb's ends and the hand-fit ranges
+agree; the left forearm's stop strike (0.2 to 0.26 of its turn, back on the stop, lit as every movement, none under
+reduced motion); the hold (every body movement near its end for at least 0.5 s, lit exactly as long as without the hold,
+dark through the hold and the return, back where it was; the game arm and the forearm's turn likewise; a press during the
+hold; reduced motion); the eye view through a neck movement's hold, at holds of 0.3 and 0.6 s (kept above nine tenths of
+its swing until the return, never past the pointer the other way, ends at 0; with the rule for a neck still in its
+movement taken out it fails at 0.6 s: 9.08 degrees past the pointer); no flash (for every movement of the map at 60
+frames a second: at most half its room in the first frame, no turning back before its end, no frame that jumps half its
+room, also after a further press; without the kick's cap the five movements with little room fail on both halves); the
+face shapes whole at their movements' ends; the toe rule; the left hand's tilt (wanted for the six hand and finger
+areas and the hand's movements while driven, not on their way back and not for the wrist's; eased, never a fifth of the
+way in one frame; for four hand movements from the activity, nearly gone when the finger is back, which fails with the
+update-64 rule; the side by the forearm's turn); the tip's placement off a box; the neck's bow (only what the frame hands
+in, none in the eye view, eased with no step of 3 degrees and no dip of 3 at the top, back to 0; the head the eye stands
+on is the same with and without it, which fails with the bow left in); the face's edge code (its own, adjacent to itself
+only, the forehead out); codes 15 and 31 in the hidden-part pass; the hold through a trunk movement and E (the old place
+with the moved camera moves the hand 30 mm and more with no turn of the look; the carry in the reference leaves it where
+it is, and a real turn carries it with its place in the picture kept; a place taken from the outside camera would throw
+it more than 100 mm; the rule at the end of each frame: nothing taken outside the eye view, taken once on the way back,
+kept while the trunk moves and the look is still, taken anew at rest; and the wiring of the rule into the hold read from
+the source). `tests/arm-jerk.test.mjs` (two tests restated for the hold), `tests/small-fixes.test.mjs` (the knee),
+`tests/face-move.test.mjs` and `tests/see.test.mjs` (code 15 is a group now) follow. Update 65: the package's file with
+the see, see-pass, outline-idle, face-move, head-hold, neck, limb-hold, limb-follow, limb-keys, look-taken, arm-jerk,
+small-fixes, hold-move, quiet, limb-pair-push and fix63 files, 136 tests, pass; the start check prints `"ok":true`;
+browser tests `startup`, `keyboard-aim` and `limb-controls` pass; both checks' hold sequences as above. The whole unit suite: 526 pass (517 on the lead, nine new), on 21 November; after the
+changes of 22 November only the package's own and the touched test files were run (the round's processor): the
+package's file with the outline, see, limb-hold, face-move, shader-safe, neck, head-hold, look-range, look-fixes,
+hud-layout and quiet files, all pass. The start check prints `"ok":true`. Browser tests `startup`,
+`keyboard-aim`, `punch-in` and `limb-controls` pass. Frame table (frames a second: still / look / up and down / limb turn),
+this branch and update 63 timed in turns inside one run, each alone on the shared processor: update 63 37.7, 41.3, 40.0
+for the look, 49.4, 37.5, 38.7 up and down, 54.6, 49.6, 45.7 in the limb turn; this branch 38.0, 40.2, 39.2, then 41.8,
+45.2, 39.0, then 50.4, 42.1, 43.8; still 56 to 60 on both. The look and up-and-down phases are the same; the limb turn
+averages 45 here against 50, inside a spread of 42 to 55 on both that follows the drawing's time, which nothing here
+touches. The simulation's own share of a frame is the same on both (1.1 to 1.4 ms still, 1.3 to 1.7 looking, 1.35 to 1.6 in
+the limb turn). Seven separate runs minutes apart varied more than that (limb turn 33 to 56 here, 52 to 55 there). The
+look rule for the left hand runs every frame while the look is off level; timed in Node it takes about 4 millionths of a
+second with a still look and 45 with a moving one, where the rule it replaced took about 75.
+
+**Not done, or not right.**
+- *The face, the jaw and the throat stay small at the start view.* All 36 of their movements travel 0.8 to 5.5 px on the
+  mirror body's face there (0 to 4.3 before), because that face is about 40 px tall and no zoom is allowed; your own
+  face is not drawn in the eye view. The ink on the brow line, the eyelids and the lips (22 November) makes the brows,
+  eyelids, mouth corners, lips and the jaw's opening readable by contrast; the nose's two movements, "Move jaw to the
+  side" (1.6 px) and the throat's two (the throat bone under the jaw, 0 to 4.2 px) still read only by the lit muscle,
+  and nothing honest makes them larger without zoom. The ink also gives the mirror body's eyes dark rims and its lips a
+  dark outline at rest. "Purse the lips" measures 0.8 px where it measured 2.5 (one point at the lips' middle); with the
+  ink it reads as the lips' outline shrinking.
+- *Fourteen more movements stay under 12 px in the start view on both bodies*: "Turn left / right sole outward" 3.3 and
+  3.4, "Turn left / right sole inward" 8.6 and 8.4, "Straighten left / right knee" 6.3 (6 degrees of room), "Straighten
+  left elbow" 8.8, "Straighten right elbow" 10.6 (8 degrees), "Bring left fingers together" 3.5 (5 degrees), "Bring right
+  fingers together" 7.6 (a stop strike), "Straighten right thumb" 7.1, "Curl left big toe" 11.8, "Lift left / right small
+  toes" 11.5 and 11.3. They are small parts far from the eye or movements with little room in the start posture; none
+  was made larger, since a larger end would not be a plausible one.
+- *"Bend head forward"*: the bow of the upper body makes it plain from outside only. In the eye view it is the view's
+  own dip (section 171) and the mirror body's legs, as in update 63, since the mirror body's head is above the top edge
+  during the hold; the view's dip shows the open top of your rib cage at the bottom of the picture. The other neck
+  movements were not given a bow: they already travel 41 to 51 px on the mirror body.
+- *During a trunk movement the chosen limb stays where it is in the room* (as before), so its place in the picture moves
+  with the camera for the moment of the movement and is back when the trunk is; the arm stretches and bends with the
+  trunk. A look in that time moves it by the look's own turn, worked out with a camera trial of the trunk as it was
+  (0.45 ms a call, measured by a check over 940 calls; about one a frame, only while the trunk is not where it was and
+  the look moves; none on other frames). The keys during a trunk movement move the hand along the arm's line as the
+  moving trunk places it, so with a look turned meanwhile it ends 17 to 72 mm from the same inputs with no movement
+  (12.7 mm for the right arm with D); nothing jumps. An arm chosen during a trunk movement is not moved by the look until
+  the trunk is at rest, so a look turned in that time leaves it where it was (82.2 mm from the same sequence with no
+  movement in the check's case); the keys move it at once (the right arm a frame at a time, riding with your body).
+- *Keys used on the right arm during a trunk movement are undone when the arm is let go before the trunk is back*, or
+  when it is chosen again while it goes back: its way back goes to the places from before the movement (with D held
+  0.15 s, 88.4 mm from the same inputs with no movement in a check). Carrying the keys' change over would need the
+  change the same keys make at rest, which the bent trunk does not give; not done.
+- *Your right leg is pushed 87 mm and stays when the right arm is chosen and the trunk bends* (an older fault of the limb
+  push: the view's hold re-solving the arm for the trunk counts as the arm moving, and its upper arm pushes the thigh).
+  It is in package LIMBS2's page (round 29, item 4), so it was left to it here.
+- *A look turned outside the eye view moves no limb* (as before): back in the eye view the limb is where you left it,
+  so its place in the picture is the one the turned look gives it.
+- *Your own left hand's tilt* (22 November) was judged on the start view. At the look on a hand area the arm, the limb
+  the look carries, stands wherever the look has brought it: in runs where the look settled for 0.8 s it was raised
+  across the right half of the picture with the hand at the top right corner, partly beyond the frame or out of view,
+  and there the tilt cannot help; in runs where it settled for 0.25 s it was on the left near the area. The tip's
+  keeping off the hand is tested on its own (tipSides) and was not seen in a picture, since in my runs the hand was not
+  under the tip. The tilt still bends the wrist visibly during every hand movement (15 degrees, while the movement is
+  driven), which a player might read as a wrist movement; the wrist's area is not lit.
+- *The hold is unlit.* For 0.3 s the part stands at its end with no light on its area or muscles. Lengthening the
+  light was not this package's to do.
+- *Under reduced motion* the seven stop-strike movements do not move at all (as before for six; "Turn left palm up" is
+  the seventh), and a movement with little room goes its few degrees without a kick.
+- "Open left hand" moves nothing when the look is 60 degrees or more above level, where the look has already opened the
+  hand fully. No strip area is looked at from there in the start place.
+- *How it was measured has limits.* The movements were switched on by the press event at the start look, not by a look
+  resting on each spot (only 19 were, on update 63). The largest travel at 100 ms samples misses what happens between
+  them for the 113 movements not followed frame by frame. Three movements of the right shoulder carry the arm past the
+  eye, where the travel on screen has no meaning ("1000+" in the table). "Both ways" (moving a part lights its own area
+  and spot) was checked on the pure index only (`jointAreaIndex`: 116 joint directions light their own movement, the
+  twelve of the whole hand's open and close light the finger's own), not by keys and drags in the browser.
+
+## 190. The background is an abyss: a deep black, faintly lit round the brain and the bodies (21 November)
+
+The owner, Message 208, after looking at Body update 63: "Background should still be more of an abyss." (Its second
+sentence, the edge glow of the strip's black blocks, is section 191.) Before it, Message 206: "let's make the background
+more of a black abyss, but still with a gradient"; Message 135: "far more black of a background, but with a little bit
+of a gradient. So not exactly pitch black, with the gradient changing as you go further or closer away"; Message 89:
+"perhaps something should be done about the endless black space".
+
+Where it stood (Body update 63, measured on the screen at 1600 by 900; the numbers are RGB steps of 255): behind
+everything was the room of 18 November, a dark operating theatre out of focus, since section 176 with a black of 4, 4, 5
+and a pool of light on its floor. The start view's corners measured 10 to 21 and the background beside the brain rose
+from 14 at the picture's edge to 30 at the brain's outline: a dark grey haze, not a black. A look straight down showed
+one flat grey of 13 to 20, the floor's pool: a floor under you. A look straight up was one flat 4, 4, 5. The page's very
+first paint, before the loading picture, was a grey of 15 to 33 with rings in it.
+
+**No room any more.** `ROOM.abyss` (`ns-room.mjs`), on by default: no floor, pool of light, wall, horizon, lamps or
+shadows are drawn. The backdrop is one black, `ROOM.abyss.black` (RGB 2, 2, 2; the scene's clear colour under it follows,
+`roomClearHex`), and the only light in it is the dark round the things, faintly lit. Nothing in it has an edge, a shape
+or a place of its own. `ROOM.abyss.on` false brings the room back exactly as it was: its black (`RAW_LOOK.room`), its
+pool and its shader are not changed.
+
+**A glow close round each thing.** `ROOM.abyss.glow`: behind the brain, the mirror body and your own body seen from
+outside, the dark is lit by the old halo's rule, without its rim and fainter: brightest behind the thing's middle, falling
+off through its outline into the black over about one of its sizes (brain 0.008 of white in linear light with a spread of
+1.1 of its size; a body 0.0025 with a spread of 1). It is measured in the thing's own size, so in the picture it grows as
+the thing comes nearer and shrinks as it goes away (Message 135). Its tint is a cool grey (0.86, 0.93, 1).
+
+**A wide, faint light round the brain.** `ROOM.abyss.far`: with the glow alone (the variant the first helper left,
+"a2"), every look past the things was one flat, dead black: straight up 2 everywhere, straight down 3, a look to the
+left 3 over two thirds of the picture, from outside 2 down both edges. So the brain, the largest thing, also lights the
+whole side of the dark it stands on: 0.003 x the brain's size in the view (its radius over its distance, 0.45 at the
+start, at most 1) x (1 + cos a) / 2, where a is the angle between the line of sight and the line to the brain's middle.
+That is the evenest falloff there is (it has no edge and no shape anywhere): full toward the brain, half at right angles
+to it, nothing straight away from it. A look that shows no thing is now lighter toward the side the brain is on, and the
+brain coming nearer lights more of the dark.
+
+**The body you are in lights nothing.** The eye view's camera stands a little behind your eyes, 1.05 to 1.56 of your
+body's radius from its middle, and the halo's rule ("none from inside a thing", from 0.7 to 1.6 of its size) let most of
+your own body's glow through there: in a2 half of the light in the start view's corners was a broad lift from the body
+you sit in. A glow row can now say how near the view point may come (`[light, spread, core, from, full]`): your own
+body's starts at 1.4 and is full from 2.1, so the eye view has none of it and the view from outside (2.2 to 2.5) all of
+it. The brain's and the mirror body's keep 0.7 and 1.6.
+
+**The loading picture and the page are the same abyss.** The loading picture (`ns-assembly-core.mjs`) drew the room as
+the game's first picture sees it. It now draws the abyss as its OWN viewer sees it, lit round its own brain and its two
+bodies (`ASSEMBLY.abyss`: their sizes as balls). (The first helper's draft hung the glow of the game's first brain in
+the loading picture: a grey haze of 17 to 20 across the middle with no thing in it, lighter than the room it replaced.)
+The page's very first paint (`.ns-app` in `assembly.css`) is the abyss's tones (11 in the middle to 2 at the edges)
+instead of the old room's greys, and the loading canvas before its first frame shows the same (it was one flat #05070b):
+the first paint, the canvas and the loading picture follow each other without a grey flash or a flat step.
+
+**What the screen shows now** (quality "full", 1600 by 900; update 63 in brackets; the offline arithmetic, `roomLight`,
+agrees with the game within one step):
+- the start view: corners 5 to 7 (10 to 21); from the left edge to the brain's outline, half way up, 6 -> 14 (14 -> 30),
+  rising all the way; low at the left 5 -> 9 (19 -> 27);
+- a look straight up: 2 to 3 at the upper edge, 4 to 5 at the lower (one flat 4);
+- a look straight down: 7 to 9 at the upper edge, 4 at the lower (one flat grey of 13 to 20);
+- a look 62 degrees to the left: 3 to 4 at the left edge, 16 by the brain; 100 degrees to the left and 15 up: 2 to 5;
+- the mirror body held near (1.3 m from the camera, the look on it): the corners 7 to 10, and from the left edge to the
+  brain's outline 9 -> 18; pushed away (4.4 m), the same look: 5 to 6, and 6 -> 15: a near body lights more of the dark;
+- the brain carried away (17 m from the camera): its glow shrinks with it, 10 beside it and 3 in the corners; carried
+  nearer (6.0 m): 16 beside it, 5 at the far side of the picture; turned about 60 degrees by a drag: the same on both
+  of its sides (6 -> 15 on the left, 6 -> 14 on the right);
+- from outside (E): the edges 5 (6 to 10); looking down from outside 4 to 5 (8 to 10, and a grey patch of 27 to 32
+  under you: the floor);
+- the loading picture: corners 2 to 3 (5 to 15), 10 to 12 between the bodies, 13 by the brain;
+- at the hand-over the far corners go from 2 to 3 (loading picture) to 5 to 7 (the game): the game's brain is much
+  larger and nearer. In update 63 they went from 5 to 12.
+No banding: the backdrop's dither (plus or minus 0.75 of a step) is unchanged, the black stands above it (1.65 steps), and
+the mean of boxes of 40 pixels along the slow gradients rises evenly at every quality level (a look straight up, from
+top to bottom: 2.5, 2.8, 3.0, 3.2, 3.5, 3.8 in red).
+
+**The dark muscles and the outlines against it.** The dark shade floor of section 187 was set to about twice the room's
+light. On the raised right arm in shadow (the path of that section's fault, at twice the pixels) the darkest twentieth
+of the muscle pixels measures 55, 6, 13 on both builds: 1.7 times the light of the room's background (median 16, 18, 20)
+and 6 times the abyss's (4, 4, 5). So the dark muscles stand further off the background than before, and the floor needs
+no change for it (`RAW_LOOK.muscleFloor` and section 188's two constants are not touched). The ink line of a silhouette
+(drawn 14, 9, 10) was darker than the room behind it; against the abyss (10, 10, 11 beside that arm, 3 to 7 far from the
+things) it is about as dark as the background, so there a body's edge is the edge of its colour, as on any black. The
+lines where one limb lies over another, and the brain's, are as before.
+
+**Cost.** The backdrop is drawn as before: one triangle at the far depth, shaded only where nothing covers it; no new
+pass and no texture; one more uniform (the three things' sizes). Its shader is the room's three glow rows plus one row
+for the wide light (a length, a dot product and a minimum), without the floor, the wall, the lamps, the tile lines, the
+shadows and the gloss: in the text 3 exponentials against 13, no sine, arc tangent, power or screen derivative, no loop
+(1 815 characters against 4 347). The backdrop alone, drawn over the whole of a 1600 by 900 picture with nothing in
+front of it and timed by the graphics card's own timer (300 draws a run, six runs each in turn, the things where the
+start view has them): the abyss 0.044 ms a draw, the room 0.058 ms (medians; every run of the abyss 0.042 to 0.045,
+of the room 0.056 to 0.059). In the game the brain and the bodies cover most of it.
+Frame table at 1600 by 900 (frames a second, still / looking round / up and down / the limb turn; each run alone on the
+test slot, in turn with the lead's server, in this order): this branch 43.9 / 14.1 / 28.7 / 19.2, the lead 60.1 / 27.0 /
+31.7 / 28.1; this branch 57.5 / 38.3 / 46.5 / 53.4, the lead 57.0 / 31.5 / 40.0 / 47.1; this branch 60.0 / 38.3 / 50.3 /
+53.5, the lead 59.1 / 26.0 / 34.9 / 32.1. The first run of this branch was slow in every part of the frame, also in
+those this change cannot reach (in the still view the simulation took 1.9 ms against 1.2 to 1.4 in the other runs, the
+HUD 0.74 against 0.21 to 0.30, the draw call 11.1 against 5.1 to 6.3): the one processor was busy with something else.
+In the second and the third pair this branch is the faster in all four cases. The same build varies widely from run to
+run (the lead's limb turn 28.1, 47.1 and 32.1), so the table shows no cost and cannot show the small gain the card's
+timer measures.
+
+**Checked.** Ten new unit tests (`tests/abyss.test.mjs`: no place in any direction, the start view's corners and its
+rise to the brain, no flat black looking up, down, aside and from outside, the wide light's even slope and no edge
+anywhere (under a fifth of a screen step per quarter degree), nearer and further, your own body from the eyes and from
+outside, the shader's numbers and what it no longer holds, the loading picture and the page's two backgrounds); the
+room's own tests now read the room's rule (`ROOM` with the abyss off) and pass unchanged. `?case=boot` ok. Looked at in
+pictures at quality "full" and at the lowest quality (drawn "lite-0.6": the same numbers within one step, no band) and
+under reduced motion (the same picture; the light is steady in every mode): the start view, looks straight up and down
+and to the left, the mirror body held near and pushed away, the brain carried and turned, the view from outside level,
+up, down and to the left, the raised right arm in shadow at twice the pixels, the loading picture, the page's first
+paints and the hand-over; the start view, the looks up and down, the view from outside, the arm and the loading
+picture beside the same view of update 63. The whole unit suite, run alone: 527 tests pass (517 and these ten). Browser
+tests: `browser-startup` passes; `browser-keyboard-aim`, `browser-play-settings` (it changes the picture quality) and
+`browser-punch-in` under reduced motion pass, each run alone. (Earlier in the evening, with six other jobs on the one
+processor, those three failed at their own time limit for the game to start, on this branch and on the unchanged lead
+alike, and one real-time test of the pack loader failed on both.)
+
+**Not done, or not right.**
+- Away from the things the gradient is there in numbers and hardly to the eye: a look straight up runs from 2 to 3 at
+  the top to 4 to 5 at the bottom, a look far to the left from 2 to 5. On most screens that is a black, a little less
+  black toward the brain. A stronger wide light shows more and greys the start view: `ROOM.abyss.far.light` 0.005
+  gives 3 to 6 looking up and 8 to 9 in the start view's corners, 0.007 gives 3 to 7 and 10 to 12 (worked out with
+  `roomLight`, not looked at in the game). 0.003 is a choice for the black, and the owner may want the other.
+- By the brain's outline the start view now measures 14 where the room measured 30. If the gradient should show more
+  there, raise the brain's glow (`ROOM.abyss.glow.brain`, its first number) before the wide light.
+- A body held nearer than about 1.4 m loses its glow again (the rule "none from inside a thing" starts at 1.6 of its
+  radius and ends at 0.7), so "nearer lights more" holds for the mirror body from far away down to about there. From
+  outside, looking up, the camera comes to 1.7 radii of your own body and its glow is at about a third.
+- The loading picture's far corners are the bare black (2 to 3) and the game's first picture has 5 to 7 there: the two
+  cross over in the 0.8 s fade. The glows in the loading picture are balls round its brain and bodies, not their shapes.
+- The page keeps the old blue-black (#05070b, `--ns-bg`) as the colour under everything and in its cards and text
+  shadows; it is not seen behind the picture. The page's own gradient (the first paint, and the loading canvas before
+  its first frame) is plain CSS without the game's dither: for that moment its nine steps from 11 to 2 are rings.
+- That the shader and `roomLight` agree is known from the pictures (within one step at every point measured), not from a
+  test: the unit tests check the arithmetic in JavaScript and the numbers in the shader's text.
+- All of it was judged on screenshots of one machine. How deep a black of 2 to 7 looks depends on the screen and the
+  room it stands in.
+
+## 191. A glow that is there on every machine, in each area's own colour, and never too much; the black blocks' edge glow (21 November)
+
+The owner, 21 November, evening: "The glow needs to be fixed, and the glow for the black parts of the motor strip also
+need to be fixed. Right now, there's essentially no glow, and it's too much before as well." Message 208: "The black
+motor parts should have some edge glow." Still standing: Message 2 ("an optogenetic glow activation but with different
+colors/shades for each are with the same corresponding color/shade across all 3 items"), Message 159 ("let's make brain
+activation almost bright white"), Message 177 ("have the whole brain light up slightly, faintly, with whatever color
+area is being picked"), Message 203 ("as bright as possible"), and the three times it was too much (Message 133, the
+blinking; Message 170, "way too bright"; Message 198, "obstructing the view").
+
+What was wrong, measured before anything was changed. The only thing that spread light beyond a lit block was the
+full-screen bloom pass, and that pass is the first thing the automatic picture quality gives up (`HDR_BLOOM.offFromLevel`
+1, section 144): on a large or slow display a lit block was a flat white patch for 0.4 s, its own colour gone
+(`AREA_LOOK.areaWhite` 1), nothing round it. Between activations the area under the look had only a weak light
+multiplied by its own colour: on an area tried before, darker than its untried neighbours; on a black block, nothing.
+The whole-brain tint lived for the 0.4 s of a contraction. A black block showed black, or full white for a second,
+again at every small look movement.
+
+One rule for the player now: the block you look at glows softly in its own colour; when it switches on it flares
+white-hot at its core with a clear halo of its own colour round it for the 0.4 s of the contraction; then the soft glow
+of the look remains. The black blocks have a quiet glowing edge, which brightens under the look. The same at every
+picture quality level.
+
+**The halo is worked out in the materials that are drawn anyway (`AREA_HALO`, new module `scene/src/ns-area-halo.mjs`).**
+A lit or looked-at block lights the surface round it in its own glow colour: the neighbouring blocks and the brain
+tissue beside the strip, strongest at the block's edge, at a quarter half way out and gone at the reach. The cortex
+shader and the area shader both ask one small function, `nsHaloAt`, how much of each halo lands on the fragment's place
+on the brain (its rest position in the brain's own millimetres), so the pool lies ON the surfaces: it is behind the
+bodies in front of them, it follows the folds, it is the same at every quality level and it needs no extra pass and no
+`HDR_BLOOM`. While no halo is on, the shaders skip it (one uniform, `nsHaloN`); at most six halos at once (`slots`: the
+look, a lit area, both hands' and both feet's areas of a Space grip).
+The block's shape (`haloShape`): a block is a band across the gyrus, over the crown and down both banks, often bent
+like a V. Its shape for the halo is a line of five points through the middle of that band (the end of one bank, a
+shoulder of the crown, the crown's middle, the other shoulder, the end of the other bank) with the radius of half the
+block's width, so the halo starts at the block's own edges all the way round. The points come from the strip's own
+triangles, sampled by the same owner runs the area shader draws with (`blockSamplePoints`); the width is the block's
+run of the strip coordinate over how fast that coordinate rises on the crown, held to the strip's own scale
+(`haloFitWidths`: near the midline, where the strip turns over the brain's edge, the plain measure gave an ankle block
+16 mm and a toes block 1 mm). All 54 blocks come out as bands 1.9 to 10.7 mm wide. The reach is two block widths, never
+under 9 mm nor over 10 (`reachWidths`, `reachMinMm`, `reachMaxMm`; with 16 the look's pool of the wide neck block lay
+over four of the narrow finger blocks beside it and turned them from teal to lilac for as long as the look rested
+there): the eye takes about one block width for the pool.
+Strengths: a contraction 1 (`lit`, times the area's own glow strength, so the halo rises and ends with the area's light
+and nothing of it stays on the way back); the look 0.8 (`look`; 0.4 at first, then 0.55: two independent checks
+found the pool round a looked-at block only next to its edge, +1 to +8 of 255 in the band round it, and the lead asked
+for a glow seen at a glance at normal size); a Space grip's areas 0.4 (`held`); a held posture's calm light (the neck
+while the head is turned) none.
+On the tissue the pool takes the halo's colour and keeps the tissue's own light and shade (`tissue.mix` 0.6 at the
+block's edge, `gain` 1.12, `lift` 0.12, plus `add` 0.3 of added light so the pool also shows in the shade of a fold;
+0.2 before the second check),
+cut at display white. (At first `mix` 0.85 and `add` 0.1: the check saw the pool in a shadowed fold beside the gold
+hand block as a dull olive stain, the tissue's colour replaced by the glow's but its darkness kept.) The neighbouring
+blocks take the LIT part of a halo whole, as added light (`strip.add` 0.45), and of the look's part only a narrow band
+past the block's edge (`strip.look` 0.6 within `strip.lookReachMm` 1.5 mm): under a look they keep their own colour
+beyond a soft fringe over the gap. (At first they took the look's part at the full reach: with the look resting on the
+wide neck block the check saw the cyan thumb and finger blocks beside it turn violet for as long as the look stayed;
+then none of it, and with the look at 0.8 a block among blocks, the elbow, showed no glow round it at all, +1 of 255.) The gaps between blocks and the
+black blocks take none.
+Tried and dropped: the halo as more slots of the living brain's tissue bloom (`BRAIN_LIVE.bloom`, section 89): its
+slots carry the swell of the vertices, a disc, and fade over 0.8 s, so the tissue stayed tinted long after the
+contraction (a browser hunt of update 63 saw it "turn lilac and fade only slowly"). The bloom keeps its swell, its
+dimple, its rosy flush and its ring; its own spill of the key's hue and its light above white (seen only where the
+bloom pass runs) give way to the halo. One capsule on the crown: the visible band is the crown and the banks (the brain
+surface is cut away over the strip), so the pool sat on the crown only. The along-strip direction from regressing
+position on the strip coordinate: wrong for a bent block, widths from 2 to 39 mm.
+
+**The lit block keeps its white-hot core and shows its colour (`AREA_LIT`).** Its middle is white (Messages 159, 203:
+`areaWhite` stays 1). Toward its two borders along the strip (5 CSS pixels in, at most a third of the block's width
+from each side; the outer two fifths of that the colour whole, `rimFull`, the rest running into the white) and down
+its banks (from 1.5 to 5 mm of relief depth) its light is the area's own vivid colour at 1.15
+times display white on its brightest channel, the colour whole; its fresnel rim is that colour too (it was white x 2).
+The keys' "white-hot frame" added twice the emission's own colour on top (`BRAIN_KEYS.frameGain` 2): past white per
+channel, where the screen cuts each channel off, so an azure key's frame showed cyan-white and an orange key's yellow.
+`frameGain` is 0: the rim is the frame.
+`AREA_LOOK.areaGain` 3 -> 1.6. On the screen the white core is white either way (anything at or above 1 is cut at
+white), so this changes nothing where the bloom pass does not run; where it runs, light above white is what it
+spreads, and at 3 (7.5 at the flash's peak) that was a white halo over the neighbours on the full quality level only
+(sections 101 and 132 each cut the gain, from 2.4 and from 1.8, because the lit key's bloom hid its shape and its
+neighbours). The halo is now the materials' at every level, and the bloom adds a little softness to the white core.
+
+**The look's own soft glow (`LOOK_GLOW`).** While the look rests on an area, lit or not, tried before or not, the area
+shows its full colour and its full self-light (`unvisit`: the "visited" dimming of section 126 is lifted for as long as
+the look is on it and comes back when the look leaves; the marking itself is untouched) and throws the halo at the
+look's strength, steadily: eased in and out over 0.15 s (`AREA_HALO.easeS`), no pulse, at once under
+`prefers-reduced-motion`. It is a pointer light, not activity: it starts no movement, no beam and no muscle light.
+
+**The whole-brain tint follows the look (`BRAIN_PICK_TINT.look`, `pickTintWant`).** Message 177's faint cast followed
+only the strongest link that draws a line, and since the look's own link went (section 184) that was the 0.4 s of a
+contraction, hardly eased in before it eased out. It now takes the colour of the area the look rests on for as long as
+the look stays (a lit area during its contraction first, as before), eased over 0.18 s as before. How much is unchanged:
+the gain of section 187 (`BRAIN_PICK_LOOK`). A black block has no colour of the body's code and tints nothing.
+
+**The black blocks (`ABYSS_EDGE`, `areaFlares`).** At rest each of the six in-between blocks carries a soft glow along
+the INSIDE of its borders: brightest at the inner edge of its black border, gone 9 CSS pixels in (a linear falloff,
+`falloffPower` 1), constant in screen pixels, in one cool light blue on both halves of the brain (sRGB 120, 160, 235
+at 0.9 of its strength): it reads as light. Its borders are the two ends of its run along the strip
+(exact, from the strip coordinate, as the gap between blocks is). At most 0.38 of the block's width from each side, so
+a narrow block keeps a black middle. Under the look the glow is 13 pixels deep at full strength, and the block's
+frame is drawn in the same light blue, 1.4 CSS pixels wide (`framePx`), in place of the white hover frame (2.8 px);
+the block throws the look's halo in that colour at 0.6 of the look's strength, on the tissue only. (At first: sRGB
+150, 170, 205 at half strength, 4 pixels in, and also a glow along the gyrus's outline as seen, where the surface
+turns from the eye. The check saw a thin steel-grey line with a streak along the lower bank, and under the look a hard
+white outline; the owner, Message 146: "much darker blacks instead of ugly grays". The outline term is off, `face` 0.
+Then 0.6 of the colour, 6 pixels, falloff (1 - t)^2: a second check still saw at rest a thin dark-blue line, its peak
+66, 89, 133, darker than the pink beside it, because the brightest part of the squared falloff lay under the ink and
+the gap's cover.)
+A black block moves nothing, so it is never drawn switched on (`shownActivity`): no white fill, no one-second flash,
+no relight at each small look movement. The activity itself (`ns-actions.mjs`) is not changed: the area is still
+marked as tried. Its card says what it shows now: "Nothing: its edge glows brighter while you look at it, and it
+gets marked." (it said "it only lights up"; the three longer texts the same). The gaps between blocks stay matte black.
+The edge glow is added after the keys' press and focus rules: it never reacts to another area's activity, and nothing
+in what is picked changed. The unfinished draft of this morning (`ABYSS_EDGE` with 40 samples of the outline pass's ink
+picture per fragment and a distance field per block) was read and not used: the area shader already has both
+distances, and the draft was never run.
+
+**The tissue ring is calmer (`BRAIN_LIVE.bloom`).** The ring of a movement being switched on and the bloom now take
+the area's own glow colour (they took the area's emission, near white while lit). In that colour the old ring was a
+wide wave over 41 mm of cortex that ran on for 0.4 s after the contraction had ended: it now ends with the contraction
+(`pulseS` 0.8 -> 0.45), runs half as far (`pulseTo` 2.4 -> 1.3, 22 mm), takes a third of the tissue's colour (`pulse`
+0.75 -> 0.25; at 0.4 it was still a pale-blue band right across the cortex beside a lit elbow area) and carries no
+light above white (`pulseGlow` 0.3 -> 0).
+
+**No dark dip at the end of an activation (`KEY_PRESS`, `keyPressed`).** The keys' press of section 83 (the key
+darkens and a dark frame closes in for 0.2 s at each new activation count) came, for a look, 0.5 s after the look
+started, when its 0.4 s of light had just ended: between the lit block and the look's glow it was a dark dip of about
+0.1 s (the check measured the block's middle 221 lit, 99, then 170 under the look; 254, 74, 139 on update 63), one
+blink per activation (the owner, Message 133). The key is now pressed by the count's SOURCE (`KEY_PRESS.bySource`):
+ns-app hands `updateRegions` the step's activation marks (`ns-actions` `stepGated`), and a key is pressed when its
+count rose and a click was marked on its area in the same step (a click, a tap on a muscle, a number key), never for
+the look's count. So the light falls from lit to the look's glow without a dip, on every area. (The first version told
+them apart by time, no press for a count within 0.3 s after the light ended; a second check found it lost the press of
+a click late in its frame 0.1 to 0.3 s after the light, 4 of 20 frame phases at 60 frames a second and 11 of 20 at
+144, and still pressed at the look's count on the tongue and the black blocks, which never light: a 5-frame dip half a
+second into the look. The time rule stays for an app that hands no marks.)
+
+**The tongue areas do not flare (`NO_FLARE.noMovement` true).** The two tongue areas are coloured but move nothing:
+they lit for about a second on a click (violet with a white core) and could relight at small look movements. Like the
+black blocks they are now never drawn switched on: under the look they glow in their own colour like any block, a
+click presses the key and gives a soft glow (below), and they keep their mark. Their card now says "No tongue movement or muscle colour change. It
+glows while you look at it and keeps a mark once tried." (it said "This area can still light up"), and the three
+longer texts say "marks" for "can light and mark". `tests/browser-punch-in.mjs` read the tongue's light rising on a
+click; it now reads that it does not rise (restated with the lead's agreement).
+
+**A click on an area that does not flare glows softly (`CLICK_GLOW`, `clickGlow`).** With no flare, a click on the
+tongue or a black block showed only the key's press (the second check: the block's middle 185, then 137 for about six
+frames); a player could think it did not register. A click now gives the area's halo a soft rise and fall in the
+area's own colour (a black block: its edge glow's light blue) for the 0.4 s a contraction lasts, at half a
+contraction's strength (`lit` 0.5, sin over the 0.4 s, steady under reduced motion): no white core, no flare, and only
+a click starts it (the activity's click mark), so a small look movement relights nothing. `tests/browser-punch-in.mjs`
+now also reads that the click on the tongue pressed its key once.
+
+**The colour key says "Black in-between areas"** (`ns-text.mjs`; it said "Grey" since update 61).
+
+**Muscles: looked at, not changed.** At the cheapest quality level (no bloom pass) a lit muscle of the mirror body
+reads plainly in its area's colour: the elbow bender is a pale azure among rose-red muscles for the lit time and rose
+again after it. Nothing was changed: no halo shell (`MUSCLE_HALO` stays off, section 172), no see-through muscle,
+nothing lit on the way back.
+
+**Measured.** Pictures at 1600 by 900 with the same look path on the lead (`e489c67`) and on this branch, so
+the looked-at block lies on the same pixels in both; the page's clock was slowed twelve times while a contact sheet of
+every drawn frame was recorded, so the 0.4 s of a contraction is seen frame by frame on a machine that draws a few
+frames a second. The block's mask is the lead's lit block (white), used on both builds; "ring" is the pixels 3 to 12
+pixels outside it. Colours are sRGB 0..255 means. "Low" is the cheapest quality level (no bloom pass), "high" the full
+level with the bloom pass.
+
+| what | quality | before | now |
+|---|---|---|---|
+| Left elbow area (azure): the ring while lit | low | 73, 87, 120 | 68, 118, 166 |
+| | high | 72, 89, 125 | 57, 105, 153 |
+| the ring under the look alone, the area tried before | low | 57, 74, 115 | 70, 108, 156 |
+| | high | 57, 72, 116 | 58, 87, 133 |
+| the block under the look, tried before | low | 105, 162, 204 | 115, 194, 235 |
+| | high | 100, 149, 181 | 110, 182, 210 |
+| the block while lit (the region that was all white) | low | 253, 253, 254 | 183, 229, 250 |
+| | high | 255, 255, 255 | 190, 237, 251 |
+| the cortex far from the block, under the look (the tint) | low | 134, 97, 99 | 136, 101, 105 |
+| | high | 135, 97, 99 | 135, 100, 105 |
+| Right elbow area (orange): the ring while lit | low | 126, 80, 49 | 170, 101, 48 |
+| | high | 148, 97, 70 | 169, 103, 53 |
+| the ring under the look alone, tried before | low | 131, 84, 50 | 152, 95, 51 |
+| | high | 135, 80, 51 | 148, 93, 53 |
+| the block under the look, tried before | low | 211, 162, 129 | 239, 196, 148 |
+| | high | 199, 155, 124 | 224, 193, 146 |
+| the cortex far from the block, under the look (the tint) | low | 178, 133, 134 | 185, 134, 131 |
+| | high | 178, 133, 133 | 187, 135, 132 |
+| A black block at rest: its edge band (4 px) / its middle / the ring outside it | low | 6, 5, 6 / 4, 4, 5 / 154, 95, 133 | 36, 39, 49 / 4, 5, 5 / 153, 95, 134 |
+| | high | 4, 3, 4 / 4, 4, 5 / 155, 95, 134 | 30, 33, 41 / 5, 5, 6 / 156, 96, 136 |
+| under the look: the band inside the white frame / its middle | low | 8, 8, 9 / 7, 7, 8 | 34, 38, 47 / 7, 7, 8 |
+| | high | 8, 7, 8 / 7, 7, 8 | 47, 54, 65 / 7, 7, 8 |
+| under the look: the ring outside it | low | 114, 85, 97 | 125, 104, 117 |
+
+Read: before, the bloom pass added almost nothing round a lit block even on the full level (the azure ring 73, 87, 120
+without it and 72, 89, 125 with it): the lit block was a white patch at every level. Now the ring takes the area's own
+colour by 30 to 45 of 255 at both levels, and the two levels agree within about 13. Under the look the area tried
+before is as bright as an untried one (it was darker than its neighbours), with a pool of 20 to 40 round it. The tint
+moves the cortex far from the block by 3 to 9 of 255 toward the area's colour (azure: green +3, blue +6; orange: red
++7 to +9, blue -1 to -3). The black block's middle stays black; before, it turned white for a second under the look
+(block mean 254, 254, 254 in the first second), now never. Frame times of the sheets and the pictures are in the
+work folder of the round (not in the repository).
+
+After the independent check (the changes above), at the game's real speed, the same look path as before (the
+lead / this branch before the check / now; "ring" as above, "annulus" the band 28 to 70 px round the crosshair):
+
+| what | quality | lead | before the check | now |
+|---|---|---|---|---|
+| Left elbow under the look: the ring | full | 57, 73, 116 | 58, 87, 134 | 70, 95, 145 |
+| | low | 58, 75, 116 | 71, 109, 157 | 70, 98, 146 |
+| the annulus 28 to 70 px (mostly the neighbouring blocks) | full | 64, 99, 117 | 66, 104, 124 | 67, 104, 123 |
+| the block's middle (brightest channel), frame by frame from lit to the look's glow | low | 254, 74, 139 (the check's patch) | not taken | 231, 227, 215, 186, 188, 189, 190 |
+| | full | | 225, 223, 207, 193, 108, 108 | 226, 226, 210, 182, 184, ... (rising by 1 a frame) ..., 193 |
+| A black block in the start view: its edge band (4 px) / middle | full | 4, 3, 4 / 4, 4, 5 | 32, 34, 42 / 4, 5, 5 | 27, 36, 56 / 5, 6, 8 |
+| The middle black block under the look: edge band / middle | low | 8, 8, 9 / 7, 7, 8 | 34, 38, 47 / 7, 7, 8 | 39, 52, 78 / 8, 8, 10 |
+
+With the look on the neck the cyan thumb and finger blocks beside it keep their colour (the pool is on the tissue
+only); in a shadowed fold beside the lit gold hand block the pool is a warm gold light; a click on the tongue lights
+nothing but its key's press. The annulus round a looked-at block hardly changes now that the neighbouring blocks take
+none of the look: the look's pool shows in the ring next to the block and on the tissue.
+
+After the second check, real speed, cheapest level, the same look path (the lead / after the first check / now):
+
+| what | lead | after the first check | now |
+|---|---|---|---|
+| Left elbow under the look: the ring / the annulus 28 to 70 px | 58, 75, 116 / 64, 99, 117 | 70, 98, 146 / 67, 102, 121 | 71, 100, 149 / 68, 104, 123 |
+| Right elbow under the look: the ring / the annulus | 132, 85, 51 / 150, 125, 75 | 153, 96, 52 / 159, 129, 76 | 167, 114, 69 / 162, 135, 83 |
+| A black block in the start view: edge band / middle | 4, 3, 4 / 4, 4, 5 | 35, 41, 62 / 5, 6, 8 | 50, 62, 94 / 19, 25, 36 |
+| The middle black block under the look: edge band / middle | 8, 8, 9 / 7, 7, 8 | 39, 52, 78 / 8, 8, 10 | 64, 85, 126 / 24, 31, 45 |
+| The tissue beside the tongue after a click (brightest channel) | white for a second | 106, flat | 106, rising to 152 at 0.2 s, back to 106 by 0.4 s |
+| The left elbow's middle from lit to the look's glow | 254, 74, 139 | 225, 223, 207, 193, 108 (full level) | 231, 230, 225, 197, 198, ... 201 |
+
+**Checked.** 529 unit tests pass (twelve new, `tests/area-halo.test.mjs`: the strengths, the black blocks' states, the
+block's shape, the halo's state, the lit and the looked-at block's colours, the tint that follows the look, the shader
+text composed on the real area shader). `?case=boot` ok. Browser tests, each alone on the processor: `browser-startup`,
+`browser-keyboard-aim` and `browser-punch-in` pass (a first try of all three, with the load at 17, ended at their own
+60 s page waits before the game had loaded). Frame table (frames a second, still / looking round / up and down / the
+limb turn; this branch and the lead in turn): this branch 47.5 / 23.1 / 29.5 / 34.1 (taken while two other suites of
+unit tests were still running: every part of the frame was slower, the parts this change does not touch too, and the
+load took 15.6 s against 11 to 12), the lead 58.8 / 31.5 / 36.6 / 40.2, this branch 60.3 / 36.5 / 41.4 / 47.1, the
+lead 59.2 / 35.6 / 50.1 / 18.9. The machine was shared with other work throughout, so single numbers jump (the lead's
+18.9 and 50.1 are in one run); nothing in them says this branch is slower. The script's time to draw a still frame:
+4.9 ms here against 6.0 and 5.1 on the lead in the three quieter runs. While nothing is lit or looked at the halo
+costs one comparison per area and nothing is written; a still view stays idle.
+After the check: `tests/area-halo.test.mjs` (17 tests, five new) and the files whose words or constants changed
+(`area-words`, `hud-words`, `bodymap-moves`, `brain-live`): 41 pass; `browser-punch-in` passes with its tongue
+expectation restated; `?case=boot` ok (on the last commit); the whole unit suite and the frame table were left to the
+lead's run on the merged work. After the second check: `area-halo` (19 tests), `area-words`, `hud-words`,
+`bodymap-moves` pass; `browser-punch-in` passes (the tongue's click pressed its key once, its drawn light did not rise); `?case=boot` ok. Pictures looked at, real speed,
+cheapest level: the left elbow, the right elbow and the neck under the look beside the lead and the first check's
+version, the start view's black block, the tongue's click sheet. Pictures looked at, real speed, full and cheapest level: the elbow's, the neck's, the
+gold hand's and the middle black block's contact sheets and resting looks, the tongue's click, the start view's black
+block beside the lead's and the earlier one.
+Before the check: pictures looked at: the contact sheets of the left elbow, the right elbow and the middle in-between area at the low
+and the full quality level on the lead and on this branch; the lit and the looked-at block side by side at both
+levels; the same three areas at real speed on the full level, and two of them at real speed on the cheapest level
+under reduced motion; close pictures at twice the pixel density of a looked-at block and of a black block at rest and
+under the look; the start view, the outside view and the view after
+two presses of R, lead above this branch (the same but for the black blocks' edge glow); the mirror body's lit muscle
+at the low level.
+
+**Not done, or not right.**
+- Seen at the game's real speed in five runs (the full and the cheapest level, reduced motion once) and by the
+  independent check. The first table's numbers were taken with the page's clock slowed twelve times, before the
+  check's changes. The owner's display was not examined.
+- The look's glow round a block now shows at a glance where tissue lies beside it (the right elbow's band 28 to 70 px
+  +12 to +17 of 255 over the lead, the gold hand block) and as a soft fringe over the gaps; round a block among blocks
+  (the left elbow) the band is still only +4 to +6 over the lead: more would hide the neighbours' colours.
+- Under the look the neck's narrow fringe lies as a pink edge across the first 1.5 mm of the cyan finger blocks
+  beside it; beyond it they keep their teal.
+- With the longer, linear edge glow a black block's middle is no longer quite black: 19, 25, 36 at rest, 24, 31, 45
+  under the look (dark navy), with the light blue at its edges.
+- After a look's light the right elbow's middle falls from 195 to 180 for two frames and comes back to 191 over 0.15
+  s: no dark dip, but a small undershoot.
+
+- A click on an area with no movement (the black blocks, the tongue) gives only the key's press and the soft click
+  glow round it: no light of its own on the block. That "only what moves lights up" is this package's rule (the
+  brief's and the lead's decision), not the owner's; he was not asked.
+- A black block's edge glows along its two ends on the strip only; at the strip's outline (its other two sides) the
+  strip's dark ink line is all there is. Both halves of the brain use the one cool light blue (the colour table's own
+  pale glow colour for the left half's black blocks is a warm one, unused).
+- The pool on the tissue is small where the tissue next to a block lies deep (the brain surface is cut away over the
+  strip, so what is beside a block on the screen can be 10 mm or more from it in the brain): round the elbow blocks it
+  shows mostly on the neighbouring blocks. The reach is never under 9 mm, so round a 3 mm block the pool is about one
+  and a half block widths, not one.
+- Next to a lit light-coloured block (the cream and pale-orange blocks of the right arm) the white core stands out
+  less than next to a deep one: the neighbours are light themselves.
+- The blocks' shapes were looked at in pictures for the elbow, neck and middle in-between blocks only; the other 50
+  were checked by their measured widths (1.9 to 10.7 mm), not by picture.
+- The whole-brain tint is as faint as section 187 left it (3 to 9 of 255 on the cortex); it now lasts as long as the
+  look does. If it should show more, raise `BRAIN_PICK_LOOK.lift` first.
+- The living brain's rosy flush and dimple round a looked-at or lit block (section 89) still ease out over 0.8 s
+  (`BRAIN_LIVE.bloom.outS`): after a contraction the tissue next to the block stays a little rosier for about a
+  second. Its coloured part is gone (that is the halo now, which ends with the light); the flush was left.
+- `PREVIEW-NOTES.html` has no entry for this change: its entries are numbered by published update.
+- Muscles on the full quality level still flash white with the bloom pass at switch-on (not touched here).
+
+## 192. The electrical map: M shows the nervous system as lines of light, and the signals are seen to travel, brain to body and body to brain (21 November)
+
+The owner, 21 November: "Let's continue working on the neurosurge game. And let's try an electrical mapping view, like
+you see in functional neuroscience, connectomic live maps, dynamic maps." And on 20 November: "we want a view of brain
+activity, a very specific view of brain activity, like a connectomic activity map, or something like that, or a
+functional neuroscience map where we can actually see activity, color-coded, etc. And that's probably what we want to
+update the neuroscience game with, rather than just a simple motor strip, so we can actually see electrical storms and
+electrical activity and neural activity and networks and pathways, etc., etc., throughout the entire body, from brain to
+body and body to brain. And then we can tie that to muscle contraction."
+
+**What the player gets.** Press M: the picture goes dim and the nervous system appears over it as fine lines of light:
+fibres fanning from every block of the motor strip down through the brain to the brainstem, a cord down the mirror
+body's spine and down your own, nerves into the limbs, the trunk and the face. At rest the wiring glows faintly and a
+few slow sparks drift along it. Switch an area on as always, with a look or a click: a bright front in the area's own
+colour runs from its block down its own route, crossing sides where the real fibres cross, out along the nerve to the
+muscles of that movement, each of which gets a soft mark of light as the front arrives; paler beads then run back up on
+their own line beside it to the sensory strip just behind the block, where a soft patch glows and fades; fainter pulses
+run from the block to the brain regions it is linked with. Move a limb with the keys, grip with Space or turn the limbs
+and the same routes carry traffic both ways. Press M again: the ordinary view is back as it was.
+
+**A view of its own, on M** (`EMAP_CODE`, `toggleEmap` and the `onEmap` option in `ns-controls.mjs`; `setEmap` /
+`toggleEmap` / `emapFrame` in `ns-app.mjs`). The key is wired like R, a page command: one `{ type: 'emap' }` request
+per press, taken from the browser, never on auto-repeat or with Alt, Ctrl or Meta, only while playing. The state is
+`data-ns-emap="on|off"` on the app root; off at the start of every session; it stays through a pause and through the
+outside view (E); Reset body clears the lit routes and leaves the map as the player set it. It changes no camera, no
+control and no movement, and with the map off the ordinary picture is not changed in any way: nothing of the map is
+drawn and its part of a frame does not run. The map is a separate picture with its own light rules: traces, travelling
+beads and the report on the way back are allowed here, although the ordinary view shows nothing on a movement's way
+back (Message 206, section 177). M is on every list of keys: the Shift rationale in `ns-controls.mjs`, the Esc page's
+rows and its "Views and reading" group, the keyboard picture (`KEYBOARD_PICTURE_ROWS`: right of N), the capture line ("Click to look around · M: electrical map · Esc: controls"),
+`PLAYER-GUIDE.md` and `PREVIEW-NOTES.html`.
+
+**The dark ground** (`EMAP.dim` 0.68, `EMAP.easeS` 0.3 in `ns-emap.mjs`). One clip-space quad drawn after everything
+of the ordinary picture (order 200; the 3D arrows are at 100) multiplies the finished picture by 0.32, eased in and
+out over 0.3 s, so the bodies and the brain stay as a dim setting. No existing material is touched, there is no new
+render target and no dependence on the bloom pass.
+
+**One geometry, one shader, drawn twice** (`ns-emap-three.mjs`: `createEmapView`, `emapShaders`, `EMAP_LOOK`). Every
+wire is a ribbon of two vertices per node and every mark a small quad, all in one static geometry (1427 lines, 566
+marks and 49 278 vertices with the wiring data of section 193). A vertex carries its rest place in the atlas's
+millimetres, what it rides, and its coordinate along the route; the graphics card poses it from a small texture of
+world matrices (the "palette", 253 rows: the big brain, then the 104 segments of the body rig and the 22 of the left
+game arm for the mirror body, then the same for your own body; written when the dark ground is about to be drawn, and
+sent to the graphics card only when a matrix changed, so a still view with the map on sends nothing but the clock),
+and lights it from two more small textures (which lit area has which wire; each lit area's colour, level and start
+time) and a clock. The lines are drawn once in front of what is there at full strength and once where something stands
+in front of them, weaker (`EMAP.light.hidden` 0.4 for the resting wiring, `hiddenLit` 0.68 for a lit route, which must
+still read inside the brain), so the whole wiring is seen and the picture keeps its depth. The light is screened onto
+the picture and clamped at display white: the map looks the same at picture quality High and Low, with and without
+the bloom. The lines are not registered with the outline pass and are never picked. A line's half width is its width
+in the world at its distance, kept between 0.55 and 1.7 CSS pixels; it fades out nearer than 0.42 m to the eye; in the
+eye view the wires of your own head and neck, which are not drawn there, are not drawn either.
+
+**The routes** (`buildEmap` in `ns-emap.mjs`; `EMAP_STATIONS`, `EMAP_NUCLEI`, `EMAP_BRAIN_MESH`). Typical, simplified,
+laid by hand; nothing is traced from a scan.
+- In the big brain: from each movement's own part of the block (the area's key points, `rec.keys`) a twig to a hub
+  7 mm under the block, then one fibre per area through the internal capsule of the same half, the midbrain, the pons
+  and the medulla, each placed as a share of that mesh's own box, the leg's fibres behind the face's in the capsule and
+  outside them in the brainstem. An area whose way out is the cord gets a tail that crosses to the other side low in
+  the medulla, and a second, uncrossed tail where a muscle of its own side needs one (drawn weaker by the area's
+  `laterality` field: `EMAP.sameSide`); an area of the face, jaw, tongue or throat gets a tail to the place of each
+  head nerve it needs in the brainstem, on that nerve's side; the in-between areas get no fibre down at all, only
+  links. Which ways out an area gets comes from the muscles the game itself lights for its movements.
+- A drawn bridge joins each way out of the big brain to the same place of the mirror body (the top of its cord's
+  strand, or the first point of a head nerve): the big brain is that body's own brain, drawn large and outside it, and
+  the legend's detail says so. The sixteen bridges leave the big brain as ONE bundle through a point under the
+  medulla and part only near the mirror body's head: drawn each on its own straight way they fanned across the
+  picture like a kite once the brain was turned (seen in a picture). Each rests at 0.25 of the idle light
+  (`EMAP.idle.bridge`; 0.6 and 0.45 made the bundle the brightest thing of the resting picture).
+- In each body: the cord as two strands in the canal, 2.6 mm either side of the canal's centre line as section 193's
+  data gives it (`cordCourse`, `caudaCourse`), down to the cord's tip; the roots from the strand at their levels along
+  the data's own root courses (`rootCourse`: the low ones run down inside the column first, each leaves through its
+  own opening); every nerve and branch of the data on both sides; one twig per muscle from the data's course point for
+  that muscle to its point in the belly. Posed places come from the pose's own segment matrices
+  (`poseBodyDetailed().segments`, rest to drawn). Nothing is re-skinned.
+- Where a line passes from one bone to the next it changes what it rides within 24 mm either side of the joint between
+  them (`EMAP.jointMm`; over more where the line passes far from the joint), where both bones put it at the same
+  place. The first build blended all along the stretch between two course points, which bent the lit lines into
+  zigzags on bent limbs (seen in the first Space-grip picture). Where the joint lies beside or beyond that stretch the
+  change was at first squeezed against the stretch's end, into one node step: with W held the lit nerves of your own
+  raised arm were stair steps at the shoulder (seen in a picture; measured in Node with the arm's bones turned 80
+  degrees about the shoulder: one 9 mm step of the plexus became 39 mm with a 91 degree turn, one of the nerve to the
+  latissimus 104 mm). The change now keeps its width, up to the whole stretch (`jointBlend`; the same case: 25 mm and
+  57 degrees, and 44 mm).
+- The left arm is the game arm's rig: the left side's course points on the upper arm, forearm, radius, hand and digits
+  ride that rig's segments, on your own arm and on the mirror body's.
+- Back up: per area and way out one fibre from that way out up the back of the brainstem, across where the way down
+  crossed, past a point inside the capsule's inner face (the atlas has no thalamus) to the point of the postcentral
+  gyrus nearest to 11 mm behind the block.
+- Links: from the block along the wiring data's links of its precentral gyrus (to the sensory strip behind it, the
+  same block of the other half over the middle, the frontal gyri in front, the cerebellum's other half by the capsule
+  and the pons); links between other regions are drawn as the resting network.
+
+**The nerve data is section 193's** (`ns-wiring-data.mjs`, merged into this work). The courses, the level of each
+nerve and the nerve of each muscle are that module's: 89 nerves and branches a side, six head nerves a side that
+leave the brainstem, the canal, the roots, 292 muscle rows and the brain's 53 links. The map takes it as one object (`NERVE_TRUNKS`,
+`nerveForMuscle`, `MUSCLE_NERVE_BY_ID`, `mirrorTrunk`, `CORD_LEVELS`, `cordLevelAt`, `cordCourse`, `rootCourse`,
+`BRAIN_LINKS`, `rootWay`) and `ns-app.mjs` fetches the module at the first M press, not with the page (187 kB that
+the game needs for the map only). In the data's final shape every nerve id says its side (`r_…`; `mirrorTrunk` gives the left
+twin as a record of its own, `l_…`, whose points on the left arm name the game arm's segment as `armSeg`), and
+`nerveForMuscle` answers with the nerve of the muscle's own side; the builder takes both that shape and the
+stand-in's. With it the model has 178 nerves and branches, and all 337 muscles (the 292 of the body rig and the 45 of
+the left game arm) hang on their data nerve, with no warning. Each root of a nerve of the cord ends at the point
+where the data says it joins its nerve (`rootWay`; at first every root ran to the nerve's first point, which drew the
+lower roots of a plexus climbing up to it), and the nerve's time coordinate is its middle root's at that root's own
+join point; the accessory nerve's roots leave the cord's side inside the canal, so it is drawn as a nerve of the
+cord. A
+muscle whose name the data did not know would take the nearest nerve of its own side (a head nerve only for a muscle
+of the head). A plain stand-in in the same shapes stays as the fallback when the module cannot be loaded
+(`ns-emap-standin.mjs`, `makeStandinWiring`: one run per body part along the rig's joint centres; the legend then
+says so); the model's tests run with both.
+
+**Colour says which area** (`EMAP.colours`). A lit route is in its area's own glow colour (`ns-colors`
+`areaGlowColor`, scaled to full brightness and 22 % toward white, `whiteLit`: the violets and blues would not read on
+the dark ground); the resting wiring is one cool grey-blue; the report keeps the hue, 62 % toward white (`paleUp`),
+with smaller, closer beads, and runs on its own lane beside the command's line (the command on the right of its
+direction of travel, like traffic), so the two directions are told apart without colour. The front's head and the
+strongest light go toward white.
+
+**What moves, and when** (`emapStep`, `emapLightAt` and the shader built from the same constants). Every node has one
+time coordinate: the display time at which a front that entered the cord at 0 reaches it. A volley is then a start
+time, a start coordinate, a level and a colour, and each lit wire how far the route uses it and when the report
+enters it; fronts, beads, marks and pulses are worked out per pixel from those.
+- Speed. Real large nerve fibres conduct at some tens of metres a second: the clinical values for human limb nerves
+  are about 50 to 60 m/s in the arm and 40 to 50 m/s in the leg, and the fastest fibre class of the textbooks is
+  quoted at 70 to 120 m/s (standard teaching values, written from memory here, not looked up again). `EMAP.realMmS`
+  takes 50 m/s. The command's front runs at one display speed, at least `speedMmS` 12.5 m/s and raised by the build so
+  the farthest muscle of any movement is reached within `arriveMaxS` 0.16 s of the start (the game starts the movement
+  at once; its timing is not changed). The farthest is a short flexor of the left big toe at 2.22 m of route, so the
+  speed is 13.9 m/s: 3.6 times slower than real. The report runs at 0.3 of that (`upShare`): the farthest is back at
+  the strip half a second after its muscle lit; 12 times slower than real. The legend states
+  both in round numbers, worked out from the model (`emapSlowLine`). The bridge counts as 150 mm (`bridgeMm`).
+- A volley. The front leaves the block at the activation; behind it the route keeps a steady light (`light.hold`
+  0.42) with soft beads flowing down (1.0 a second past a point, long tails, `EMAP.bead`); when the movement's own
+  light ends the route fades over 0.8 s (`fadeS`). A muscle's mark comes up as the front arrives (`EMAP.dot`). The
+  report starts at each muscle when its front arrives and flows up (1.2 beads a second, paler, smaller); its patch on
+  the sensory strip glows when it arrives. Pulses run out along the block's links in 0.7 s and are gone within a
+  second (`EMAP.link`).
+- The player's own movements (links whose source is keys, Space or the limb turn, the limb turn's and the
+  head-following links): the same routes at their level, traffic both ways while they last. A look or a click sends a
+  new front each time, also while the last one is still fading; a held movement whose light comes and goes with its
+  speed rejoins the light that is there without a new front (no flicker of fronts). The crosshair on a muscle shows
+  that muscle's route as a steady faint hint.
+- Rest: at most six sparks (`EMAP.spark`), one starting about every 0.7 s, each on a line chosen at random, rising
+  and fading over 1.5 to 2.8 s while it drifts a little.
+- Focus: while a route is lit the resting wiring is drawn 60 % weaker (`EMAP_LOOK.focusDim`, in over 0.12 s, back over
+  0.5 s), so the lit route is the brightest thing in the picture (the game's own rule for its keys, section 83).
+- Calm: nothing goes bright, dark and bright faster than three times a second (beads at 1.5 and 2.2 a second on a
+  steady light that never drops to dark between them); the brightest things are small. Under
+  `prefers-reduced-motion`: lit routes without travel and without beads, steady, and no sparks.
+
+**Words** (`EMAP`, `emapRouteLines`, `emapSlowLine` in `ns-text.mjs`; `ns-emap-card.mjs`; `.ns-emap-*` in
+`quiet.css`). One small card at the top right, away from the other cards, only while the map is on, following the R
+key's levels. Short card: the title, "Command: brain to muscle", "Report: muscle back to brain", each with its mark,
+and "A drawn picture, slowed down. Not a recording." More detail: the route of the area under the look (the area's
+own sentence about its fibres from `plainDetail` where it has one, without its bracketed terms, else one plain
+sentence from its pathway and laterality; how the signal goes on, down the cord or straight out along a nerve of the
+head or upper neck; the report; "A typical route, simplified."), and, until an area has been looked at since M was
+pressed, what kind of picture this is instead (the big brain is the mirror body's own; the paths typical and
+simplified, not traced from a scan; the signal made up by the game, and by how much the travel is slowed). The last
+area's route stays while the look is elsewhere, so no text comes and goes as the crosshair crosses a gap. Hidden
+level: nothing.
+The first More detail was 26 lines of small type under the short card (about 1070 letters; the card 590 px tall) and
+lay ON the game's own information panel, which at that level stands at the bottom right and is up to 66 % of the
+window high: two texts on top of each other (seen in a picture). The owner's standing note is "Way too much text
+now". At "more" the legend is now one low, wide card above that panel (532 px wide, More detail a column to the left
+of the short card, which keeps the right edge; never taller than the room above the panel), and its words are at most
+nine short lines (at most 311 letters for an area's route, 406 for the general words). The bracketed anatomical terms
+of an area's sentence are left to the information panel beside it, which gives the area's text in full.
+
+**Cost** (`EMAP_BUILD` in `ns-app.mjs`; `buildEmapSteps`). Off: nothing is drawn and nothing runs in a frame.
+Nothing of the map is fetched or built before the first M press (`EMAP_BUILD.onPress`): neither its nerve data (a
+module of about 200 kB) nor, since 22 November, its own modules (`ns-emap-three` with `ns-emap` and `ns-emap-storm`,
+`ns-emap-standin`, `ns-emap-card`, about 188 kB: a checker found every player loading them at the start); a player
+who never presses M loads none of it, and the page's count of scripts at the start (`PAGE_SCRIPTS`) is as without the
+map. At the first press the data is fetched and
+the model is built 7 ms a frame (or a quarter of a slow frame's own time), 89 to 145 ms of work in all in the
+browser, in 3 to 9 slices; the map eases in when it is done. The first way stays behind the switch: the data fetched
+and the model built in idle time (2 ms a frame, from 150 frames into play), so the first press found it ready; it was
+dropped the same day because every player then loaded the data. On: per frame the processor steps the state machine (no allocation:
+300 000 frames in the unit test without a garbage collection) and multiplies about 250 matrices; the palette is sent
+to the graphics card only when a matrix changed; nothing is written per vertex. The graphics card draws three more
+draw calls. A failure anywhere in the map (the build, a frame, the palette, which is written inside the game's own
+draw) switches the map off for the session and keeps the reason in `inspect().emap.error`: the game goes on.
+
+### Part 3: the map becomes a live brain scan with electrical storms (22 November)
+
+The owner, 22 November about 01:25, about the map as it was (a dark veil, faint grey wiring, one lit route per
+movement): "I mean like a live brain scan map where you have electrical wire, electrical storm activity going
+everywhere." What is above stays (the key, the veil, the routes, the report, the legend, the load at the first press);
+the scan and the storms are added and are now the map's main picture. Everything in them is made up for the game.
+
+**The brain as a live scan** (`emapScanShaders`, `scanSurfaces` in `ns-emap-three.mjs`; `EMAP_STORM`, `SCAN_STOPS`
+in the new `ns-emap-storm.mjs`). The brain's surface (the glass in one piece, its geometry shared, not copied, and the
+motor areas merged once into one geometry) is drawn a second time over the dimmed picture, pushed out 1.8 mm along
+its normals (`EMAP_LOOK.scanInflateMm`: the living brain swells up to 1.6 mm round a key, and the copy must stay in
+front of it), coloured on a scan scale: deep violet where nothing happens, through blue, cyan, green, yellow and
+orange, to near white only at the hottest cores (`scanRamp`; above a heat of 0.7 the shown heat rises at half the
+rate, `scanTone`, so near white needs a heat of 1.3: one storm's core alone stays orange, near white is where a
+storm, its hops and a lit area meet). It is screened onto the picture, at most 0.74 strong (`scanAmount`), weaker
+where the surface turns away (the square of how much it faces the eye) and in the grooves (the glass's own groove
+depth), so the brain's shape and folds stay readable. The heat at a point is one sum, worked out per pixel by the
+graphics card from a few small arrays the processor fills once a frame: 12 resting sources on the surface that swell,
+drift 16 mm and fade over 36 mm, each with periods of 5 to 15 s (`EMAP_STORM.base`), the live storms (the sums stop at
+their count), and the activations. A depth
+pass of the same copy comes first and the colour pass tests for the same depth, so only the nearest layer is
+coloured. Four draw calls.
+What was seen and changed on the way: where pieces of the brain meet, their pushed-out copies overlapped and the colour
+was laid on twice (a bright seam along every gyrus: the depth pass); without shading the scan was a flat blue
+silhouette (the facing and groove terms); close up with an area lit, the heats summed to near white over most of the
+brain, a white-out (storms 0.7 to 1 with a 20 mm core and a 0.6 wave at first, now 0.55 to 0.85, 18 mm and 0.45, the
+tone knee and the 0.74 cap); many storms were on the brain's far side, unseen (a storm now starts on the point of its
+region nearest the eye of six drawn at random, a point near the midline counting as farther: seen face-on through
+the gap between the halves a storm there was a bright block behind the mirror body).
+
+**Wires everywhere, with traffic** (`EMAP.scan`, `buildEmapSteps` in `ns-emap.mjs`). Every link of the nerve data
+(53) is drawn as a bundle of six fine fibres, each from its own point of the two regions' surfaces, so the bundle fans
+at its ends and is tight in its middle, through the link's stations and, where its fibres change sides, through the
+data's two meshes of the crossing (`crossesAt`; over the middle for the great bridge between the halves);
+neighbouring surface regions of one half are joined by two short fibres each (86 pairs), sunk a little toward the
+half's middle. 492 fibres in all, generated by these rules and stated as drawn, not traced; they rest at 0.35 and
+0.3. The areas' own links now rest at 0.3 instead of 0. On every wire of both bodies and the brain small
+pulses run at all times (`EMAP_STORM.traffic`): 0.6 to 1.1 pulses a second pass any point, 22 mm apart in the brain,
+60 mm on the bodies and 34 mm on the bundles (which therefore run fastest), each wire with its own rate and phase, in
+the scan's colours (cyan where it is calm, toward yellow near a storm). Worked out per pixel from the wire's own
+numbers and the clock: no object per pulse; on the mirror body's wiring at 0.35 and on your own at 0.6
+(`EMAP_LOOK.trafficMirror`, `trafficOwn`: the mirror body's dense, small wiring screened to a white figure at full
+traffic). The network's fibres inside the brain, behind its surface, are drawn at 0.5 (`EMAP_LOOK.netHidden`; the
+other hidden lines at 0.4; 0.7 at first drew the fibres behind the mirror body over it as a tangle).
+
+**Storms** (`createStorms`, `stormAt`, `stepStorms`). Every one to three seconds a storm starts on a region (a third
+of them on the area the look rests on, the others on the side of the brain the player sees): a hot core swells over
+0.3 s and calms over 1 to 2 s, and a wave rolls out over the surface at 50 mm/s for 70 mm. Its links fire: on two
+of its links a front runs along the fibres at 160 mm/s, and when it arrives the region at the other end flares,
+weaker (0.55), and fires on once more (0.3). About a third of the storms also send a volley down the mirror body's
+cord. Up to 16 storms (with their hops) are alive at once. The fronts and the volley are lit in the scan's hot
+colours, and the wires near a storm take its heat's colour.
+
+**Tied to the muscles** (`stormActs`; the existing routes). When a movement switches on, a storm starts on its block
+and fires its links, the block is the hottest spot of the scan while it is lit (0.75 of its level, with the storm's
+core), the regions it is linked with warm to 0.3 of its level, the route carries its volley down the cord to the muscles as before, each contracting muscle glows
+as a soft spot in the scan's colours (`EMAP_LOOK.muscleScale` 1.6, up to 24 px), and the feeling strip behind the
+block warms when the report comes back.
+
+**Calm.** Each curve of light rises and falls smoothly: a storm's light rises once and falls once; the wave's ring is
+32 mm wide, so a point under it brightens and darkens once in about 0.64 s; a front's head passes a point in about
+0.15 s and leaves it at the storm's steady light; the traffic passes a point at most 1.1 times a second. Under
+reduced motion the scan stands still (the resting sources at their places, no storms, no traffic): a steady heat map,
+the routes steady as before.
+
+**Words.** The short card gains the scan's colour bar, "Activity: calm to stormy", and its honesty line is now "Made-up
+activity, drawn like a live brain scan. Not a recording." (it was "A drawn picture, slowed down. Not a recording.";
+that the travel is slowed, and by how much, is said under More detail).
+
+### After an independent check, for update 65 (22 November)
+
+A checker and a reviewer found three major faults; the lead decided how to mend them. These replace the numbers of
+part 3 above where they differ.
+- **The strip's blocks vanished under the scan**, the game's main targets. The motor areas are no longer in the scan's
+  copy (it was the glass and the areas merged; now the glass only, and of the glass only its outer pieces:
+  `scanSurfaces`, 62 198 triangles). A second draw of the blocks after the dark ground in their own materials broke
+  every block into dark triangles and stripes; a second checker found why: it drew each area's own meshes
+  (`regionMeshes`), but each area's patch leaves out the parts its FILL meshes draw (`rec.fillMeshes`), which were not
+  drawn again. That draw is gone. Instead nothing of the map is drawn over a pixel of a visible block: the dark ground
+  and both passes of the scan read the stencil mark the strip's own depth pass already writes (ns-scene-three
+  `STRIP_CUT`; stencil test "not equal", write mask 0, as the brain's surface and the vessels do), with no draw added.
+  The blocks keep their full colour, halo, edge glow and the game's own activation light over the dimmed picture;
+  where the mirror body stands in front of a block, the strip writes no mark there and the body stays dimmed. Without a
+  stencil buffer the test passes and the map is drawn as before. The deep pieces of the glass (white
+  matter, ventricles, the small middle parts) are out of the copy too: pushed out 1.8 mm they came through the cortex
+  in triangle-sized patches.
+- **A flat yellow bar in the gap between the halves.** The scan's heat above its floor fades to nothing toward the
+  midline, from 22 to 6 mm off it (`EMAP_STORM.midFadeMm`, in the scan's vertex shader, and in `scanHeatAt`); the copy
+  keeps the brain's own cut next to the gap (`ns-brain-gap`: not coloured and no depth where the glass is cut open);
+  a storm never starts on a point nearer the midline than 25 mm while its region has another (`pointOf`). Measured
+  in the page every half second: the share of yellow pixels in a box 80 px wide round the gap, at most 0.0013 over
+  30 s at rest and 0.0027 over 10 s of the Space grip (the checker's pictures had the bar over most of that box).
+- **The fibres buried the mirror body's torso.** Three fibres a link instead of six (`EMAP.scan.fibres`), resting at
+  0.2 instead of 0.35 and 0.3 (`idle.bundle`, `idle.local`), and a link with no station of its own bends through a
+  middle point sunk toward its own half's middle by 0.3 of its length (`scan.bundleSink`) instead of running straight
+  through the brain's centre; 333 network fibres. Where something stands in front of them the network's fibres are
+  drawn at 0.15 instead of 0.5 (`EMAP_LOOK.netHidden`) and the big brain's other lines at 0.18 instead of 0.4
+  (`brainHidden`: the mirror body stands in front of the brain's middle, where every area's fibres and links meet);
+  the areas' links rest at 0.15 instead of 0.3. The mirror body's outline reads at the start view and from outside.
+- **A throw in the frame step** left the dark ground and a frozen map for the session: the step is guarded, and a
+  failure switches the map off and hides every mesh of it, as a failure in the palette does.
+- **Lanes and traffic in one pixel came to four a second.** Beads at 1.0 a second down and 1.2 up instead of 1.5 and
+  2.2 (`EMAP.bead`); the lead asked for 1.2 and 1.4, which still summed to four in the test of the summed lanes.
+- **Large stacked discs on contracting muscles**: up to 14 px instead of 24, 1.1 times the mark instead of 1.6.
+- **Every player loaded the map's code at the start**: its modules are fetched at the first press of M beside its
+  data (`PAGE_SCRIPTS` stays as without the map).
+- **Objects made every frame**: none any more in the storms' step, the activations or the view's call.
+- **Words**: the legend's head says "Press M to hide" (it said "M: off" while the map was on); the Esc page's M row
+  says the scan and its storms are made up and drawn like a brain scan, not a recording; M is off the five-second
+  controls card again (the owner's own four chunks).
+
+A second checker then went through that round (the yellow bar gone, the mirror body readable, the merge whole, the
+lazy load safe) and found more; the third pass, also 22 November:
+- **The blocks too dim** with the map on: the stencil above (and the cause of the broken second draw).
+- **The strip's outer rim shimmered at rest** (at low quality 94 pixels rose and fell four or more times a second at a
+  32-level step, the worst ten times): the scan's depth pass was an opaque material, so it was drawn before the
+  strip's own transparent depth pass, and its still copy raced the beating strip for the depth at the rim. It is
+  transparent now (drawn after the strip's), and both scan passes read the strip's stencil mark.
+- **The mirror body's own wiring was a white web** with a bright cord down its middle: at rest it is drawn at 0.6
+  (`EMAP_LOOK.idleMirror`; lit routes unchanged), and the big brain's lines behind things at 0.1 instead of 0.18.
+- **The midline fade took heat off the leg and foot areas' own activation** (a toes area kept 42 to 52 % of it): only
+  the resting sources and the storms fade; the activation is added after the fade.
+- **The test of the summed lanes checked a lucky case.** It now runs along a nerve at three places and at six levels
+  of the cord's two strands for four pairs of areas (both knees; the left half's hand with the right half's toes, and
+  the other way; both hands), with the traffic weighted as drawn. It found four a second, so: beads 1.0 a second both
+  ways (`EMAP.bead.upHz` 1.2 to 1.0), the beads' phase taken from the map's clock and the place only (not from each
+  volley's own start), so every lit wire at one place beats together and the cord's two strands in one pixel beat as
+  one; and on a lit route the resting pulses give way to its own beads.
+
+A third checker passed the map for update 65 and left four follow-ups; the fourth pass (22 November, for update 66):
+- **The brain under the map kept 80 to 100 % of its light and read as a lilac brain**, not a live scan: the scan's
+  depth pass, drawn at 200.4, came after the brain's glass. It has its own draw order now, 4.8
+  (`EMAP_LOOK.orderScanDepth`): after the strip's own depth pass (1.5, so the rim stays out of the race) and before
+  the glass (5 and 6), so the glass is not drawn under the scan and the deep-blue resting scan is back; still
+  transparent and still kept off the blocks by the stencil. What lies behind the pushed-out copy is hidden again
+  under the scan: with the map on the ordinary beams of light from an area (orders 12 and 12.5) are hidden near the
+  brain, where they run along its surface (a fourth checker saw none of the left hand's beam); the map's own route and
+  muscle marks stand in for them, and in update 65 the beams were already lost under the dark ground and the scan. At rest the picture had one or two soft clouds at a time: between the
+  storms, small short flares of their own now start every 0.45 to 1.1 s on the side the player sees (`EMAP_STORM.minor`:
+  0.3 to 0.5 strong, fading over 0.6 to 1 s, no cascade, no volley; each rises once and falls once).
+- **A few wire pixels shimmered at frame rate at low quality**: the front pass of the lines (depth test "less or
+  equal") and the hidden pass ("greater") are exact complements, and a line lying on a surface flipped between them.
+  The front pass is drawn a little nearer (polygon offset -1, -4: `EMAP_LOOK.frontOffset`).
+- **Fine network lines crossed the full-colour blocks**: the front pass is drawn in two parts, the routes and the
+  bodies' wiring over everything, and the network's lines (the bundles, the short fibres and the areas' links) kept off
+  a block by the strip's stencil; the hidden pass is kept off the blocks too (what lies behind a block is not drawn over
+  it). One draw more.
+- **The mirror body read as a back view with a bright cord down its middle**: its own wiring rests at 0.45 instead of
+  0.6 (`idleMirror`) and its cord at 0.7 of that (`cordMirror`).
+
+A fourth checker passed that pass at no measurable frame cost and found more; the fifth pass (22 November, for update
+66):
+- **A blink at every M off** (the brain faded from blue to black, then the whole pink brain came back in one frame) and
+  a sudden drop at M on: the scan's depth pass at 4.8 kept the glass away for the whole ease while only the scan's
+  colour faded. The depth pass is at 4.8 only while the map is wholly on; while it eases in or out it is drawn after
+  the glass, and the scan's colour pass covers the glass by the map's own amount (its alpha, `uCover`), so the brain
+  fades from its own colours to the scan and back, and at the moment the map is wholly on both ways give the same
+  picture. Measured in two boxes of the brain in every frame through M on and M off: see the checks.
+- **The small flares stopped after M off and on** for as long as the map had been on: the map's clock starts at 0
+  again, the storms' clocks did not. They are set back with it (`restartStorms`: the next storm at 0.6 s, the next
+  flare at 0.3 s).
+- **The mirror body's cord was hardly dimmer** (4 %): its traffic did not take `cordMirror`. It does now, and
+  `cordMirror` is 0.5. That alone left the strip down its middle as bright as before (the roots of the cord and the
+  bridges from the big brain, which meet at its neck, lie along the same line): the roots carry a flag of their own
+  now and take `cordMirror` with the cord, and so do the bridges. The strip the checker measured (8 by 90 pixels, High)
+  went from 110 to 91, beside it 67; the line still shows, about as bright as the nerves over the shoulders and flanks.
+- **The polygon offset moved the shimmer to other wire pixels**: a wider band, -2 and -16 (`frontOffset`). Paired runs
+  at low quality, 4 s each, counts per second at the 16- and 32-level steps: the two new spots behind the mirror's
+  raised left hand are steady again (873,277 at 2/1, 877,268 at 1/1; they were 12/7 and 13/7), the three old ones stay
+  steady, but 782,338 (15/5 and 14/7) and 817,340 (16/10 and 11/0) are still fast. Pixels fast only with the map on, at
+  the 32-level step with a pixel of shift: 19 and 18, against 32 between two map-off runs.
+
+Checks of the fifth pass:
+- The brain's light read in every frame in two boxes (the left half's side, the top of the right half) through M on and
+  M off: the largest step from one frame to the next was 3 and 6 levels at High on M on, 1 and 6 on M off; 1 and 4,
+  2 and 4 at low. Bursts of pictures through both presses at High and low show the brain fading from pink through
+  lilac to the deep blue scan and back, with no black frame.
+- The unit tests, the browser tests `emap`, `startup` and `keyboard-aim`, and the start check pass.
+- Frame table at High, look part (frames a second): the lead build 39.0 and 38.0; this build with the map off 39.0 and
+  33.4 (a third run, 17.9, was spoilt: 3 frames a second at the still part, the outline alone 180 ms), with the map on
+  37.8, 34.6 and 29.8. Paired, the map on is 3 to 11 % below off on the look part; the up-and-down and limb parts swing
+  both ways by more than that. The cost stays open.
+
+**Checked.**
+- Unit tests in Node (`tests/emap.test.mjs`, 26 tests; with the stand-in and with the nerve data): the model builds
+  with no warning; each of the 142 movements has a complete route to each of its muscles, in order (1137 routes with
+  the data); crossing follows `laterality` and the muscle's side; a head nerve never passes the cord, and the throat
+  area's strap muscles go by the cord (C1 to C3) while its other muscles go by head nerves; a twig may leave its
+  nerve at the nerve's first point (56 of the 1137 routes: the coracobrachialis, the quadratus lumborum); the
+  in-between areas send nothing down; the farthest muscle is reached within 0.16 s; a volley's front, marks, report
+  and fade come at their times; the report never lights the command's lane; calm (beads at most three a second, no
+  dark between them, no negative light); reduced motion is steady; at most six sparks; the step makes no garbage
+  (300 000 frames, no collection); the build in small steps gives the same model; M is one request per press, never
+  on repeat or with Alt, and moves nothing; M is on every list of keys; the words are short and claim nothing; the
+  card replaces its lines; the shader text has no `pow` and guards every lookup; the joint rule. The whole suite:
+  569 of 569 pass on the final code (one run before it failed one timer test of the pack loader, 905 ms against a
+  limit of 870, which passed alone).
+- The browser test `tests/browser-emap.mjs` (real keys and mouse, 1600 x 900): nothing of the map is fetched or built
+  240 frames into play; at the first M press the nerve data is asked for once and the model is built with no warning;
+  the camera, the look and the joints do not change; the game's picture, read small, differs by 36.4 of 255 on
+  average with the map on and by 0.06 after M off; a look at an area sends a volley whose route passes the bridge
+  and arrives in time; at "more" the legend shows the area's route, does not lie on the information panel and
+  nothing of it is cut; at the hidden level there is no legend and the map stays; the map stays through the outside
+  view and a pause. Passed. `startup` and `keyboard-aim`: both passed. The start check printed `"ok":true`.
+- Frame rate before part 3, alone on the processor, frames a second for still / look / updown / limbturn (the lead's
+  table, twice each, in turns): the game's own ground (18930) 60.2 / 35.9 / 48.3 / 55.5 and 60.0 / 40.3 / 43.6 / 52.7; this work with the
+  map off 60.1 / 39.6 / 45.0 / 52.3 and 60.0 / 39.8 / 50.1 / 55.4 (the same: off, the map costs nothing); with the map
+  on 60.0 / 37.1 / 43.1 / 49.9 and 60.0 / 41.0 / 46.7 / 46.9 (a still view stays at 60 and idle; in the limb turn,
+  with 12 routes lit, about 5 frames a second fewer than with the map off).
+- The map's own processor time in a frame (`inspect().emap.meanMs`): the step 0.03 to 0.06 ms, the palette 0.02 to
+  0.35 ms. The first M press: the map was built 0.69 s after it and fully shown after 1.06 s.
+- The fourth pass, on the final code: the map's test files with `chunking` and `wiring-data`, 60 of 60 (new: the view
+  test checks the three line passes, which keep off a block and which are drawn nearer, and the depth pass's order;
+  the storm test counts the small flares); the start check `"ok":true`; the browser tests `emap`, `startup` and
+  `keyboard-aim` passed. The third checker's paired measure at low quality (its frame-by-frame measure and its
+  pixel-by-pixel comparison, read only), the map off, on, off, on for 4 s each at the start view: pixels that rose and
+  fell four or more times in a second at a 32-level step only with the map on (one pixel of shift allowed) 42 and 10
+  (16-level step: 84 and 39), against 97 (142) between the two map-off runs; they lie scattered on the strip's rim and
+  the mirror body, as the map-off-only ones do. The frame table at High, twice each in turns: 18930 60.0 / 40.6 / 41.2 /
+  46.0 and 59.7 / 42.6 / 46.5 / 51.8; map off 59.4 / 39.1 / 44.2 / 52.3 and 59.5 / 41.1 / 44.9 / 50.5; map on 59.8 /
+  39.5 / 49.6 / 54.0 and 60.0 / 35.3 / 49.0 / 53.5 (the look 14 % below in the second pair, level in the first).
+  Pictures at real speed, High and low: rest (the deep-blue scan, the blocks clean, no network line across them), a
+  storm with flares, a lit block.
+- The third pass, on the final code: the map's test files with `chunking` and `wiring-data`, 60 of 60; the start check
+  `"ok":true`; the browser tests `emap`, `startup` and `keyboard-aim` passed. The rim measured frame by frame at low
+  quality, at rest, the look still, 3.5 s (`s-shimmer`; a crop of the brain's middle): pixels that rose and fell four
+  or more times in a second, map on 107 at a 16-level step and 23 at a 32-level step (the worst 9 a second), map off
+  100 and 33 (the worst 17); the worst pixels lie on the mirror body's edge in both, which the map does not draw. Not
+  the 0 the lead asked for: the ordinary view's own shimmer is as large. The frame table at High, twice each in turns:
+  18930 59.8 / 38.5 / 38.6 / 49.7 and 60.0 / 41.0 / 44.7 / 54.0; map off 58.3 / 36.3 / 50.3 / 47.6 and 60.0 / 33.6 /
+  44.5 / 51.7; map on 58.8 / 37.4 / 44.0 / 37.1 and 60.0 / 38.3 / 28.5 / 47.3 (the look as fast as with the map off,
+  so the storm slots and the hidden network were left as they are; single up-and-down and limb-turn runs read low).
+  Pictures at real speed, High and low: rest (the blocks in full colour, the mirror body readable) and a lit block
+  (the left hand's area: its own glow, the storm round it).
+- After the independent check, on the final code: the map's test files (`tests/emap.test.mjs`, `tests/emap-storm.test.mjs`,
+  `tests/emap-view.test.mjs`) with `tests/chunking.test.mjs` and `tests/wiring-data.test.mjs`: 60 of 60 pass. New: the
+  view built with three.js in Node (its meshes, the scan on the glass only, nothing shown while off, a throw in the
+  step hiding every mesh and staying hidden, nothing left after dispose); the summed lanes (down, up and traffic at a
+  nerve's point while a knee area is held, and at one level of the cord's two strands while both knees' areas are:
+  three a second at most); the midline (within 6 mm of it the scan stays at its floor through 30 s of storms; 20 and
+  more storms over a minute, none started near the midline). The start check printed `"ok":true`; the browser tests
+  `emap`, `startup` and `keyboard-aim` passed. The frame table at High, still / look / updown / limbturn, twice each
+  in turns: 18930 60.0 / 40.0 / 43.8 / 52.8 and 59.7 / 38.7 / 42.5 / 51.1; this work with the map off 60.0 / 40.0 /
+  42.1 / 46.5 and 60.1 / 41.5 / 39.2 / 50.7; with the map on 58.8 / 35.5 / 51.0 / 53.8 and 60.0 / 37.2 / 43.0 / 49.0
+  (the look 10 to 11 % below the map-off runs, the other parts within the noise). Pictures at real speed (opened):
+  map off and on at the start view, a storm (a burst of 2.5 s), the Space grip, a movement by look (the left hand's
+  area) and by click (the left knee's), the outside view.
+- Part 3 in Node (`tests/emap-storm.test.mjs`, 11 tests): the network (every link a bundle between two regions, the
+  neighbouring surface regions joined, each fibre's vertices carrying its regions and its place along it); the brain
+  boxes' surface points; the colour scale (violet at rest, near white only at the top, never more than 0.74 laid on,
+  the tone knee); storms over two minutes (one every one to three seconds, a quarter to a half of them where the look
+  rests, hops, several at once, cord volleys in a sixth to a half); a hop flares when its front arrives, weaker, and
+  the front is dark ahead and lit behind from either end; the owner's rule on the curves: through a minute of storms
+  no point of 60 on the brain brightens and darkens more than three times in any second, the traffic passes a point
+  at most twice in a second, a fibre's point under a storm every two seconds at most three; the resting sources'
+  periods; reduced motion: no storms and a scan that does not change at all over ten seconds; a lit area the hottest
+  spot (0.9 or more), its linked region warmer than a far point by 0.2 or more; the shader texts.
+- Part 3 in the browser, alone on the processor: the scan drawn with 101 672 triangles of the brain's copy, 44
+  regions, 141 links and 492 fibres; the browser test passed on the final code (picture change 35.9 of 255 with the
+  map on, 0.97 after M off); the start check printed `"ok":true`.
+- Part 3's cost. With every storm summed at every pixel and a `discard` in the scan's shader (which turned off the
+  early depth test, so the sum ran for every hidden layer of the brain's pieces) a frame with the map on took about
+  77 ms: 13.1 / 8.7 / 11.1 / 9.0 frames a second at High, 49.1 / 15.3 / 19.9 / 15.0 at Low. Without the discard, the
+  sums stopping at the live storms, then the heat summed at the copy's vertices, the final code, twice each in turns
+  (still / look / updown / limbturn): the game's own ground (18930) 60.0 / 37.5 / 44.0 / 49.7 and 59.4 / 38.1 / 42.7 /
+  51.7; this work with the map off at High 60.1 / 33.5 / 45.6 / 51.0 and 35.2 / 18.6 / 24.7 / 22.5 (the machine was
+  disturbed during that run: the Low run right after it read low too); with the map on at High 58.0 / 30.5 / 37.9 /
+  54.4 and 57.2 / 36.9 / 41.0 / 35.8; with the map off at Low 51.4 / 37.5 / 47.1 / 47.2 and 32.3 / 26.9 / 37.0 / 34.7;
+  with the map on at Low 60.0 / 39.5 / 45.0 / 55.3 and 60.0 / 39.4 / 57.6 / 57.8.
+- Part 3 seen in pictures at real speed (opened and judged): the rest and two-second bursts at High (a storm rolls over
+  a half in about a second, yellow to orange with a small near-white core, the network everywhere, the folds of the
+  brain readable under the colour), the brain close while looking at a hand area (the area the hottest spot,
+  yellow-orange, no white-out; the hand's muscles glowing), Low (the same look), reduced motion (two pictures a second
+  apart identical to the pixel at 2 % tolerance), W held, the outside view.
+- Seen in pictures (opened and judged): the resting map at picture quality High and Low (the same look); a hand
+  area's route a third of a second after the look (its colour from the block through the brain, the bridge and the
+  mirror body, and up your own left arm with marks on the forearm's muscles); the front on your own arm in a burst
+  of frames; an eyelid area and the throat area (to the mirror body's face and neck); W held; the Space grip (four
+  routes in four colours down all four limbs: the clearest picture of the view); reduced motion (the route steady, no
+  beads, no sparks); the mirror body turned by a drag (its wiring turns with it); the outside view; the "more" level
+  at 1600 x 900 and at 1366 x 768 and the hidden level; M off (the ordinary picture as it was).
+
+**Not done, or not right.**
+- The blocks' edges are a little jagged at low quality (the stencil follows the canvas's own pixels).
+- The cost on the look part of the frame table with the map on is not settled: in the fourth pass's two pairs it was
+  level once and 14 % below once; the storm slots and the hidden network were not cut to find out.
+- Wire pixels that shimmer at low quality only with the map on remain, about as many as the noise between two map-off
+  runs; each change of the front pass's offset moved the flip to other spots (the fifth pass's numbers are below).
+- With one half hot and the other calm, the midline fade makes a straight edge between the halves along the gap.
+- The network in the middle of the picture, behind the mirror body, is still the busiest part; the mirror body's
+  outline reads, its own nerves on it, but less cleanly than with the map off.
+- Part 3's cost: with the map on, the look part of the frame table read 10 to 11 % below the map-off runs in the last
+  pair of runs (35.5 and 37.2 against 40.0 and 41.5 frames a second); a still view loses about one frame a second; the
+  other parts were within the noise of a machine whose own runs vary by more than that. Where the time goes was not
+  measured.
+- Part 3 (the live scan) was looked at in four runs of pictures at real speed after the last changes of its look
+  (high, low, reduced motion; the start view and the brain close, looking at a hand area), not played by a person, and
+  not at all on narrow or upright windows. Whether it reads as "electrical storm activity going everywhere" is the
+  owner's call: at rest the brain is mostly deep blue with one or two storms rolling over it at a time, and the dense
+  network in the middle of the picture is the busiest part.
+- The network's fibres in front of and behind the mirror body still cross it as a fine tangle (behind it at 0.5 of
+  their light); the mirror body is harder to read with the map on than without.
+- The scan is a copy of the brain's surface pushed out 1.8 mm. It does not follow the living brain's wobble while the
+  brain is carried (up to 4.2 mm): during a carry the colour can slip a little off the surface or be cut by it. At the
+  silhouette the copy stands 1.8 mm outside the brain, a thin rim of colour. Its depth pass also hides lines lying
+  within 1.8 mm of the surface behind it (they are drawn at the hidden lines' strength).
+- The storms start where the processor chooses (a region near the side the eye sees), not where the game's simulated
+  activity is: at rest they are decoration of the made-up kind the legend states, not a picture of the simulation.
+  The resting sources and the network's fibres are generated by rules (stated in EMAP.scan and EMAP_STORM), not drawn
+  from data.
+- A storm's front runs from the region's end of every fibre of a fired link, also on links whose real fibres run one
+  way only; the cord volley runs down the mirror body's cord and bridge only, not on into the roots and nerves.
+- Each root now ends where the data says it joins its nerve, but the nerve's light still starts at the nerve's first
+  point: the part of a plexus above a lower root's join lights with the rest, not from the join on.
+- The three-times-a-second rule is tested on single curves (one point of the scan, one wire). Where several wires
+  cross in one pixel their pulses add; that sum was not measured.
+- The scan's heat is summed at the vertices of the brain's copy (101 672 triangles) and laid between them, not at each
+  pixel: the JS sum the tests check (scanHeatAt) is exact at a vertex only.
+- No person has played the map; nothing here says how it feels in the hand. Until 22:55 every picture was taken while
+  seven helpers shared one processor (a frame took 0.3 to 2.3 s): the bursts that show the front travelling were taken
+  then, with the page's clock slowed to the frame time. The later pictures were taken alone on the processor, in real
+  time, and only ONE run of pictures was taken after the nerve data's final state and the last changes of this
+  section; the bursts of a face area, the trunk area and an in-between block, and the mirror body turned, are from
+  before them.
+- At your own shoulder with the arm raised (W, the first key a player presses) the lit nerves are a tangle, not a
+  route: the plexus, four nerves and their straight twigs cross in a small space seen from above, the twigs as bright
+  as the nerves. Part of it is the binding: a line rides rigid bones and changes bone inside ONE stretch between two
+  course points, so with the arm turned 80 degrees a 9 mm step of the plexus is still 25 mm with a 57 degree turn
+  (the nerve to the latissimus: 44 mm), and with a knee bent 70 degrees 66 of 4670 node turns of that leg's wires are
+  sharper than 75 degrees, most of them in twigs. The cure is a change of bone spread over several stretches, with
+  the twigs and the child nerves following their nerve's blend; not done. On the inner side of a deep bend a line can
+  also pass through bone or a short way outside the muscles.
+- With the map on, frames are slower where much moves and much is lit: in the limb turn with 12 routes lit, 49.9 and
+  46.9 frames a second against 52.3 and 55.4 with the map off (about 2 ms more a frame, most of it in drawing); in
+  the up-and-down look 43.1 and 46.7 against 45.0 and 50.1. A still view is not changed. Where the time goes was not
+  measured further (the two passes over the 49 278 vertices, or the palette sent each frame while a limb moves).
+- The front is fast by rule: 0.16 s to the farthest muscle, so it crosses the big brain within two frames. What reads
+  as travel is the front along a limb of your own body, the beads behind it and the report's slower way back.
+- On the mirror body at its start size a nerve is about a pixel wide. Its route lights and its marks show, but the
+  beads there cannot be told apart; they read on your own body and in the big brain.
+- Two lit areas that share a wire (one side's strand of the cord, a plexus) show ONE of them on it: the newer takes
+  the wire, since colours are never blended. The older route then has a stretch in the other's colour, and if the
+  newer one ends first that stretch is dark until the older one ends too.
+- The brain's lines do not follow the living brain's small motions (the beat, the wobble while it is carried, the
+  blooms round a key): they stand still while the tissue moves a little under them. With the outer muscles lifted
+  (the Body Worlds setting) the twigs and marks end where the muscles lie unlifted.
+- The report is a drawn convention, not anatomy of its own: it uses the command's nerves and roots (the data has no
+  sensory nerves), a typical way up the back of the brainstem, a point where the atlas has no thalamus, and the
+  nearest point of the postcentral gyrus behind the block. It starts when the front arrives.
+- The game's own lights of an activation (the white block, the cone of light, the muscles' colour) are still there
+  under the dimmed picture, so an activation is drawn twice: dimly by the game and brightly by the map.
+- The real conduction speed (50 m/s) is a textbook value written from memory, not looked up for this work.
+- The first M press is not instant any more: the map's modules and its data are fetched and the model built then, and
+  the map is fully shown about 0.9 to 1.3 s after the press (a second checker: built after 0.88 s and shown after
+  1.2 s at High; 1.3 s at low with three presses while it loaded; before the modules were fetched lazily, 0.69 s). During those frames each frame carries up
+  to 7 ms of building; the frame rate in that third of a second was not measured. The way that had the map ready
+  before the first press is behind `EMAP_BUILD.onPress`.
+- More detail shows what kind of picture this is (the bridge, typical paths, simulated, how much slower) only until
+  the first area has been looked at after M; to read it again the player must switch the map off and on. In a window
+  lower than about 760 px the last line of More detail can be cut at the card's foot; in narrow or upright windows
+  (under 901 px wide, or taller than wide) the first layout is still in force (More detail under the short card, cut
+  at 30 % of the height) and was never looked at. At "more" the wide card covers the top right of the picture and
+  can lie on an orientation label of the brain (one was seen under its edge).
+- If a body pose comes without segment matrices (the path without the hand skin), only the brain's wiring is drawn.
+- Not tried: a lost and restored graphics context while the map is on; a software renderer; a browser other than
+  Chromium; a touch screen; a screen reader on the legend.
+
+## 193. The data of the drawn nerves: which nerve serves each muscle, from which level, along which course; and the brain's typical links (21 November)
+
+The owner, 20 November: "we want a view of brain activity ... so we can actually see electrical storms and electrical
+activity and neural activity and networks and pathways, etc., etc., throughout the entire body, from brain to body and
+body to brain. And then we can tie that to muscle contraction." 21 November: "let's try an electrical mapping view, like
+you see in functional neuroscience, connectomic live maps, dynamic maps." (Neither message has a number in the notes.)
+
+The atlas the game draws has muscles, bones and a brain, but no spinal cord and no nerves (section 192 draws the map).
+This section is the DATA those drawn routes come from: one pure module, `scene/src/ns-wiring-data.mjs` (no imports, no
+three.js, no page), its generator `tools/build-wiring-courses.mjs` with `tools/wiring-geometry.mjs`, and
+`tests/wiring-data.test.mjs`. It draws nothing and no page loads it yet on this branch.
+
+**One readable row per muscle (`MUSCLE_ROWS`, 152 rows).** Each row: the muscle's name (and the other spellings the
+game's meshes use), its nerve, its spinal or cranial levels, the main one, why that one, its sources, a note, and other
+nerves that share the muscle (`also`: the deep finger bender's ulnar half, the back belly of digastric, the hamstring
+part of adductor magnus ...). A muscle with two nerves is drawn from the first. The main level (`main`) follows the
+table of the Medical Research Council's booklet where it prints a root in bold (36 rows, `by: 'M'`); the level the
+ISNCSCI examination tests that movement for where the booklet marks two roots or none (8 rows, `'K'`: the hip benders
+L2, the knee straighteners L3, the calf S1); the bold root of the brachial plexus table for three shoulder muscles
+(`'W'`); the only level there is for the 31 muscles of the cranial nerves and of C1 (`'S'`); and for the other 74 rows
+(`'C'`) a choice whose reason is in the row's note, because the sources read mark no main root: the middle of the listed
+levels in most, a neighbour's bold root in some. The page's own example is kept: biceps brachii, musculocutaneous
+nerve, C5 C6, main C6 (the booklet prints neither in bold; ISNCSCI tests elbow bending as C5; the row says both).
+`MUSCLE_NERVE` holds the result for each of the rig's 287 muscle names, `MUSCLE_NERVE_BY_ID` for each of its 292 muscle
+meshes (two meshes are both named "right digastric": by id the front belly has the nerve to mylohyoid, the back belly
+the facial nerve). `nerveForMuscle(name)` resolves a rig name, an alias, a movement's muscle name, a mesh id or a
+game-arm catalogue key (`BIC`), on either side; the name rule is the game's own (`ns-bodymap` `muscleNameMatches`: the
+same words, or only extra "part words"), copied so the module stays free of game state, without "hand" and "foot" as
+part words (the hand's and the foot's little-finger and little-toe muscles share names and have different nerves).
+
+**The nerves (`NERVE_TRUNKS`, 89, right side).** The cranial nerves that move muscles: III (the rig has the lid lifter;
+it has no muscle that turns the eyeball, so IV and VI are left out), V3 with its nerve to mylohyoid, VII with its
+posterior auricular branch and its five face branches, IX, X and XII, and XI, the accessory nerve, whose fibres begin
+in the top of the cord (C1 to C5): its roots leave the cord's side inside the canal and its strand climbs beside the
+cord into the skull through the great opening and out by the jugular opening (`rootsLeave: 'cord'`); the cervical
+plexus with the ansa cervicalis, the phrenic nerve and the C1 fibres that ride with the hypoglossal nerve; short
+muscular branches of the cervical nerves; the brachial plexus with the dorsal scapular, long thoracic, suprascapular,
+two pectoral, two subscapular, thoracodorsal, axillary, musculocutaneous, radial (and its deep branch), median (its
+forearm branch and its twig to the thumb's ball) and ulnar (and its deep branch) nerves; the eleven intercostal nerves
+and the subcostal nerve; the back branch of every spinal nerve from C2 to L5; the lumbar plexus with the
+iliohypogastric, femoral and obturator nerves; the sacral plexus with both gluteal nerves, the nerves to obturator
+internus and to quadratus femoris, the sciatic nerve, the tibial nerve with both plantar nerves, and the common, deep
+and superficial fibular nerves. Each has its anatomical name, a plain name ("the main nerve of the front of the
+thigh"), its levels, its parent, where it starts (`origin`: the cord, or the midbrain, pons or medulla), its sources,
+the rule its course was laid by, and the course: 2 to 13 points `{ seg, p }` from the cord or the brainstem outward
+(485 points in all). A branch's first point IS a point of its parent's course (`from` is its index). A plexus is drawn
+as ONE bundle; each of its roots joins it at its own point (`rootJoin`, below). Six nerves serve no muscle of this rig
+and are wiring only, which their notes say: IX, X, XII, the phrenic nerve (no diaphragm), the lateral plantar nerve,
+and the bundles themselves.
+
+**The frame is the rig's rest frame, which is NOT the atlas's untouched frame.** The page prepares the body before the
+rig is built (the bulkier build of section 97, the longer limbs of section 164): the right wrist's pivot is at z =
+705.6 mm in `packs/BODY-RIG.json`, the atlas's own capitate bone at about 790. Vertebrae, skull and pelvis are unmoved;
+the limbs are. Every point here is in the rig's rest frame (`WIRING_FRAME`), which is what the rig's segment matrices
+take in, and `seg` is the rig segment the point rides. **After any change of the body's rest shape the courses are
+stale and `node tools/build-wiring-courses.mjs` must be run again**; the generated block records six pivots of the rig
+it was laid over, and the test fails when they no longer match.
+
+**How a course is laid.** By a stated rule on things the atlas has, never freehand: the rig's joint pivots; the bones'
+and muscles' own shapes (the middle of a cross-section at a height, a bone's knob, a muscle's belly); the limb arteries'
+centre lines of `packets/bodyparts3d-body-vessels-r1`, carried from the atlas's frame to the rest frame by the
+displacement of the eight nearest atlas vertices, as the game rivets its vessels (the median nerve with the brachial
+artery, the ulnar nerve with the ulnar artery in the forearm, the tibial nerve behind the popliteal and with the
+posterior tibial artery, the deep fibular nerve with the anterior tibial artery, the femoral nerve on the outer side
+of the femoral artery at the groin); and rules from the bones for the rest (the radial nerve behind the humerus at
+mid-arm and in front of the elbow's outer knob; the ulnar nerve 7 mm behind the inner knob; the sciatic nerve between
+the sitting bone and the great knob of the thigh bone, then 62 % of the way from the thigh bone to the hamstrings; the
+common fibular nerve round the neck of the fibula; an intercostal nerve 8 mm under its rib, the lower six running on
+between the two inner flat muscles into rectus abdominis, T10 at the navel's level). The cranial nerves start on the
+brain atlas's own brainstem: that atlas is in the same frame as the skull (medulla z 1464 to 1506, pons 1502 to 1531,
+midbrain 1528 to 1546; the joint between skull and neck at 1478), so its coordinates say where the brainstem sits in
+this skull. Their openings in the skull (the jugular opening, the oval opening, the hypoglossal canal, the inner ear
+opening) are NOT measured from the skull meshes: they are placed by millimetres from landmarks that are (the styloid
+and mastoid processes from the muscles that hang from them, the jaw's joint, the occipital condyle), which is the
+weakest part of the courses.
+
+**Every point is checked on the real meshes.** "Inside the body" is measured, since the body has no skin to test
+against: 14 rays (the six axes and the eight diagonals) are marched from the point through a 4 mm occupancy grid of
+every surface of the prepared body; all 55 joint pivots score 13 or 14 of 14, points in the open air beside a limb 2 to
+7, the gap between the thighs 10. A point passes at 12 or more, or at 10 with a surface within 4 mm. Of the 372 points
+laid (41 more are shared branch points), 352 score 14, 17 score 13, two 12 and one 11; 11 points failed at first and
+were moved 2.5 to 9 mm toward the nearest part of the body (four of them the femoral nerve under the groin, where the
+atlas's artery lies in an open hollow between the thigh muscles), 6 of those had started inside a long bone and were
+stepped out of it; none is outside now. Only POINTS are checked, not the straight lines between them.
+
+**The cord.** `VERTEBRAL_PIVOTS` gives one coordinate down the spine: 0 at the rig's `atlanto_occipital` pivot, 7 at
+`cervicothoracic`, then one per joint to 24 at `lumbosacral` (the rig has no pivot between the cervical vertebrae).
+`CORD_SEGMENT_V` places each of the cord's 29 segments (C1 to S4) on it by the taught rule that the cord is shorter than
+the column: the cord's tip at the joint between L1 and L2 (20), the five lumbar segments behind the tenth to twelfth
+thoracic vertebrae, the sacral ones behind L1, T6 behind T5, C8 behind C7; between those anchors an even
+spread. `ROOT_EXIT_V`: C1 between skull and atlas, C2 to C7 above their own vertebra, C8 under C7, thoracic and lumbar
+nerves under their own vertebra, S1 to S4 spaced down the front of the sacrum. `cordLevelAt(level)` returns
+`{ fromPivot, toPivot, t }` as the contract asks, and also the point itself. The canal was measured, not offset by a
+guess: rays from front to back through each vertebra mesh find the back wall of the vertebral body and the front of the
+arch, and the canal's centre is midway (for the atlas, which has no body, 64 % of the way back, behind the dens).
+Finding: the rig's vertebral pivots, being midpoints of whole-vertebra centroids, already lie INSIDE the canal, 0.7 to
+4.5 mm from its measured centre (12.6 mm at the skull joint, where the pivot is on the atlas's facets). The canal's
+half-width came out at 7.4 to 13 mm (17.8 in the atlas). A root exit is the canal's centre moved sideways by that
+half-width (at most 13) plus 4 mm, and where that spot is inside bone, the nearest free spot in a small search (11
+exits moved 2 to 3 mm): all lie 13 to 18 mm from the midline. `cordCourse()`, `caudaCourse()` (the "horse's tail"
+below the tip) and `rootCourse(level, side)` (down the canal from the segment to the exit: 30 mm for T6, over 170 mm
+for S2) give ready polylines.
+
+**Where a nerve ends in its muscle.** A third of the way along the muscle from its end nearer the START of its nerve
+(its fleshy upper end, not its tendon), in the middle of its cross-section there; where that middle is outside the
+muscle's own surface (a curved sheet; 49 of 292), the nearest piece of the muscle itself. Muscles served level by
+level (the deep back muscles, the flat belly muscles) and five broad sheets whose nerve runs along them (trapezius,
+sternocleidomastoid, latissimus dorsi, serratus anterior, platysma) take the piece nearest the nerve's course (48).
+The twig leaves the nerve at its course point nearest the muscle (`at`); a cranial nerve gives no twig inside the
+skull (`twigFrom`). The longest twig is 105 mm (vastus lateralis), the median 18 mm. Two first tries were wrong and are
+gone: "the end nearer the nearest course point" put the finger straighteners' points in the hand (their meshes include
+the tendons), and letting the point ride the mesh's own rig segment made the belly of tibialis posterior swing with the
+foot (its mesh hangs mostly from the foot): the point now rides the bone its belly lies on.
+
+**The left side is the mirror of the right, and every id says its side.** `NERVE_TRUNKS` holds the right side under
+ids `r_...` (`r_femoral`); `mirrorTrunk('r_femoral')` is the left twin, a record of the same shape with the id
+`l_femoral`, its parent `l_...`, and every course point mirrored (`mirrorPoint`: x to -x; the segment `r_...` to
+`l_...`). `nerveForMuscle` answers with the nerve of the muscle's own side (`l_musculocutaneous` for "left biceps
+brachii"), and `trunkById` gives either side's record. The body rig has no left forearm or hand (the left arm is the
+game arm, its own rig), so a mirrored arm point also says `rig: 'arm'` and the game arm's own name for its segment
+(`armSeg`: `l_forearm` is its `ulna`, `l_radius` its `forearm`, `l_hand` its `hand`, the finger bones alike,
+`l_upperarm` its `upperarm`). `nervePathForMuscle(id)` gives the whole drawn way to one muscle mesh on its own side:
+its main root's exit (or the brainstem), the nerve up to the twig, the muscle's point; for a mesh of the left game arm
+that the body rig does not hold (`FJ1478M`), its right twin's way mirrored. These shapes are the ones the map's model
+of section 192 was written against (ids and segments that swap `r_` and `l_`): built with this module in place of its
+stand-in, that model takes all 178 trunks and finds every one of its 337 muscles' nerves in the data, with no warning.
+
+**The brain's links (`BRAIN_LINKS`, 53).** Between meshes the brain atlas has, the motor and sensory strips first: to
+each other; from the superior, middle and inferior frontal gyri to the motor strip; from the sensory strip to the
+superior parietal lobule and the supramarginal gyrus; the three parts of the superior longitudinal bundle; the strips
+and the supplementary motor areas of the two halves through the corpus callosum; the motor strip down through the
+internal capsule, midbrain and pons to the medulla; to the opposite half of the cerebellum by way of the pons, and
+back; the corticobulbar route from the motor strip to the motor nuclei of the cranial nerves in the pons and medulla
+(one link on its own side and one crossing: most of those nuclei are driven from both halves, the lower face only from
+the opposite one); the report of touch up from the medulla to the opposite sensory strip, and the report of pain and
+temperature (already crossed in the cord) up the same way. Then the arcuate bundle, the cingulum, the uncinate bundle,
+the inferior longitudinal and inferior fronto-occipital bundles, the occipito-parietal fibres, the fornix, and four
+more links between the same lobes of the two halves. Each has `from`, `to`, `name`, `plain`, `crosses`, sometimes
+`via`, and its sources. Where the fibres change sides is DATA, so a view can draw the crossing: `crossing` = `{ in,
+when, share, name, plain }` and `crossesAt` = the two halves of the region they cross in. The motor route says `when:
+'at the end'` in the medulla (the pyramidal decussation, below the last mesh, as the fibres go on down the cord), the
+touch route `'on the way'` inside the medulla, pain and temperature `'before the start'` in the cord, the routes to and
+from the cerebellum in the pons and the midbrain. The right half's links do not speak of speech (it is made on the left
+in most people): "the lower frontal area in front of the mouth part of the motor strip". The atlas has no corpus
+callosum, thalamus, superior temporal gyrus, temporal pole or orbital gyri: a link between the halves says `drawnAs:
+'arc'`, and a bundle whose true end has no mesh is tied to the nearest mesh and says so in `note` (the arcuate bundle
+to the middle temporal gyrus, the uncinate bundle to the inferior temporal gyrus).
+
+**Sources (`WIRING_SOURCES`; facts only, in the game's words; nothing copied).** Read on 21 November: the Medical
+Research Council's *Aids to the examination of the peripheral nervous system* (1976), table "Nerve and main root
+supply of muscles" (pages 60 and 61, read as pictures of the pages so the bold roots could be seen); OpenStax *Anatomy
+and Physiology 2e*, sections 13.2, 13.4, 14.2, 14.3; the ISNCSCI worksheet's key muscles; Wikipedia: the list of
+skeletal muscles (nerve column), brachial, lumbar and sacral plexus, spinal cord, six nerve articles and nine tract
+articles. Every row, nerve and link names its source keys. Not reachable on the day: the 1918 Gray's Anatomy
+(bartleby is retired, another host refused) and the NCBI Bookshelf (StatPearls); so the levels of the deep back
+muscles, which the list gives only as "posterior branch of spinal nerve", rest on the spans those muscles are taught
+to have, and are the least certain rows.
+
+**Words.** `WIRING_NOTE` holds plain sentences a view can show: typical adult routes as taught; simplified, laid by
+rule over this one atlas body, not traced from a scan, not measured in anyone, real bodies vary; the "main" level of a
+muscle is this game's pick where books give several; the brain's links are tied to the nearest part the brain model
+has, which has no thalamus. The map of section 192 has its own words on screen (in `ns-text.mjs`); the first pass of
+this package had put a sentence of its own there, which nothing used, and it was taken out again.
+
+**Checked** (on the first pass; the second pass, below, added four tests). `tests/wiring-data.test.mjs`, 11 tests in
+half a second: the page's examples; every one of the rig's 292 muscles by id, name and alias, every muscle name of the
+142 movements, the 25 catalogue keys and the 51 left-arm and 54 face mesh names resolve to a nerve; rows are well
+formed and sourced (17 of the booklet's bold roots are pinned); every nerve's parents lead without a loop to the cord
+or the brainstem, every level is known, a branch starts on its parent; every course point and muscle point rides a real
+rig segment and lies within that segment's reach of its skeleton as the rig file gives it; the taught places of some
+twenty nerves hold against the rig's own joints (the radial nerve behind the humerus, the ulnar nerve behind the
+elbow's inner side, the median nerve in front of the elbow, the sciatic nerve behind the thigh bone, the tibial nerve
+behind the inner ankle, the five face branches in their order ...); cranial nerves start on their part of the brainstem
+inside the skull, keep more than 6 mm from the cord and give no twig inside the skull; the cord's segments are in
+order, each at or above its exit, with roots that get longer downward; the left side mirrors the right and every
+mirrored segment exists; every link names brain meshes that exist with the atlas's own names; every source key exists
+and is used; no private strings. A twelfth test runs the tool with `--check`: the body is prepared exactly as the page
+prepares it, every course is laid and measured again on the real meshes, and the committed block must equal the fresh
+build (about 7 s on a free processor; `NS_WIRING_FAST=1` skips it). Each of four deliberate faults (biceps given to the
+radial nerve, the rig's wrist pivot recorded 20 mm off, a face muscle given a spinal level, a link to a brain mesh that
+does not exist) fails a test. The whole unit suite: 529 tests (517 before this package), none failing; in the one run
+of the whole suite the twelfth test was still switched off, and it passes on its own. The start check prints
+`"ok":true`; the browser tests `startup` and `keyboard-aim` pass (their first runs, with the shared processor at a load
+of 14 to 23, ran into their own 60-second waits, as `startup` did in the unchanged checkout at the same minute). The
+frame table, still / look / up-down / limb turn in frames a second, this branch then the unchanged one, in turns: 59.4,
+32.4, 41.2, 42.0 (the processor still busy); 60.1, 33.1, 48.5, 50.6; 59.1, 36.2, 48.6, 55.2; 60.0, 37.1, 49.0, 45.4: no
+difference beyond the spread between runs, as expected, since the package puts no code into the page (a module nothing
+imports yet). (These runs were made on the first pass; the second pass, below, changed only this module, its tool and
+its test.)
+
+**The second pass, after two independent checks (22 November).** One checker read every row against anatomy sources,
+the other the code, the tests and the courses' geometry. Neither found a wrong nerve. What they found, and what was
+done:
+- **Two points rode the wrong bone** (the generator had given them the segment of the nearest bone): the nerve to
+  latissimus dorsi's point in the back wall of the armpit rode the humerus, and the obturator nerve's points in the
+  thigh rode the pelvis. They now ride `r_girdle` and `r_thigh`. A **pose test** was added (`poseStretch` and
+  `WIRING_POSES` in `tools/wiring-geometry.mjs`, used by the test): twelve turns of one joint each (the shoulder
+  forward and sideways, the elbow, the forearm both ways, the wrist both ways, the hip bent and spread, the knee, the
+  ankle up and down), each turning the segments that hang from that joint about the rig's own pivot and axis. Every
+  straight piece of a nerve or of a twig whose ends ride segments on the two sides of that joint is measured. The
+  largest stretch is now **34 mm** (the bundle in the armpit and the musculocutaneous nerve's first piece, arm raised
+  sideways 60 degrees). Before it was 83 mm (the twig to adductor brevis, hip bent 60 degrees) and 70 mm (the nerve to
+  latissimus). The test fails above 40 mm.
+- **Every root used to join its bundle at the bundle's first point**, so the lower roots of the lumbar, sacral and
+  neck bundles ran 15 to 97 mm upward and back down. Each root now joins at its own point: `rootJoin` in the generated
+  block (and on each trunk that starts at the cord), the course point the root reaches most directly from its opening
+  without climbing more than a few millimetres. The largest climb is now **7.9 mm**. `trunkRootLines`, the new
+  `rootWay(id, level)` (the whole root from its cord segment, down the canal, out through its opening, to the join
+  point) and `nervePathForMuscle` use it. The map's builder must attach each root wire there; until now it attached
+  every root at the first point.
+- **The median nerve's forearm points** rode the radius above the ulna; they now ride the ulna (`r_forearm`) down the
+  forearm and the radius only just above the wrist, so a turned forearm takes them the right way.
+- **Pieces through bone.** The generator now samples every straight piece, every millimetre, against EVERY bone (a
+  ray-parity test through each bone's own triangles), not only its points against six long bones. Where a piece runs
+  through bone it adds one point beside it, the smallest step aside (2 to 24 mm) that clears it and stays inside the
+  body: **54 such detours**. The winding places got a point of their own: the common fibular nerve round the neck of
+  the fibula, the tibial nerve round behind the inner ankle knob with its artery, the deep fibular nerve in front of
+  the tibia. The five face branches and the posterior auricular branch, which lie under the skin, are now laid on the
+  outer surface every 28 mm or less (`surfaceRun`; the atlas has no skin, so they lie just on the outermost muscle or
+  bone: 31 points). Points laid on purpose in the skull's own passages (the facial canal, the jugular and oval
+  openings, the hypoglossal canal, the slit into the eye socket) are marked and left alone.
+  - **In bone:** 188 of 13,737 mm (1.4 %). Of that, 128 mm is in pieces that end in one of those passages; the rest is
+    four face and scalp pieces with about 5 mm each. Before: 837 of 13,433 mm (6.2 %; the checker measured 890 mm).
+  - **Points inside a bone:** 1, down from 21.
+  - **Points moved** to pass the checks: 23, by 1 to 9 mm (16 had started inside a bone). None is outside the body.
+- **Code.**
+  - `WIRING_GENERATED` is frozen (a write to it had moved the cord).
+  - Unknown keys, `'constructor'` and `'__proto__'` among them, give null or an empty list everywhere.
+  - Each end of a name shared by two meshes carries its own nerve (the two bellies of "right digastric": its `at` had
+    pointed into the wrong nerve).
+  - "transverse" or "abdominal" alone names no muscle.
+  - The block's comment says its points are CC BY 4.0, and CC BY-SA 4.0 where laid on or in Z-Anatomy muscles.
+- **Tests.**
+  - **The three faults** the checker found to pass the fast tests are now caught:
+    - a point moved off the limb, by a new test against the limb's outline measured on its meshes (`outline` in the
+      block: 24 stations along each limb's axis, 24 sectors round it). Not to every side, as the third checker found:
+      it allowed the largest radius of three sectors plus 4 mm, so a point moved 60 mm off the shin passed. Corrected
+      in the third pass, below;
+    - a point on the wrong segment, by the pose test (a shin point on the thigh stretches its twig 45 mm at the knee);
+    - a wrong nerve for a well-known muscle, by a pinned list of 42 textbook rows (both sides).
+  - **Not caught by a fast test:** a point moved 60 mm but still inside the calf. Only the rebuild test catches that,
+    as "DIFFERS". (Still true after the third pass: the outline test catches moves off the limb, not within it.)
+  - The tests went from 12 to 16.
+- **Anatomy.**
+  - **Sternocostal part of pectoralis major:** now drawn from the lateral pectoral nerve, which carries its main level
+    C7, with the medial one second.
+  - **Accessory nerve:** its fields and course start in the cord, as above.
+  - **Nerve to mylohyoid:** named as a branch of the inferior alveolar nerve.
+  - **Wordings:** "a nerve of the lowest part of the belly wall" for the iliohypogastric nerve; "outer side" for the
+    lateral plantar nerve.
+  - **Rows taught both ways:** the other commonly taught value is now in each such row's note (16 rows).
+  - **Fibularis longus and brevis:** main level now S1. The charts of what each level moves give turning the sole
+    outward to S1; the booklet marks neither.
+  - **Flexor digitorum profundus:** marked a choice.
+  - **Honesty sentences:** the two added to `WIRING_NOTE` (the main level is this game's pick; the brain's links are
+    tied to the nearest part, no thalamus).
+  - **Brain links:** the two textbook routes and the crossings as data, as above.
+  - **Text slip:** the comment and this section now put the sacral segments behind L1, as the numbers do.
+
+**The third pass, after a third check (22 November).** The checker measured the courses in poses and found what the
+rest pose hides. What was found, and what was done:
+- **The forearm turned.** The anterior interosseous nerve's first point rode the ulna and its second the radius, so
+  with the forearm turned 80 degrees 45 to 70 mm of its first piece lay inside the radius; the twigs to pronator teres
+  passed 15 to 19 mm through bone at 150 degrees. The pose test now also turns the forearm to 160 degrees (the game's
+  own start), bends the elbow to 140 and the hip to 100, opens the jaw 30 degrees and bends and turns the neck: 19
+  poses. A new check (`poseBone`) measures, in each pose, how much of every straight piece passes through the six long
+  bones (capsules round each bone's axis, the shaft's radius, the ends trimmed by a tenth) beyond what it does at rest.
+  - All the anterior interosseous nerve's points now ride the ulna, a third of the way across the membrane from it.
+    Leaving the median nerve where it is taught to (just below pronator teres), its first piece was still crossed by
+    the radius in every choice of segments tried (27 to 47 mm). It is now drawn **leaving the median nerve near the
+    middle of the forearm, lower than taught**, and its rule says so.
+  - **Muscle points move as the game moves the muscle.** The game moves each vertex of a muscle with the two nearest
+    of the segments in its rig blend (`ns-body`). A muscle's point now rides the nearest bone among those segments.
+    Pronator teres, brachioradialis and the long radial wrist extensor get the piece of the muscle nearest their nerve
+    as their point (the median nerve passes between the two heads of pronator teres; the radial nerve runs between
+    brachioradialis and brachialis), not a belly point a third down that lay against the radius. Tried and dropped:
+    keeping each forearm twig on its nerve's bone, and each twig of 12 mm or less on its nerve's segment. That kept the
+    twigs out of bone, but left 16 muscle points 27 to 75 mm off the muscle the game draws, in the game's start pose
+    or with the neck turned or the jaw open.
+  - **The largest extra length in a long bone** is now **19 mm** (the twig to extensor carpi ulnaris, which runs from a
+    nerve on the radius to a point on the ulna, at 160 degrees). The twigs to pronator teres pass 13 mm, the ulnar nerve
+    above the wrist 15 mm. The test fails above 20 mm. Left out of that bound: the ends of the ranges (elbow 140, knee
+    120, hip 100), where the forearm folds onto the arm and flesh gives way where rigid points cannot. The median
+    nerve's piece across the elbow passes 28 mm into the humerus's capsule at 140 degrees.
+  - **The largest stretch** is 39 mm (the twig to omohyoid, neck turned 45 degrees; bound 40). At the ends of the
+    ranges, where the bound is 60 mm, it is 53 mm: the sciatic nerve behind the hip bent 100 degrees. Its point behind
+    the hip now rides the pelvis. On the thigh, the piece from the pelvis's notch to it passed 15 to 20 mm through the
+    hip bone with the hip bent.
+- **The outline test.** It now uses the limb's own bin only: the point's station (32 along the axis) and its 10-degree
+  sector (36 round it), with a 3 mm margin, and an empty bin allows nothing. Each bin holds the farthest the limb's
+  mesh surfaces lie from the axis, every triangle sampled every 3 mm (the vertices alone left thin bins empty). Beyond
+  a limb's ends it also takes in the next segment's meshes, and it takes in the meshes of muscles whose points ride the
+  limb: the hamstrings' meshes ride the shank in the rig. One point is named as lying in a hollow of the meshes, with
+  its bin bridged from two sectors to either side: the tibial nerve behind the knee, between the hamstring tendons. The
+  test checks that the bin really is a hollow.
+  - **What it catches.** Each of the 105 limb course points was moved 20, 40 and 60 mm to each of eight sides, square
+    to the axis: 2,520 moves. All 1,245 that take a point more than 5 mm past the limb's surface in its own bin fail.
+  - **What it misses.** The other 1,275 moves stay inside the limb, across it or along it, and pass. That needs the
+    meshes. The checker's own case is one of them: the tibial nerve's mid-calf point moved 60 mm outward still lies
+    inside the calf, whose back is 84 mm behind the shin's axis there. Moved 4 mm past the calf's surface, it fails.
+- **Detours and kinks.** A detour point may now turn the nerve at most 60 degrees, and a piece gets one detour. The
+  exception is a place a recipe marks as hooking round a bone: the nerve to obturator internus round the spine of the
+  ischium (99 degrees). The largest other detour turn is 59 degrees, and the 136-degree hairpin in the C7 back branch
+  is gone. Four pieces that no point within 60 degrees clears are left in bone: the posterior auricular branch 21 mm,
+  the C3 and C4 back branches 13 mm each, T2's 17 mm. The bends within the recipes were looked at too, and five were
+  smoothed:
+  - the posterior auricular branch ends at the back of the scalp muscle, without turning back 147 degrees;
+  - the lower-jaw and neck branches lost a point laid on the angle of the jaw that swung them in and out;
+  - the neck branch's sheet points sit on the neck's side;
+  - the suprascapular nerve has one point in supraspinatus, not an inner one and then an outer one.
+  9 bends over 90 degrees remain within the 316 bends of the courses: the suprascapular nerve round the blade's spine,
+  the T7 intercostal nerve's end, the deep ulnar branch round the hook of the hamate, the subcostal nerve, the
+  obturator internus hook, the deep fibular nerve onto the foot, the accessory nerve through the jugular opening, the
+  facial nerve's bend in its canal, and the superior gluteal nerve. Most are real bends.
+- **The left side.** Every point and piece is now checked against the mirrored left side's own bones as well, and root
+  openings are placed clear of bone on both sides (C1, C7, C8 and T6 moved 3 to 4 mm). The bundle of the brachial
+  plexus was lowered 3 mm, so the C8 root still climbs only 7.6 mm. In bone:
+  - right: 222 of 13,614 mm (1.6 %; 113 mm of it in the skull's passages);
+  - left, mirrored onto its own bones (not the game arm): 199 of 11,210 mm (1.8 %);
+  - the same pieces on the right: 222 of 11,210 mm (2.0 %).
+  The right side's share is up from 1.4 %: the turn bound leaves the four pieces above in bone.
+- **Smaller fixes.**
+  - **Platysma:** its point rides the neck. On the jaw, it swung 41 mm when the jaw opened.
+  - **Temporal branch:** laid every 8 mm, 1.5 mm out. Its points lie 1.6 to 2.9 mm off the nearest mesh, and the middles of its pieces up to 2.9 mm. One piece, at the upper edge of the cheekbone's arch, is 5 mm off at its middle.
+  - **Quadratus lumborum:** its way ran back up the lumbar bundle. A muscle's way now runs only outward: the root
+    joins at its own point, or at the point where the muscle's branch leaves if that lies above it. A twig on the
+    bundle itself leaves no higher than its root's join point. A test walks every muscle's whole way.
+  - **S3 and S4:** their joins were the far points because the join rule charges 3 mm for every millimetre a root
+    would climb past 3 mm. A point beside the S3 opening and one on the bundle's lower edge, in front of the S4
+    opening, now take them: 19 and 31 mm, before 75 and 79.
+- **Anatomy.**
+  - **Trapezius:** main level now C4. The charts of what each level moves give shrugging the shoulder to C4. Other
+    tables give C3, and the row's note says so.
+  - **Sternocleidomastoid and trapezius:** their notes now justify the level by where the accessory nerve's cells
+    lie (about C1 to C3 for sternocleidomastoid, C2 to C5 for trapezius), as their way is drawn. Before, they cited
+    the cervical plexus.
+  - **The crossing corticobulbar link** now ends at the opposite half of the pons, where the face's nerve centre lies,
+    not at the medulla.
+  - **Link 7:** its right-half wording is shorter.
+  - **Reading dates:** the three sources read on the second pass say 22 November.
+
+**Not done, or not right.**
+- Nothing here has been SEEN in the game: no view draws it on this branch. The pictures looked at are from a plotter
+  of this work (bones as dots, courses as lines), front and side, which shows gross errors only.
+- 74 of 152 main roots are choices, not readings; 16 rows are "taught both ways" and say so with the other value. The
+  rows least certain: the deep back muscles' levels (11 rows: no open table gives them per part).
+- A plexus is one bundle: the brachial plexus's trunks, divisions and cords, the median nerve's two roots and the
+  sciatic nerve's two halves in the thigh are not drawn apart. Branch points are where the rule put them, not measured.
+- The cranial nerves' openings in the skull are placed by offsets from landmarks, not found in the skull meshes; the
+  intracranial stretches run through bone as drawn (128 mm, in pieces that end in one of those passages).
+- Every point rides ONE rigid segment. The belly wall, the neck and the shoulder are skinned between several bones, so
+  when the trunk bends or the shoulder moves, a drawn nerve there will slide against the muscles beside it.
+- The left arm's nerves are the right arm's mirrored, not laid on the game arm's own meshes. Measured once, by hand
+  (not in a test): on the left game arm as the page prepares it (`bulkArmAssets`), all 56 mirrored arm course points lie
+  within 11 mm of one of its vertices (median 2.9 mm), and the mirrored elbow and wrist pivots within 3.5 mm.
+- The map of section 192 has to follow two changes of the third pass. The crossing corticobulbar link now ends at
+  the opposite pons, not the medulla. The way to a muscle (`nervePathForMuscle`) may start at a lower join point than
+  before: it never runs back up a bundle. Its twigs' `at` changed for 92 muscles, and 23 muscle points ride another
+  segment, as the game moves their muscle. The courses' point indices changed too (the anterior interosseous nerve now
+  leaves the median nerve at its point 5). A view that stores indices must take them from the data, not from this
+  text.
+- The map of section 192 has to follow three changes of the second pass: draw each root to its join point
+  (`rootJoin`, `rootWay`), not to the bundle's first point; draw the accessory nerve's roots from the cord's side
+  inside the canal (`rootsLeave: 'cord'`), not through the openings between the vertebrae; and use `crossing` and
+  `crossesAt` to draw where the brain's routes change sides. A copy of the map's own 26 tests (its branch at `e826d11`,
+  read only) run with this second-pass data passes 25. The one that fails counts seven head nerves a side, but the
+  accessory nerve now starts at the cord, so there are six.
+- Left out: cranial nerves IV and VI and the eye-turning branches of III (no such muscles in the rig), the pudendal
+  nerve, S5 and the coccygeal segment, the sympathetic chain, all skin nerves, the sensory side as its own routes (the
+  report up is the view's, along the same nerves).
+- The module is about 200 kB (the generated block 94 kB, of which the limbs' outline 22 kB; the tables and their notes
+  most of the rest). It is loaded by
+  nothing here; a view that imports it adds one script to the page's count (`PAGE_SCRIPTS`) and should load it on
+  first use, not at the start.
+
+## 194. The faults a review and a play-through found in Body update 63 (21 November, evening)
+
+The user: W and S "are not rotating internally or externally while moving" (Message 186); "in returning to its previous
+place, you won't see corresponding activity and muscle activation. It will just return." (206); a look or a click
+switches on what the crosshair is on (148); a limb that collides "will push them out of the way rather than going
+through them" (174). Body update 63 was read by a review (three findings confirmed by two readers each, C1 to C3;
+twelve more that nobody had checked, U1 to U12) and played by testers (two findings seen by one tester). Each was
+shown here first (offline on the game's own body, in the browser, or, for U1 and U3, from the code and by arithmetic:
+said where it applies), then fixed in the function it was in, with a test that fails on update 63. A check of the
+package the same night showed C3 and U1 in the browser, before and after, and found eight more things; what was done
+about them is in the paragraphs marked "after the check".
+
+**S on a hanging arm no longer turns the upper arm** (C1; `LIMB_CHAIN.rightArm.spin.across.elbowMm` in `ns-grasp.mjs`).
+Section 183 let the keys turn the right upper arm about its length "only with the arm brought across the front of the
+body". The test for that asked only that the hand's place lie 20 mm toward the body's other side of the elbow. A
+hanging elbow sits 5 to 11 cm to the outside of the shoulder that S draws the hand toward, so the test held there too;
+the low arm has no sideways swing left under the combined-range rule, the step counted as blocked, and S turned the
+upper arm inward. Offline, on the game's own body, 90 frames of S as the game runs the keys: from raise 20 / swing 0
+the turn went 35 to -15.8 degrees, from 0 / 0 to -16.5, from 20 back to -13.8, from 34 back to -5.8; with the arm
+raised out to the side and the elbow at a right angle, A turned it outward to as much as 55. Of 150 poses the body
+takes, S turned the upper arm in 24: 4 across the chest (meant), 1 by the body's own range rule (not the keys) and 19
+that were not meant; A in 5 that were not meant. The turn's leave is now given only with the upper arm itself brought
+across: the elbow at least `elbowMm` (80 mm, a quarter of the upper arm's length) toward the body's other side of the
+shoulder. In every wrongly turned pose the elbow was 57 to 327 mm to the outside when the leave was given; in the arms
+across the chest (raise 40 to 90, across 20 to 45) 110 to 251 mm to the inside. After: S turns the 4 across the chest
+by the same amounts as before (-39 to -55) and the range rule's 1; A none of its 5; the arms across the chest of section
+183's tests are unchanged (the hand in to 14 cm of the shoulder). Two low arms just inside (raise 20 and 30, across 15,
+the hand in front of its own side of the chest) were turned 67 degrees before and are not now. The test is made when the
+leave is given, not while it lasts: as S draws the hand in, the elbow itself goes back out past the shoulder.
+After the check, two residues, both shown offline with the check's own probes (`across.handMm`, `across.again`):
+- The leave lasted until the look next carried the limb, so the keys alone could take it out to the side: across the
+  chest 43 / -31, S for 1.5 s, W, D, then S again turned the upper arm from -49.0 to -56.1 with the elbow 29 cm outside
+  the shoulder (4 of 24 such runs, 2 to 7 degrees). The leave now ends, and none is given, once the hand's place is
+  level with the shoulder or outside it (`handMm` 0): 0 of 24. While S draws a hand in from across the chest its place
+  stays inside, and those runs end as before.
+- The app takes the leave away whenever the look carries the limb. At raise 70 / across 30, after half a second of S
+  and a small look movement, the elbow was 79 mm inside (under `elbowMm`), no leave was given again, and S ended with
+  the hand 28 degrees off its line and the turn stuck at -19. An upper arm that the keys have turned, and that nothing
+  else has turned since (the solve keeps the turn's value before and after the last frame that turned it, and the next
+  frame's value must lie between them), is given the leave again without the elbow's test while the hand's place is
+  inside: the run now ends 9 degrees off at -44, as the uninterrupted one. A second such run (raise 90 / across 20)
+  ended 27 degrees off at +4 on update 63 as well and now ends 11 off at -28. A first version gave the leave again to
+  any upper arm turned inward of 12 degrees; the limb turn's own overside end is -15, so after a double tap of Space
+  it would have turned the low arms that `elbowMm` refuses (a test now keeps that). A second check then found that the
+  record outlives the look's carry (the carried arm is solved with no spin, so the turn and the record stay): S across
+  the chest, the look carried the arm down to a low pose, then S turned the upper arm 3 to 20 degrees more in 65 of 96
+  such poses, with elbows from 97 mm outside to 55 mm inside the shoulder. The renewed leave now keeps part of the
+  elbow's test (`againElbowMm`, 60 mm inside, against 80 for a first leave): 0 of 96, and the case above (79 mm) is
+  still given it. Of the check's 129 poses the same 17 turn by the same amounts and the same 6 low arms are refused.
+
+**The view's follow of a keyed limb is the game's turn again** (C2; `followLimbView` in `ns-app.mjs`). Section 184 made
+a turn the game makes by itself feed no glow and switch nothing on (`gameLookSeq`); section 185 rewrote the follow.
+After the merge the count stood only in the old follow's branch, which no longer runs, so every turn of the live follow
+(up to 75 degrees a second) was read on the next frame as the player's own look. In the browser (key 4, then D held):
+while the view turned 26 degrees to keep the right hand in the picture, the neck area rose to 0.69 and the LEFT
+shoulder's area to 0.61, and the left shoulder of your body and of the mirror body were drawn blue, with only the right
+arm moving. One line (the count, after the follow's turn). After: the right shoulder's area 1 (the limb the key moves),
+the neck at the turned head's own resting level 0.07, the left shoulder's area not shown, nothing blue. This is also
+the review's U2 and U10, and section 185's "H9's side effect ... was not traced".
+
+**A movement started while another still carries the view holds the look on its own spot** (C3; `CARRIED_LOOK.chain`,
+`carriedLookStep`). The hold of section 184 was decided once, when the view began to be carried, and "no hold" then
+stood until nothing carried it any more. A second neck or trunk movement begun in that time (within about 1.5 s) got no
+hold. In the browser it happens through a click (while the trunk moves the look is recorded silently) and, as the check
+found, through the look itself in the moment the trunk stands still at its end: "Lean back" by a look, the look moved at
+once to a neck spot, then a click there or the look's own rest. On update 63 the click started "Tilt head back", the
+view swung 30 degrees up, the tip by the crosshair went blank, then said "Right middle finger", then "Right thumb", and
+a second click 12 frames later did not repeat the movement (the check's run: the tip said "In-between area", nothing,
+"Eyelids", and a second click 0.47 s later did nothing; on this branch the look stayed on Neck through the swing and the
+second click repeated the movement). Now a movement begun while the view is still carried (the activity's count of
+movements, `moveSeq`, has gone up) is decided afresh by the same first-frame rule; a hold that is on stays the same hold
+when a click repeats its movement.
+
+**The hold ends with E and with a turn of the look by the game** (U1; `CARRIED_LOOK.viewEnds`). The hold stood for "the
+player left the look where it was" and told that from the pointer alone. E changes the view, and choosing a limb or
+moving one with the keys lets the game turn the look: the crosshair is then on something else by the player's own doing,
+while the look went on naming the old spot and a click repeated the old movement (read from the code: nothing ended the
+hold but the pointer and an area key; shown in the browser by the check: on update 63, after E, with the crosshair on
+bare brain in the outside view, the tip still said "Neck" and a click repeated "Bend head forward", and with key 4 and D
+held the follow turned the look 8 degrees, the hold stayed and a click repeated; on this branch the tip follows the
+crosshair and the click does nothing in both). A change of the view (the count of E presses) or a turn by the game since
+the hold began now ends it, like the player's own look.
+
+**A look that arrives on an area during a neck or trunk movement switches it on when the movement is over** (after the
+check, its one major finding, an old fault; `CARRY_ARRIVAL`, `carryArrivalStep` in `ns-app.mjs`, the gaze event's
+`arrivedFrom` in `ns-actions.mjs`). While a neck or trunk joint moves, or the eye view still swings, the gaze is
+recorded silently: the view slides by itself then, and what it slides onto must not switch on (section 184). The
+player's own pointer can move the look in that time too, and the area it came to rest on was recorded just as silently,
+so once the movement was over the area counted as already looked at and stayed dead until the look left and came back.
+In the browser, on update 63 and on this branch before the change: "Lean back" by a look, the look moved in one move
+onto the left toes' area while the trunk contracted, the trunk at rest 1.3 s later, the look resting 3.7 s: nothing (the
+count of movements 4 to 4 and 7 to 7). Now, when the PLAYER moved the look during such a movement, the frame remembers
+the area the look was on before, and the first frame after the movement tells the activity so: an area other than that
+one is met as an arrival and switches on after the usual rest. After: the left big toe curled about 0.35 s after the
+trunk was at rest (7 to 8), with no look off and back. What does not count, and switches nothing on as before:
+- the player left the look alone (the view only slid and came back: section 184's case);
+- the look is held on the movement's own spot, or a click took the area under the crosshair;
+- the frame was silent for another reason as well (the game turned the look, a limb or the mirror body is carried, the
+  view was changed);
+- the look ends on the area it started from. That covers a nudge of the mouse during the head's own swing, which would
+  otherwise make the same area fire again each time; it also covers a look that went away and came back within the
+  movement, which is judged by where it rests when the view is the pointer's again (during a swing of 15 to 30 degrees
+  what is under the crosshair says nothing of where the look is).
+The check's suggestion, to give the silent frames to the activity as empty space, was not taken: a click during the
+movement acts on the area the activity has under the look and would have found none, and the nudge above would have
+fired the area again.
+
+**A push asks for the same approach speed at every refresh rate** (U3; `LIMB_PUSH.frameRefS`, `pushFrameShare`). The
+push's three small distances (the mover's end moved 0.4 mm, the overlap grown 0.5 mm, and section 185's `approachM`, the
+point of contact come 1 mm nearer) are per frame. At 60 frames a second the keys move a limb's end 10 mm a frame, and
+1 mm is an approach of 6 cm a second; at 240 frames a second the same 1 mm asks for 24 cm a second, so a contact near
+the mover's root or at a slant (a quarter of the keys' speed is 0.6 mm a frame there) never counted and the limb was
+passed through (by arithmetic: the browser here draws 60 frames a second at most). On a frame shorter than a sixtieth
+of a second each distance is now taken in proportion. At 60 frames a second and below nothing changes.
+
+**One quick look move from an arrow onto an area switches it on** (the play-through; `PICK_LAG`, `overrideChangeSilent`,
+stepFrame). The crosshair's pick (what is seen there: an arrow tip, a body) is asked of the picture drawn the frame
+before, and since 19 November its answer serves two more frames while no input event arrives. After one quick move from
+an arrow tip onto a nearby area the pick went on saying "arrow" for up to three frames, and the gaze was blanked; when
+the fresh pick came the look had not moved, so the change counted as "only an override changed under the same look" (the
+rule that no area switches on because a body or an arrow tip moved off it) and was recorded silently. The area was then
+only seeded: it could not switch on however long the look rested, until the look left and came back. In the browser,
+from the arrow at the top of the strip in one move onto the left toes' and the right toes' area: on update 63 neither
+switched on in 90 frames of rest (2 of 2; each did after looking off and back). A change of the override within
+`PICK_LAG.frames` (3) frames of the look's last movement is now taken as the pick catching up with the player's own look
+and is not silenced; later than that it is silent as before. After: both switch on (2 of 2), as does the same move from
+bare glass (the check: 0 of 3, then 3 of 3, two of them at the game's own 56 frames a second). After the check: the 3 is
+no longer a number of its own. `PICK_LAG.reuse` (2) is the count of frames a pick's answer goes on serving, read by the
+frame's pick itself, and `frames` is reuse + 1: the pick is of the picture drawn the frame before, so that is the exact
+longest lag (the third still frame), not a margin. And the window opens after the PLAYER's look only: a look or a view
+that changes on a frame that is silent for its own reason (the game turned the look, E, the head carried the view, the
+brain turned a step) starts the count past the window (`stillFramesNext`), so a late pick after such a change is
+silenced as it was before this rule. The lag the other way stays: after one quick look move ONTO an arrow tip the area
+behind the tip is looked at for up to three frames, which under about 43 frames a second is longer than the 0.07 s rest,
+so that area could switch on (by arithmetic; neither the check nor this package could stage it: the arrow tips at the
+start view have no area behind them). Asking the pick afresh whenever the picture it was taken from is no longer the
+last one drawn would cut the lag to one frame both ways (`PICK_LAG.fresh`, built and left off). It was taken only if it
+cost no frame time while the look moves, and it does: measured in turns on one page while the look moved as in the frame
+table's "look" case, the pick asked on nine frames of ten instead of one in three, and its own time went from 1.3 ms a
+frame to 3.3 to 4.5 ms (the whole frame's mean from 19 to 21 ms to 21 to 22 ms in the quiet pairs; the frames a second
+differed by less than the runs' own spread).
+
+**Words** (U4 to U9, U12). With a free pointer over one of your limbs the tip said "Space holds your right hand"; Space
+there chooses the limb (section 186 corrected the card, not this tip): now "Space chooses your right arm"
+(`TIP.spaceAim`). The grip card's "Your right leg is chosen" named the limb the press of Space had chosen; with Space
+kept by a tap, key 1 to 4 or a double click chose another limb and the card went on naming the old one: it now names
+the limb chosen now (`gripChosenLimb`). The tutorial's drag line and the player guide said every sideways drag on a
+limb turns it; on the right hand it bends the wrist (section 183): both say so. The player guide said W and S never
+turn a limb; it now names the one exception, the right arm across the chest. The preview notes' Controls list said both
+"Press a number, 1 to 9, to do the movement" and "1 to 4 choose a limb", that Space takes hold of a limb and "Your left
+hand closes", that a click does "the highlighted movement", and that E "does nothing while Space holds something"; and
+its limits said the left wrist's sideways bends "only light their area" (they move the hand since section 184). Each
+now says what the control does.
+After the check, each first read against the code (the numbers 1 to 4 choose a limb and 5 to 9 do nothing; Space on a
+limb chooses it; the areas with no movement are the tongue and the three in-between areas of each half, the left
+shoulder has four): the preview notes no longer say that a movement stays until its opposite is switched on, that a
+number key moves a body part, that held movements do not add up or need a key to come back, or that Space holds a limb
+and closes the left hand; the README's paragraph on the areas no longer says that keys 1 to 9 do the movements, that a
+part stays where it was driven until the opposite area is switched on, or that W, A, S and D move the left hand only;
+in `ns-text.mjs` the keyboard picture's spoken label, the line under it about Space and the older one-line hint say
+that 1 to 4 choose a limb, that Space on a limb chooses it and that a look does the movement. (A second check: after a
+tap that keeps a hold of the brain or the mirror body the hands stay closed with Space up, so the line under the picture
+and the preview notes say "while Space is down, or keeps a hold after a tap". The one-line hints are put in the HUD's
+hint slot, which the style sheet hides; their comment says so.)
+
+**Looked at and not changed.**
+- U11 (the review: the gate of section 184 "removes the looked-at link that drives ... the whole-brain pick tint").
+  True: the tint follows the strongest glow link, and since `LOOK_ARMS.on` gates the soft link of the area the look
+  rests on, an area that is only looked at has no link once its contraction's light has ended (in the browser, the look
+  resting on the right toes' area: no glow link). The whole brain's faint light in the area's colour (Message 177)
+  therefore shows for the 0.4 s of a contraction and for a muscle under the crosshair, no longer for an area the look
+  rests on. Left to the package that is rebuilding that light.
+- The play-through's second finding ("as a toes area's return begins, the brain tissue next to it turns lilac and fades
+  only slowly"). Shown as numbers on update 63, and it is the tissue's own light (`BRAIN_LIVE.bloom` and the area loop
+  of `ns-scene-three.mjs`), by two of its rules. The tissue round the area under the crosshair keeps a bloom of
+  `lookLevel` 0.35, with a dimple of 0.8 mm, for as long as the look rests there (read 4 s after the area's own movement
+  had ended, and 1.9 to 5.7 s after a click: strength 0.35), so when a contraction's light ends the bloom falls from 1
+  only to 0.35 and stays. And a bloom that is let go eases out with `outS` 0.8 s: after the look had left, 0.14, 0.10,
+  0.05 and 0.03 were read about 0.3, 0.8, 1.5 and 3 s later. Both belong to the light another package is rebuilding;
+  nothing was changed here.
+- The arrow keys from the start view (the right key steps to the Throat, then to the lower in-between area, then finds
+  no area). The walk does end there. The areas are one chain (`areaChain`: one half's lowest face area up to its toes,
+  then the other half's toes down to its lowest face area); the brain is drawn turned, so the right key walks toward the
+  chain's start, which is the strip's lower right end, and from the start view the nearest area to the right of the
+  crosshair is the Throat, one from that end (section 184 said so under "not right"). The other key walks the whole
+  strip from there (below).
+
+**Each arrow press lands on the next area, both ways** (after the check; `areaStepTries` in `ns-app.mjs`). On update 63
+the left key walked 52 areas from the lower right end to the lower left one and passed over one, the right middle
+finger's, coming from the index finger's; the right key landed on it coming from the ring finger's. A narrow area has no
+point with the area all round it, and then only the first point seen was tried: when the look found for that one point
+came out on a neighbour (the eye moves as the head turns to it) the area was passed over, although
+`AREA_STEP.looksPerArea` allows three looks. Every point seen is kept now and up to three are tried, the one with the
+area all round it first. In the browser on this branch, one press at a time and each one settled: from the start view
+the right key took two presses to its end, then the left key landed on 53 areas in 53 presses, every press on the next
+area of the chain and none passed over, and the right key back the same; all 54 areas. The player guide's paragraph on
+the keys says in two sentences that the strip is one line and which key walks which way.
+
+**Checked.** 528 unit tests on the first pass (eleven new; each fails on update 63's files); on the second, the test
+files of this package and the ones beside them (104 tests in 14 files, all pass): `tests/fix63.test.mjs` has 13 tests
+now (new: the arrival after a carry, as the activity sees it and as the frame tells it; the pick-lag window after the
+game's own changes; the walk's tries) and `tests/limb-hold.test.mjs` two of this package (new: the two residues of C1).
+`?case=boot` ok. Offline, on the game's own body: the keys' turn of the upper arm from 150 poses for each of W, A, S and
+D, before and after, and the check's two probes after its residues. In the browser, on update 63 and on this branch with
+the same scenario: the follow's lights (C2), the look move from an arrow (0 of 2, then 2 of 2), the check's scenario 2
+(the arrival after a carry: 7 to 7, then 7 to 8; the look move from an arrow 3 of 3; C3's second click during the swing
+repeated the movement; U1's follow turn ended the hold), the arrow keys' walk to both ends. The browser tests
+`browser-startup` and `browser-keyboard-aim` pass on the second pass (on the first, `startup` timed out at its own 60 s
+wait on the busy machine, on this branch and on update 63 alike); the other twelve are left to the merge's checks. The
+first pass ran on a machine shared with six other packages (one to three minutes to load the game, a frame every half
+second to two seconds); the second ran one job at a time at the game's own speed. The frame table was not taken (the
+lead runs it on the merged work); the only frame-time question of the second pass, the fresh pick, was measured as above
+and left off. None of the changes taken adds work to a frame beyond a few counts and comparisons, and on a frame of the
+keys' solve of the right arm one more point of the posed arm.
+
+**Not done, or not right.**
+- The lag of the pick the other way (one quick look move onto an arrow tip; below about 43 frames a second the area
+  behind the tip can switch on) stays: its fix costs about 2 ms a frame while the look moves. Not staged in the browser.
+- U3 was not tried on a display faster than 60 frames a second.
+- The tests of the arrival after a carry and of the pick-lag window check the pure rule and the activity; the wiring in
+  the frame is shown by the check's browser scenario, not by a unit test. The C2 test still reads the source (now
+  without its comments); a behavioural test would be a browser run, not written.
+- The keyboard picture still lights the number keys 5 to 9, which do nothing since the numbers choose a limb (its rows
+  take the movement keys' list); the README's opening paragraphs on the update of 11 November still say Space takes
+  hold of a limb; the README's and the preview notes' sentences on the lights were left to the package rebuilding them.
+- U11 and the tissue's light (above) are handed over, not changed.
+- The keys' record of their own turn (`spinTurn`) is in the solve's memo, which the app keeps for the whole game: a
+  turn the keys left in place gives the leave again in a later hold of the same arm too, while the hand's place is on
+  the body's other side of the shoulder, the elbow at least 60 mm inside it, and nothing else turned the arm in between.
+  Shown offline only, not in the browser.
+
+## 195. Limbs that never whip, flicker or pass through each other, and a neck step that keeps its block in view (22 November)
+
+The owner: "the limb keys never whip" (section 185's heading, from Message 186: A and D swing a limb "between medial and
+lateral, so abduction, adduction", W and S along its line); no blinking or flicker, "the game currently physically hurts
+to look at with your eyes"; a limb that collides pushes the other "out of the way rather than going through them"
+(Message 174); "no permanent movements" (206); neck movement exaggerated "so you can see it's moving" (200). A browser
+hunt of Body update 64 found, each reproduced by a second tester: H1, the folded right arm thrown round the shoulder by
+A or D; H2, the shoulder's light flickering at the end of the arm's range; H3, a leg swung out going through the arm on
+its side; H27, a step onto a Neck block throwing the view 30 degrees up. A check of the SEEMOVE rounds found the right
+leg left 87 mm off its place after "Bend trunk forward" with the right arm chosen. Each was shown before the change
+offline on the game's own body and in the browser, then fixed where it arose; the new rules are in a new module,
+`ns-limb-pace.mjs`.
+
+**The elbow and the knee keep the keys' pace; a throw is taken slowly** (H1; `LIMB_PACE` in the new `ns-limb-pace.mjs`,
+used in `stepLimbHold`'s cut of a keyed frame in `ns-app.mjs`; `solveLimb` in `ns-grasp.mjs` now also returns `bendMm`).
+Section 185 kept the hand's or foot's move to `keyMost` (1.25) times the keys' way, and nothing kept the elbow or the
+knee. With the elbow fully bent (after S) the hand lies close to the shoulder, near the line the forward raise turns the
+arm about; there the two shoulder joints the keys' solve uses turn the hand almost the same way (offline on the game's
+body, along D after S: their columns went from 58 to 11 degrees apart, the smaller singular value from 1.22 to 0.14 mm a
+degree, against a damping of 0.81), and the damped step answered a 1 to 2 cm step of the hand with 12 to 24 degrees of
+upper arm a frame. Now, on a frame of the keys: the elbow or knee point goes at most `bendMost` (1.25, the same as the
+hand) times the keys' way; and where it would go more than `rhoFar` (2) times as far as a swing of the limb as one
+piece would take it for the hand's own move (the throw: the limb turning round its own line from the shoulder to the
+hand), the frame creeps, the elbow at most `creepMost` (0.5) times the keys' way. The cut is made in the same loop as
+the hand's, measured again on the pose after each cut. Measured over 96 right-arm poses, each key 0.75 s (13 018 moving
+frames): the elbow went 6.0 / 16.8 / 43.8 / 94.4 mm a frame (median, 90th, 99th percentile, most) for the keys' 10
+before; after, its 90th percentile is 12.5 for every key. `creepMost` 0.3 was tried first: two folded right-arm poses
+were then moved by W alone (A 2 to 3 mm, D 0 to 1 mm in 0.1 s), against the project's own trap test; 0.5 passes it (0
+of 132 poses). Tried and dropped: a move whose elbow goes more than 4 times as far as the hand waits (the folded arm
+then answered W only); the elbow's pace alone (the throw became a 0.6 s sweep of the upper arm behind the trunk for 5 cm
+of hand); a cut of the out-of-plane part of the elbow's move (the forearm's plane turns under W and S too: half of all W
+and S frames would have been slowed); a damping in proportion to the largest column (it cannot bound a step that answers
+the 2 cm lead without making the folded arm slow everywhere).
+
+**The keys let go, the limb stops** (H1, "a short tap keeps it swinging for about 0.9 s"; `LIMB_PACE.releaseStops`). The
+keys' place runs up to 2 cm ahead of the end, and the frames after the key went on solving toward it, through the same
+throw. On the first frame without a key, the place is now put where the end is and its place in the picture taken
+again (as the hold's own rule takes it), unless the look is carrying the limb that frame.
+
+**No flicker at the end of a range** (H2; `HOLD_LIGHT` in `ns-limb-pace.mjs`, fed in `stepLimbHold`; `applyLimbJoints`
+takes the joint to light). At the back end of the arm's range the keys' solve could not settle: each frame it moved the
+shoulder's sideways joint back and forth by 0.01 to 0.3 degrees (after the key was up by 0.0001 to 0.004), every such
+change counted as a move, and each lit its own direction's action: "lift the arm sideways", which lights the big shoulder
+muscle beside the eye, and "bring it in", which lights muscles out of view, in turn. `minDeg` (0.02): a frame whose
+largest change is under it is no move (nothing is set or lit, and the hold stops solving a place it cannot reach).
+`flipDeg` (1): the light names a joint and direction only once that joint has gone at least a degree that way since it
+last turned, and keeps naming it while it goes on; a joint that trembles lights nothing new, a real turn back lights
+after a degree.
+
+**A limb stops against one that cannot give way** (H3; `LIMB_BLOCK` in `ns-limb-pace.mjs`, in `stepLimbPush` and
+`stepLimbHold`). The push (section 139, `LIMB_PUSH`) moves the other limb at most 12 mm a frame and only by the
+overlap's growth; a thigh near the knee swept 20 to 34 mm a frame, an arm only partly follows, and the left hand stops at
+its full reach while the push counted it as given. The pace above already slows the knee to the keys' pace; and now each
+pair's overlap is remembered from when the two first touched, and once it has grown `deepM` (8 mm) past that, the pair
+blocks: a move of the chosen limb deeper into the other waits (as a limb waits at the body), whatever moves it (the keys
+or the look), until the two no longer touch; a move along it or away, or back down to `deepM` past the first touch, is
+taken. Only with the trunk at rest: a first version also refused the view's hold during "Bend trunk forward" (with the
+right arm chosen, the hold could not keep the hand in its place) and left the right arm 260 mm off its place when the
+trunk came back.
+
+**A limb pushed during a trunk movement goes back with it** (the SEEMOVE check's K4 and K3; `PUSH_BACK` in
+`ns-limb-pace.mjs`, `stepPushBack` in `ns-app.mjs`). With the right arm chosen, "Bend trunk forward" carried the arm onto
+the right thigh, the arm pushed the leg, and the leg stayed 87 mm off its place: the push rule keeps a pushed limb where
+it was pushed (Message 174: "to put them back in place, of course, you've got to grasp them and move them"), but this
+push came from a movement that returns by itself (206). A limb pushed while the trunk (or the neck's bow) is not at rest
+now keeps the angles it had before the first push of that movement, and goes back to them in step with the trunk's way
+back (`holdArmBack`, the rule of the right arm let go during a movement), unlit, exactly at rest. A push at rest stays,
+as Message 174 asks; a pushed limb chosen before the trunk is back is the player's and stays where it is.
+
+**"Tilt head back" keeps its block in the picture** (H27; `NECK_VIEW.upKeepShare` 0.5 and `upRiseS` 0.12 in `ns-app.mjs`,
+`neckViewStep` given the picture's height). Since every movement starts from the bowed posture (206), the tilt travels
+the neck 100 degrees, and `extendShare` 0.3 gave the view 30 degrees up: at 1600 by 900 the picture's whole half height,
+so the block the step had put under the crosshair, and the mirror body's neck, went to the bottom edge and out. The view
+now goes up at most half the picture's half height (13.5 degrees at 1600 by 900, half of its 27-degree half height;
+section 171 measured 15 on a click when a press
+still started from the last one), and its rise is eased over 0.12 s (it took 0.15 s for 26 degrees). The swing stays:
+Message 200 asked for the neck movement to be exaggerated. Without the picture's height (the pure default) the rule is
+as it was.
+
+**Second pass, after a check of the package** (22 November; the check confirmed H2, H27 and the 87 mm leg fixed, and
+found H1 only slowed, the creep making A and D on a folded leg about five times slower, the way back cancelling a
+movement of the pushed leg, and a break against SEEMOVE round 7). The branch first took in SEEMOVE rounds 7 and 8
+(d7690dc, 2692335); round 7 changed the form of `holdArmBack`, and the push-back's call to it would have thrown inside
+the frame and stopped the game.
+- **A or D on a folded right arm swings it out to the side by its upper segment** (`LIMB_PACE.swing`, `foldShare` 0.6,
+  `limbSwingMove` and `limbFolded` in `ns-limb-pace.mjs`; used in `holdTarget` and the keys' cut of `stepLimbHold`).
+  With the hand at the shoulder, a turn of the shoulder-to-hand line toward the body's right or left can only be
+  answered by the two shoulder joints swinging the whole upper arm round; the first pass only slowed that. Now A or D
+  alone on an arm whose hand is nearer the shoulder than 0.6 of its reach turns the arm as one piece, judged by the
+  upper arm: the elbow point goes toward the right or left on its ball round the shoulder and the hand is carried
+  rigidly, the hand at the keys' step unless the elbow would outrun its pace, and no further than the upper arm pointing
+  straight along the body's right or left. That is the sideways lift the owner named for A and D (Message 186). Where
+  the swing cannot be followed (the folded arm hanging and brought across, which the combined-range rule allows no
+  room for that low), the frame falls back to the turn of the line, so A still brings the folded arm across the chest.
+  A straight or part-bent arm is moved as before. Not for the legs (`LIMB_PACE.leg.swing` false): a thigh's sideways
+  lift ends at 45 degrees, and a swing judged by the thigh went on by lowering it: in the browser A took a left leg
+  drawn up out to the side and on down and back behind you (746 mm of ankle in 2.5 s). Tried by the check and dropped:
+  the forward raise clamped to 0 to 110 under A and D (D stopped dead after 0.6 s; S, A, D still ended at 110).
+- **The legs keep the keys' pace** (`LIMB_PACE.leg`, `paceFor`). A thigh swung out with the knee drawn up moves the knee
+  about twice as far as the ankle, a sweep and not a throw (rho 2.0 to 2.15, just over `rhoFar` 2; the arm's throw was
+  7 to 25), and the arm's values held a folded leg's A and D to about 0.11 m/s for the keys' 0.6. A leg's knee may now go
+  `bendMost` 2.5 times the keys' way and no creep is applied to a leg. The pace is measured against the keys' own step
+  this frame (a swing moves the hand less than the step).
+- **A fast first touch is stopped from where they touched** (`LIMB_BLOCK`, `stepLimbPush`): where the two limbs were
+  apart a frame before, the touch is taken at `slackM`, not at the overlap of its first frame (with the knee at the
+  legs' pace that could already be 2 cm).
+- **The way back is this package's own step, on the joints' places** (`pushBackStep` in `ns-limb-pace.mjs`;
+  `stepPushBack` and the push in `stepLimbPush`). It set all three joints of the pushed leg on every frame of the trunk's
+  return, and setting a joint's place and position ends its movement, so "Bend right knee" switched on meanwhile did
+  not happen (the check's P2); and the push recorded where a movement had the knee, so a knee bent when the leg was
+  pushed stayed bent (P1, old: 664 mm off on the branch, 683 on update 66). Now the places to go back to are the
+  activity's `bodyGoal` from before the first push (never where a movement has a joint), they are set as places only
+  (round 8's `limbPlace`: a movement of the joint goes on and returns to the new place), the push itself leaves a joint
+  in a movement alone, and the record lasts until every joint is home (what is left near rest goes at most `restDegS`,
+  90 degrees a second).
+- **The light starts its runs again when the keys change** (`stepLimbHold`, `holdLight` reset). After S, the next key
+  went on naming S's joint (left leg S then A lit hip flexion for the whole A). The anti-flicker rule is unchanged.
+
+**Measured.** Offline on the game's body (`tests/limbs2.test.mjs` steps the keys as `stepLimbHold` does), and in the
+browser on this branch against port 18930 (update 65), the game stepped at fixed frames through its own QA step, so the
+numbers do not depend on the machine's load:
+- H1, 4, S 2.5 s, D 0.6 s: before, the upper arm went from 17 to -60 degrees of forward raise in 10 frames (0.17 s), the
+  elbow up to 93 mm a frame (5.6 m/s), 532 mm in all, for 67 mm of hand; after, 21 to -5 degrees, the elbow at most 13 mm
+  a frame, 197 mm, for 38 mm of hand. A 0.1 s tap of D: before, the arm went on from -30 to -60 in the second after the
+  key (194 mm of elbow); after, nothing moves (0 mm). D from the start (a straight arm): the same on both, 594 mm of hand
+  in 1 s. S, A 2.5 s, then D 2.5 s: before, up over the head (forward raise 164), the elbow up to 80 mm a frame; after,
+  still up to 138, at no more than 13 mm a frame (see "Not done").
+- H2, the hunt's steps at 40 ms frames (the hunt played at 16 to 34 frames a second; at 60 the light's own ease of
+  30 ms hides most of it): before, while D holds the arm at its back end and for half a second after, the share of
+  bright orange in the shoulder's part of the picture went 11.7, 9.3, 10.7, 3.4 and round again, a four-frame cycle,
+  and the lit action switched between "lift sideways" and "bring in" 11 to 14 times; after, the one action lit once,
+  rose and faded with no jump between frames.
+- H3: the overlap of the leg's and the arm's rods (the game's own) after left leg S, A was 33 mm before and 2 mm after
+  (46 pushes; in the eye view the left hand is beside the thigh, where before it was inside it and out of sight); right
+  leg S, A, D: 34 mm before, 10 mm after (the stop engaged).
+- The SEEMOVE check's K4 (right arm chosen, "Bend trunk forward", Space 0.45 to 0.85 s, then everything settled): the
+  right leg 87 mm off its place before, 0 after (pushed up to 75 mm during the movement); the right arm 1.4 mm on both.
+- Second pass, the check's own runs on the merged branch against 18930 (update 66), QA-stepped at 60 Hz:
+  - H1: 4, S 2.5 s, then D 2.5 s: the upper arm ends level out to the right (abduction 95, its direction in the room
+    [1, 0, 0]), where update 66 ends it behind the trunk ([0.49, -0.80, 0.34], forward raise -60) in 0.17 s; S, A 2.5 s,
+    then D 2.5 s: out to the right, level (raise 81, abduction 95), where update 66 ends it over the head (164); the
+    elbow at most 13.4 mm a frame (93 to 108 on update 66); a 0.1 s tap: nothing after the key; a part fold then D:
+    out to the side. In the eye view after S, A, D the hunt's "torn" picture (dark flat slabs of the raised upper arm,
+    a stretched chest sheet) is gone.
+  - H3: left leg S, then A into the arm: the stop holds it at 5 mm of rod overlap (28 at the first touch), update 66 at
+    33 (58); right leg: 6 (17), update 66 34 (45). Afterwards each leg's keys move the ankle 215 to 300 mm in 0.5 s
+    (update 66: 263 to 303; the lowest, the left leg's D, meets the right leg and is stopped there).
+  - K4, K3 and K7 (the leg pushed during a trunk movement): the right leg 0 mm from its control at the end (update 66:
+    87, 87, 67.7); P1 ("Bend right knee", then the trunk): 0 (update 66: 683); P2 (the knee switched on during the
+    trunk's return): the ankle goes 793 mm, as with the knee alone (757), where the first pass left 75.
+  - Offline after S, 0.5 s of each key on a folded leg: left A 148 / D 269 mm, right D 116 / A 263, as before LIMBS2
+    (138 / 269, 116 / 262; the first pass 68 / 67, 65 / 64).
+- H27, "Tilt head back" with the look beside its block: before, the view went 30 degrees up, 22 of them in 0.12 s, and the
+  lit block went down the picture to its bottom edge and out of it from 0.17 s; after, 13.5 degrees (half of the
+  27-degree half height of this window), 10 of them in 0.2 s, and the block stayed in the picture for all of its light.
+
+**Checked.** `tests/limbs2.test.mjs` (new: the pace and its creep, the held limb's light at a range end, the stop and its
+allowance, the way back of a push during a trunk movement, the eye view's tilt back, and H1 on the game's body, with the
+fault shown when the pace is taken out: the upper arm swung to its back end, the elbow over 4 times the keys' way). The copy of the
+keys' frame in `tests/limb-hold.test.mjs` (`driveKeys`) now applies the pace as the game does, so its trap grid (two
+keys moving every pose of 132) guards it. Unit files limbs2, limb-hold, limb-pair-push, neck, switch-on, seemove,
+return-rules, fix63, limb-keys, limb-follow, load-progress: 100 pass, 0 fail (second pass, on the branch with SEEMOVE round 8
+merged: limbs2, limb-hold, seemove, limb-pair-push 51 pass; the other seven files 52 pass). The start check `?case=boot` ok. Browser
+tests `startup`, `keyboard-aim` and `limb-controls` pass. Frame table (still / look / up and down / limb turn,
+this branch against port 18930 in turns): 59.7 / 35.9 / 53.5 / 54.0 against 59.7 / 35.1 / 56.4 / 56.2; 60.0 / 37.9 /
+42.1 / 50.0 against 55.2 / 34.0 / 45.6 / 46.8; a third pair, since up and down was lower twice, 55.2 / 39.0 / 46.2 /
+52.5 against 57.6 / 39.1 / 40.9 / 46.4. No part is slower in all three (this branch also carries update 66, which
+18930 does not); the new work runs only on frames of the keys, in a contact, or while a pushed limb goes back.
+
+**Not done, or not right.**
+- The folded arm's swing ends with the upper arm straight out to the side, the forearm still folded; A from there goes
+  back the same way, and over the chest the turn of the line takes over again for the frames the swing cannot make,
+  so A across the chest is the first pass's slow curl. A leg is not swung: on a folded leg A and D stop where the
+  thigh's sideways lift ends (45 degrees), as before LIMBS2. The elbow goes up to 13.4 mm a frame, 1.34 times the keys'
+  way where 1.25 was asked (the cut is measured on the solve's pose; the drawn pose differs a little).
+- The pace is for frames of the keys only. The look's carry, and the rejoin after a look, keep their own rules (the
+  rejoin limits only the hand's speed).
+- The light rule is for the limb the view holds (the keys and the look). A drag on a limb and the Space grasp still
+  light the joint that moved most on every frame; the move glow of the joints' speed is unchanged. The flicker was
+  measured at 40 ms frames; the flashes have still not been checked against guidance for people sensitive to flashing
+  light.
+- The stop works on rods, not the drawn surfaces: overlaps of 2 to 10 mm remain, up to about 2 cm where a limb meets
+  another fast. Your left arm, when you move it, is not stopped (its own rig moves it, outside the keys' solve), and the
+  stop does nothing during a trunk movement. The pictures from the front cannot show depth; the overlaps are the game's
+  own rods.
+- A push made by your own keys while the trunk is moving also goes back when the trunk comes to rest.
+- "Tilt head back" was measured with the movement switched on beside its block (in the stepped mode the game does not
+  report the gaze, so the hunt's arrow walk could not be aimed); a step onto the block in real play was not re-run. The
+  view still rises 10 degrees in 0.2 s.
+
+## 196. Holding and letting go: no light on the way back, no hang, arrows that stay, and a brain you can find again (22 November)
+
+The user: "Performance and reliability should be our number one priority" (Message 134); "when you tap any area of the
+brain ... it will contract, then return to its previous place. But in returning to its previous place, you won't see
+corresponding activity and muscle activation. It will just return." (206); the beams were cut twice, "way too bright"
+(170) and "obstructing the view" (198); and the keys carry the brain and the mirror body "through ourselves and through
+anything" (159). A browser hunt of update 64 found five faults round holding and letting go (H5 to H9); each was
+reproduced again here before the change, on the lead's server, with the hunt's own scenarios, and run again after it
+on this branch with the same scenarios.
+
+**Letting go of Space no longer lights the left hand's opening** (H5; `GRIP_RELEASE.openOnRelease` in `ns-actions.mjs`,
+true before, false now). Since 18 November (Message 48) the release switched on the left hand's "open hand" movement for
+`spaceOpenSeconds` (0.6 s): the hand opened past its rest pose, its finger straighteners and the strip's Left hand area
+were lit, and with that area in view a cyan beam ran from it to both bodies. Before, on the lead (mirror body held, not
+moved, let go): 13 beams at 76 ms after the release, then 5 on each body up to 508 ms, the Left hand area at 0.98 to 1
+until 340 ms and still 0.4 at 508 ms, the hand's opening at 1; the right hand and the toes were dark at 164 ms. Only the
+left hand did this, because only the game arm has a timed open action; the rule was older than Message 206 and the four
+limbs that close and open together (section 174). Now the release only lets the grip go: the left hand eases back to its
+place with the others (the pose's own ease, about 0.1 s) and nothing is switched on. The grip's own light fades in about
+0.1 s like the right hand's, and **once the grip is let go its fading links send no beam** (`ns-app.mjs`, the rule after
+the carry's own "no beam while held"): the carry's rule ended at the release, so for a few frames after every carry the
+fading grip drew a beam that had not been there during the carry. The body map's hand card says that letting go of
+Space lets the hand go back to rest (it called the opening a game convention). The grip card's "let go" page is no
+longer shown (it described the opening), and **the fading grip's areas are left out of the "switched on now" card**
+(`ns-app.mjs` `updateInfo`): without the opening, the fading Left hand area became that card for a few frames and then
+stayed as the last card shown, a "Left hand" card nobody had asked for (seen in the first run after the change); the
+card that was there before the grip comes back, as before. After, the same scenario on this branch (three releases:
+carried and not moved, carried aside with A, and let go with a second tap): no beam in any of the 52 frames after the
+releases, the hand's opening never driven, the Left hand area 0.41 at 68 ms and 0.02 at 131 ms, all four limbs' areas
+dark from about 150 ms, together.
+
+**Letting go of the brain no longer hangs the game** (H6). The hunt measured one frame of 83 to 117 ms at every release
+of a carried brain. Here, before (this branch's base, the game's own frame callback timed round the keyup, one heavy
+job on the machine): 110.9, 149.4 (profiler on) and 120.3 ms after the look up and S, 128.2 and 80.6 ms after a carry
+by the look alone, 32.6 ms for a brain let go where it was taken, against a median of 11 to 17 ms; letting go of the
+mirror body 66.7 and 58.7 ms. The profile of a release frame: the arrows' planning took 101 of its 150 ms, 71 ms of it in
+one function, the motor areas' occupancy grid (`occupancyGrid` in `ns-arrows3d.mjs`), built twice; then the planning of
+both frames (21 ms), the sight lines against your own body (18 ms). Three causes, three changes:
+- **The grid is built without waste** (`OCCUPANCY_GRID.fast`, `occupancyGridFast`; the plain loop of before stays as
+  `occupancyGridSimple` behind the switch). It marks exactly the same cells by exactly the same test (a cell is marked
+  when its middle or one of its corners lies in a triangle, the same arithmetic in the same order), but it made a new
+  array for each of the five points of each cell, tested each corner once for each of the four cells that share it, and
+  marked the margin round every hit again and again. Now each corner of a triangle's box is tested once, a cell already
+  marked is not tested again, and the margin is added once at the end. On a brain-sized mesh in Node (8,100 points,
+  16,000 triangles, the best of fifteen runs): 20 to 130 ms before, 1 to 9 ms now; on the release frame in the browser,
+  3.6 ms with the profiler on.
+- **Each camera's grid is kept** (`ARROW_REPLAN.restGrids` 4, `motorRestGrid` in `ns-scene-three.mjs`, 1 before): the
+  brain's plan (from the look the brain was carried along) and the mirror body's (from the start look) ask for different
+  cameras, so the one memo built the grid twice on every plan after a carry. The mirror body's world points for its box
+  are also worked out once per placement (`mirrorBoxPx`), not once for each of the four cameras a plan asks it from.
+- **The item that was not carried keeps its arrows** (`ARROW_REPLAN.keepUnmoved`, below): letting go of the brain no
+  longer plans the mirror body's frame again, which was the second half of the work.
+After, on this branch, the same scenario (its last run, with every change of this section): the release of a brain
+carried up with S 48.8 and 28.1 ms (60.7 with the profiler on, against 149.4), carried by the look 59.1 and 37.0 ms,
+let go where it was taken 21.0 ms (profiler on); the mirror body 38.5 ms (56.9 with the profiler); the median frame
+before the release 9 to 14 ms. Two earlier runs of the first changes gave 32 to 70 ms for the brain and 36 to 61 ms
+for the mirror body. In the profile of a brain release frame the arrows still took 14 ms of 59 (the grid about 6 ms and the
+plan about 6 ms of it, with the profiler on; the second pass, below, moves them off that frame); the
+rest is the frame's own work, which a brain let go where it was taken pays in part too (19 to 26 ms with the profiler):
+the picture drawn with the arrows back, the hand's skin, the cards and the tip changing (reading their boxes back from
+the page costs 3 to 5 ms). So the hang is gone, but the release frame is still about two to four ordinary frames long,
+on this machine shared with six other jobs.
+
+**The mirror body's arrows stay where they are when the brain is let go, and no brain arrow lands under the crosshair**
+(H7; `ARROW_REPLAN.keepUnmoved` and `.liveCrosshair` in `ns-scene-three.mjs`, `viewPointInPlan` in `ns-arrows3d.mjs`).
+Before, on the lead (Space on the brain, look up 120 px, S for 0.9 s, let go): the green top tip went from [806, 470] to
+[712, 490] and the side tips from y 755 to 703 although the mirror body had not moved; the grey "back" tip appeared at
+[800, 455], on the crosshair, with its caption, and one click then turned the brain by 15 degrees. Two causes. The mirror
+body's plan key held the brain's plan serial, so every new brain plan planned the mirror body's frame again, round the
+brain's new tips and motor areas. Now the mirror body's key holds only its own view and place (and whether the brain
+has been planned at all, so the start keeps its brain-first order), and the brain's new tips keep off the mirror body's
+tips where they stay (as boxes to avoid). The other way round as well: letting go of the mirror body leaves the brain's
+tips where they are unless the mirror body (padded) or its top tip's room now lies on one of them. And the brain's frame
+after a carry is planned along the brain's placement direction, about 12 degrees above the look, so the box kept free
+round the crosshair was kept free in a view the player was not in. A plan made as an item is let go now also keeps its
+tips off the real crosshair: the crosshair's sight line is met with the frame's plane and that point, in the plan's own
+view, gets the same keep-out box (for those plans only: a reset plans as at the start, below). After, the same
+steps on this branch: the green tips stayed at [806, 470] and [643, 755] / [955, 755] (the mirror body's frame was not
+planned again), the green tilt tip stayed under the crosshair with its caption, and the grey back tip came out at
+[800, 413], above the crosshair; one click then tilted the mirror body by 15 degrees, as the arrow under the crosshair
+said, and the brain did not turn. Carried 250 px aside: the mirror body's left tip stayed at [1431, 406] (before it
+jumped to [1456, 348]) and the brain's back tip came out 58 px below the crosshair. In the frames drawn over the
+release the green arrows are the same before and after it, and the gap over the release was 55 ms against 103 ms.
+
+**Reset brain view puts the mirror body and both sets of arrows back as at the start, whatever the look** (H8;
+`MIRROR_RESET.keepStart` and `ARROW_REPLAN.startPlans` in `ns-scene-three.mjs`). Before, on the lead (one tap on the
+green right arrow, the look raised to pitch 0.69, Esc, Reset brain view, Reset body, Play): the mirror body's centre
+was 0.243 m off its start (its measured body 1.152 m tall against 0.728), its top tip had no click point (planned above
+the screen), its bottom tip was 52 px higher, and the brain's side tips were 40 px lower ([404, 255] and [1196, 255]
+against [412, 215] and [1188, 215]); with the look left and down at the reset, the mirror body's side tips went to the
+top edge of the screen and the brain's bottom tip to the other side. A reset of the mirror body measured the body again
+as posed at that moment, and your left arm hangs on the eye and follows the look; the plans made from that box lost
+tips. Now a reset takes back the measure of the start (the body box and the eye and foremost point its plane was set
+from; a new body, `setBody`, is measured afresh). That alone left the brain's side tips 40 px lower: the sight lines
+that keep the tips off your own body test your left arm where the look has put it at the moment of the plan. So the
+plans made before anything was first held are kept by their key (up to eight), and a later plan with the same key, which
+is what a reset gives in the same window, takes that plan back instead of planning again from wherever the look is.
+After, the same scenario on this branch: in all five reset cases (the look raised; Reset body pressed first; the look
+left and down; and the resets at the start look) the mirror body's centre was 0 m off its start, its measured body
+0.728 m tall, and all eight tips exactly where they were at the start ([472, 104], [568, 510], [412, 215], [1188, 215]
+for the brain, [807, 39], [799, 544], [649, 340], [949, 340] for the mirror body); the same in the arrows scenario's
+three resets after the carries (before, the brain's side tips came back 40 px lower after each).
+
+**A brain carried behind you and let go: the tip says where it is and how to get it back** (H9;
+`BRAIN_BEHIND` and `brainBehind` in `ns-reference-graph.mjs`, `TIP.brainBehind` in `ns-text.mjs`, `ns-app.mjs`). The keys
+carry the brain through you and as far again behind (section 132, Message 159), and that stays. Before, on the lead
+(Space on the brain, S for 6 s, let go): the brain's centre was at z 1.86, behind the eye at 0.46, in neither view; no
+line anywhere said so, at the release, 2.5 s later, in the view from behind (E) or with the full cards (R). The game's
+"Lost the brain?" line knew only the look's carry (`out.brainView.offset`), and it sits on the full cards' note, which the
+starting reading level hides. Now the brain counts as behind you when its centre lies behind the eye's start place
+along the start's straight-ahead direction (level, x and z) and the look is not turned toward it (the cosine of the
+angle between them below 0); with nothing else under the crosshair the tip beside it says "The brain is behind you" and
+"Turn round, or press Esc, then Reset brain view." (the same kind of tip as "Holding the brain"), and the full cards'
+lost-brain line says it too. Turned round, the brain is in view again and the tip goes. A limit on how far behind was
+not chosen: it would take back what Message 159 asked for, and a brain only just behind you is out of sight as well.
+The look's own carry, the case the lost-brain line was made for, had the same trouble (the line only with R): with
+nothing under the crosshair the tip says "The brain is out of sight" and "Look round, or press Esc, then Reset brain
+view." there (`hudFrame` returns `brainAway`, `TIP.brainAway`), since the second pass only while none of the brain is in
+the picture (below). After, the same scenario on this branch: the tip was on the screen at the release, 2.5 s later and
+in the view from behind; with the full cards the lost-brain line too; turned round (about 170 degrees) the tip named the
+muscle under the crosshair again.
+
+**Second pass, after a check of this package** (22 November; the checker's report and pictures are kept with the round's
+notes). Four things were wrong or not done; each was changed and run again.
+- **Kept mirror arrows over the moved brain's motor areas** (`ARROW_REPLAN.keepClearOfMotor`, `keptTipsClear` in
+  `ns-arrows3d.mjs`). The first pass kept the mirror body's tips at a brain release and checked them against nothing:
+  after ordinary sideways carries by the look (170 px left twice, 120 px right) a kept tip lay over the brain's Face and
+  neck or in-between area at its new place, and a click there turned the mirror body instead of switching the area on
+  (against Messages 55 and 56); on the lead the mirror body was planned again and no tip lay there. Now, on the frame
+  before the plan, each kept tip's click box in the view in use is tested against the motor areas' points as drawn
+  (`motorCoversRect`, the test the faint "over a motor area" look uses), and a tip outside the picture in the mirror
+  body's own plan view (`motorRestGrid`); one hit and the mirror body's frame is planned again, afresh (the first try
+  took the start's plan back, whose key had not changed, and put the tip on the same area again). A reset that takes
+  the brain's start plan back now takes the mirror body's back too. After, the check's own arrow scenario on this
+  branch: after the five sideways carries no mirror tip lay over a motor area (first pass: 3 of 5), the tips planned
+  again came out where the lead's do (within 2 px: after 170 px left forward [1418, 66], left [1198, 122]; after 120 px
+  right [716, 279]), and at the look-up-and-S releases the mirror body's tips still did not move (the main H7 case).
+- **The "out of sight" tip and "behind you" at 86 degrees** (`brainLostWords` in `ns-reference-graph.mjs`, `brainSeenShare`
+  in `ns-scene-three.mjs`). The first pass said "out of sight" by the old line's angle (the look 0.7 rad from the brain's
+  carry) while the brain's frame was 56 % and 38 % on screen and its strip filled a third of the picture, and "behind you"
+  with the look turned 86 degrees and the strip in view. Both tips now need none of the brain's 900 sample points in the
+  picture (counted where the overlay's brain box is worked out), and wait while an arrow is under the crosshair; the
+  "behind you" part of the full cards' line too. After, on this branch: after the 6 s carry behind you the tip showed at
+  the release and in the view from behind; turned 87 degrees, with the strip in view, no tip; a brain carried 170 px
+  aside by the look and the look turned back 0.6, 0.75, 0.95 and 1.3 rad: no tip (at 1.3 rad the brain's edge still
+  showed at the right edge of the picture); turned 170 degrees, the muscle's name.
+- **The release frame, spread** (`ARROW_REPLAN.spreadFrames` 3, `releasePlanStage` in `ns-arrows3d.mjs`;
+  `ARROW_REPLAN.hudReadLag`). The released item's arrows now stay hidden for three drawn frames after the release, as
+  while it was held: the release frame and the next do no arrow work (the next already skins the hand going back, and
+  with the grids on it, in a try with two frames, it was the longest frame of the release, 50 ms with the profiler on),
+  the third builds the grid the plan needs and decides whether the mirror body's tips may stay, the fourth plans. About
+  50 ms without the arrows at 60 frames a second. The HUD cards' boxes are read one frame after the information card
+  changed size instead of in that frame, where the read forced the page to be laid out again (3 to 4 ms at a release,
+  when the grip's card goes); at most one frame late in a row. After, the check's own scenario on this branch, eleven
+  releases (game frame callback; median before 8 to 14 ms): the release frame 27.9, 15.1, 16.2, 16.6, 34.7 (brain), 19.4
+  (not moved), 18.0, 17.7 (mirror body), 14.9, 17.2, 28.1 ms (brain); the frame that plans, three frames later, 20 to 52
+  ms (the brain's plan 5 ms of it with the profiler on; the mirror body's own plan after its own carry 24 ms with the
+  profiler, most of it the planner's search for free places, and its frame 46 to 47 ms). The check measured one frame of
+  18 to 50 ms in the first pass and 69 to 95 ms on the lead.
+- **The crosshair box of a release plan** (`ARROW_REPLAN.liveCrossPx` 32): with the plan's own 8 px the brain's back tip came
+  out 38 px above the crosshair after the look-up-and-S carry, so a small look up put it there again; now it comes out
+  about 60 px away (61 and 81 px in the arrow run). Not for the mirror body's own frame at its own release, which is
+  planned in the start view as before (`browser-keyboard-aim` carries the mirror body until a tip IS under the crosshair,
+  and failed with the wider box there).
+- The tests now test those decisions themselves (`keptTipsClear` on boxes and an occupancy grid, `releasePlanStage`,
+  `brainLostWords`) instead of most source lines.
+
+**Checked.** `tests/carry-release.test.mjs` (new, 10 tests): the release lights and drives nothing of the opening
+and its light only falls, the old rule behind its switch; the card leaves out an area it is told to; the fast grid
+marks exactly the plain one's cells for every margin, flat triangles, points off the grid and a mesh larger than the
+view, and is much quicker; `viewPointInPlan` against the arithmetic done by hand; `brainBehind` and both tips' words;
+the scene's and the app's rules by their source lines. With it the neighbouring files (`arm-jerk`, `info-settle`,
+`quiet`, `chunking`): 28 tests, all pass (the first run caught the second tip one word over its limit; shortened). In the browser, before on the lead's server and after on this branch, the hunt's own four
+scenarios (H5, H7, H8, H9) and one of this package for H6 (the game's frame callback round each release, and CPU
+profiles cut to the release frames). The start check: `"ok":true`. Browser tests `startup`, `keyboard-aim`, `brain-compass`, `mirror-compass` and
+`space-aim`: all pass (the other nine are left to the merge's checks). The frame table, twice each,
+in turns (still / look / updown / limbturn, frames a second): the lead's server 59.5 / 41.1 / 47.0 / 49.2 and
+59.4 / 40.5 / 39.6 / 48.0, this branch 60.0 / 37.8 / 56.0 / 55.8 and 60.0 / 41.2 / 56.0 / 57.8 (this branch also holds
+the merged work of update 66, which the lead's server does not; the look's 37.8 against 41.1 came back to 41.2 in the
+second pair). A still view stays idle: nothing of this section runs without a plan, a release or a reset, except a few
+comparisons a frame. Second pass: `tests/carry-release.test.mjs` 13 tests, with the four neighbouring files 31, all
+pass; the start check `"ok":true`; `startup`, `keyboard-aim` (which failed once, on the wider crosshair box at the
+mirror body's own release; fixed as above), `brain-compass`, `mirror-compass` and `space-aim` all pass on the final
+code; the check's own arrow scenario and a copy of its tip scenario on this branch, against the check's logs of the
+lead and of the first pass; the release frames timed and profiled again (five frames after each release marked); a
+short run that read the keep decision itself (`keepDecided`, `keepCheck` in the arrow readback) showed the forced plan
+taking the start's plan back, which was then fixed.
+
+**Not done, or not right.**
+- H6 is not gone: the release frame is 15 to 35 ms and the frame that plans 20 to 52 ms (on the lead one frame of 69 to
+  95 ms). What is left on the release frames is not the arrows': the hand's skin, the outline pass, the
+  labels and the cards; and on the frame that plans, the plan itself (the mirror body's at its own release, 24 ms with the
+  profiler on). The numbers are from a processor shared with six other jobs; the profiler doubles them.
+- H7: the mirror body's kept tips are tested in the view the player is in at the release (and in its plan view only for a
+  tip outside the picture): a look turned elsewhere afterwards can bring a kept tip over a motor area seen from there, as
+  a re-planned tip can on the lead. The test reads the motor areas' points, not their triangles; a tip box between
+  points of a coarse area would pass.
+- H7: the crosshair is kept clear only for the plan made at the release.
+- H8: the start's plans are taken back only in the window they were made in; after a change of window size a reset plans
+  again, from wherever the look is. The start's measure of the mirror body is taken back whatever the body's pose at the
+  reset (a limb the keys left elsewhere is not measured; the plane stays in front of the body's reach, as before).
+- H9: the tips need none of the brain's sample points in the picture, so a sliver of the brain at the edge of the picture
+  (seen at 1.3 rad from a look-carried brain) keeps them away, and a sliver between sample points does not; the share is
+  counted when the overlay is laid out, at most a frame old. The tip shows only when nothing else is under the crosshair;
+  on your own body or the mirror body the muscle's name wins.
+- H5: the grip's own light still fades over about 0.1 s after the release, on all four limbs together (the right hand and
+  the toes did so before); it is not cut in one frame.
+- A few tests still read source lines (that the scene feeds the decisions); the decisions themselves are tested. The whole
+  unit suite was not run here (the lead runs it on the merged work).
+
+## 197. Every word true, short and whole: Space on your own limb, the full instructions cut by more than half, the short Esc page, the cards at 800 by 600, the card's title, the tutorial on a black area, the notes page (22 November)
+
+The owner: "Way too much text now. The amount of text is completely overwhelming." (Message 57); "a visual chunking
+principle for easy learning ... that chunking principle applies throughout for visual ease" (Message 81); the words are
+for a curious 12-year-old (lead decision D3, the user's R17), and honesty is never weakened. A browser hunt of Body
+update 64 found nine faults in what the game says or shows of its words (its findings H10 to H16 and H26), and the
+round asked that the map key M be in the Controls list with an honest row. Each was seen in the browser on this branch
+before the change (pictures at 800 by 600 and 1600 by 900, kept with the round's notes, not in the repository),
+then fixed where the words or the rule are made, with checks in `tests/words2.test.mjs`.
+
+**Space on your own limb chooses it, in every line** (H10; `HUD.controlTargets` in `ns-text.mjs`, its new
+`limbsChosen`, passed by `controlTargetsLine` in `ns-app.mjs` from `LIMB_KEYS.view.hold`). At the full reading level the
+line under "Looking at" said "Space holds your right leg" while the right card beside it said "Your right leg is
+chosen": since 19 November Space on one of your limbs chooses it and nothing holds it, and section 194 had corrected the
+free-pointer tip (`TIP.spaceAim`) but not this line. With the rule the line is "Space chooses your right arm" (seen at
+800 by 600 on your right biceps, picture `a3-R-own-limb`), and with Shift held a press "goes to" a limb rather than
+"takes" it; without the rule the old words stay. Also: the card for the brain behind your body (`INFO.coveredOwnBody`)
+said "hold Space to hold a limb" and now says "Space on an arm or a leg chooses that limb"; the grip card's "Nothing is
+held: put the crosshair on the brain, the mirror body or one of your limbs, then press Space" no longer names a limb;
+`HUD.gazeMuscleHold` (never shown: `holdable` is always false) says "Space chooses this limb". The README said Space
+takes hold of "one of your own limbs", that a double tap turns the ankles with the thighs following a few degrees, that
+a drag turns a limb like a dial, that the tip lists movements with their number keys, an older order of R, and that the
+bodies and the brain stop short of each other; each now says what the code does (the arms turn over and the feet turn
+outward or inward, `ns-dance.mjs`; `NUMBER_LISTS` false; `CARRY_THROUGH` and `LIMBS_PASS_ITEMS`: a carried thing and
+your limbs go through). The player's guide's "a drag or Space" (what puts a part where it returns to) is "a drag or a
+double tap of Space". The notes page's Controls line on the double tap is corrected the same way.
+
+**The full instructions cut by more than half, each control said once** (H15; `STEP_TABLE` and `CONTROL_TABLE` in
+`ns-text.mjs`). "Show the full instructions" swapped in 3,410 words at 800 by 600 (the steps 1,498, the controls 889,
+the limits 617, counted from the page): the steps said most controls a second time in other words, and the step "Move
+other body parts." said that Space on your own limb lets you carry it, then six sentences later that Space there
+chooses the limb. Now each step says what a thing is in two to four short sentences (the steps 581 words with their
+heads) and each control is one row (19 rows, 501 words): the "Look" row is part of "Mouse / trackpad" and "Double-tap
+and hold" part of "Double-tap Space". Heads: "Your left arm." is "Your limbs.", "The glass brain." is "The brain." (drawn
+solid since 17 November), "Move other body parts." is "Hold and carry.". The page now has 2,110 words with the limits.
+Every sentence was checked against the code as it is today (each row names its source in a comment: `LIMB_KEYS`, the
+keys along the limb's line, the limb and wrist drags of section 183, `SPACE_GRIP`, `CARRY_THROUGH`, `LIMB_PUSH` and its
+limits from hunt H3, the arrows' colours in `ns-colors.mjs` `ARROW_COLORS`, `viewAfterRelease`, `toggleInfoDetail`,
+the map, `pausedNote`). The limits ("What this game is, and is not", 617 words) are the honesty lines of `HONESTY`
+and were left whole. The short words of the start page are as they were; their rows follow the merged keys.
+
+**The short Esc page names the drag without Space, the limb drag, the arrow tips and a free pointer** (H14;
+`SHELL.menu`). The page Esc opens had one drag row, "Drag: turn a held brain or mirror", which read as if a hold were
+needed (the hunt turned the brain and moved the right arm with a press and drag, Space never pressed), and nothing on
+it said how to drag a limb, that the arrow tips turn the brain or the mirror body, or that Esc twice plays on with a
+free pointer (the tutorial's arrow step and the notes page rely on it). Look and press gains "Drag: turn the brain or
+mirror body" and "Arrow tips: turn the brain or mirror body"; the Move group's note says "Press on a limb and drag to
+turn or bend it." in place of its repeat of the W S and A D rows; Views and reading gains "Esc twice: play with a free
+mouse pointer"; the held-only row is gone. The page grew from 226 to 231 words. Every group keeps two to five rows of a
+few words (`tests/chunking.test.mjs`).
+
+**The reload note on the short page** (H13; `quiet.css`). After a Low start, choosing High showed no "Reload the page
+for the sharpest edges": the note wears the help class for its look, and the short page's rule hid every help text with
+it (the rule came after the note, on 17 November). The note shows on the short page now whenever it is not hidden: at
+800 by 600, display block and 36 px high under the quality choice (it was display none, 0 px; picture
+`b1-esc-short-high-after-low`).
+
+**The tutorial on an area that moves nothing** (H26; `pressStill` in `ns-guide.mjs`, `GUIDE.partial.pressAreaStill`
+and its short line in `ns-text.mjs`). Step 2 kept saying "Click it: it moves again" (and the card "Click the area. The
+part contracts again and comes back") with the look on a black in-between area or the Tongue, where a click moves nothing
+and the step does not count it. As section 186 did for step 1 (fix H18), an area switched on while step 2 shows that
+moves nothing makes the line "Nothing moves there. Look at a coloured area that moves a part, then click it." (short:
+"Nothing moves there: look at a colour"); an area that moves brings the step's own line back, and a click there does
+the step. Seen at 800 by 600 on the lower in-between area (picture `a1-tutorial-on-area`: "2/9 Nothing moves there:
+look at a colour").
+
+**R opens the card at its top where it fits, and the card keeps its name** (H12; `INFO_DETAIL_REVEAL` and
+`infoRevealScroll` in `ns-app.mjs`; the title's sticky rule in `neurosurge.css`). The rule of review RP10 scrolled
+every opened More detail to 24 px under the card's top: the heading, the area's title, its tag and its plain sentence
+went out of sight, the first line left was cut through its letters, and at 1920 by 1080 it did so although the whole
+card fitted. Now the card opens at its top when the More detail line and 64 px of it fit there; otherwise it scrolls
+only so far that More detail starts right under the area's title, which stays at the top of the card while More detail
+is open (an opaque band to the card's inner edges, standing at the card's top padding), so no line is cut at the top
+and the card always names its area, also when it is scrolled by the wheel or when the look moves to another area.
+`on: false` gives the RP10 rule back.
+
+**Nothing of the bottom-left cards is cut at the supported sizes; the honesty line is always whole** (H11;
+`CORNER_STACK.statusFirst`, `LEGEND_FIT` and `legendFitLevel` in `ns-scene-three.mjs`; `quiet.css`). At 800 by 600 with
+the full cards and the "Try this" line in the status card, the card was 359 px against its cap of 297 (55 % of the
+stack) and was cut at its foot, where its model-name line stands ("NeuroTranslate 0.0 is" and no more); the colour key
+was cut mid-sentence as well. Now the status card has the whole stack before the colour key takes anything (at 800 by
+600 its cap is 541 px; measured 361 px with the "Try this" line, whole, the model-name line's 19 words all shown), and
+the colour key takes what is left and drops whole parts to fit: first its line of credits ("Sources and rights", the
+HUD's one control, stays; the credits are also behind "notes and credits" at the bottom of the game, as section 165 has
+it), then its two key items and its rough-map note (the limits line at the top says "a rough map"), and when even that
+does not fit it is not shown (`visibility: hidden`, so the stack's measuring goes on). Its whole height is what it
+measures plus the parts its level leaves out, at their last seen heights and margins, with 4 px kept spare; after a
+change of level the next choice waits until the key's new height is measured (at most 12 placements), so the level does
+not swing. While "Sources and rights" is open or has the keyboard focus the key stays whole and the cap fades it at its
+foot, as before. A first version dropped "Sources and rights" with the credits: the browser test `player-focus` then
+found that Tab no longer reached the opened "Sources and rights" at 1600 by 900 (the open text made the key too tall, and
+level 1 hid it); that is how it is now kept. The cap stays as a last resort. At 800 by 600 on the lower in-between area the key stood whole at 248 px without its credits line; with
+the "Try this" line in the status card it was not shown at first (the second pass below makes room for it). A window too small for even the status card still caps it, and
+then its model-name line stands at its foot, whole, over the lines it covers, with no fade (`position: sticky`).
+`statusFirst: false` and `LEGEND_FIT.on: false` give the share rule and the fading cap back.
+
+**The notes page brought up to date** (H16; `PREVIEW-NOTES.html`, the page "notes and credits" opens). Its newest entry
+was Body update 56, and two of its known limitations said your limbs pass through each other with no check. It now has
+one short entry for each of updates 57 to 66, taken from the published updates' own notes and sections 155 to 194 (66 is
+the electrical map's passes 4 and 5 and the movement rounds B to 6, section 189 and 192). In its known limitations the
+collision entry says what is so today: a carried thing goes through you and anything and your limbs pass through the
+brain and the mirror body (the owner's full range of motion), only a trunk bend from the brain still stops short of
+them (`trunkContactStop`), and the limb you move pushes the others aside, but a fast swing outruns the push and an arm
+hanging at your side is passed through (hunt H3). The list of what was asked on 17 and 18 November says the push exists
+and which overlays are grouped, and that the Borderlands look gave way to the matte look the owner chose rather than to
+the glossy one asked for then; "the start page is still longer than one screen" (there is no start page) is the Esc
+page in a small window; a new entry says what the colour key gives up at 800 by 600.
+
+**The map key** (package item 9). M is in the Controls list of the full instructions and of the start page, and its full
+row says the scan and the storms are made up by the game, drawn like a brain scan, "not a recording". The short page's
+row stays "electrical map: on, off".
+
+**Second pass, after a check of this package.** An independent check confirmed the words and the bottom-left cards
+and found three faults and five smaller things; all were fixed on this branch.
+- *The open right card* (`lockedCardScroll` in `ns-app.mjs`, the open card's rule in `neurosurge.css`, the scene's
+  `ns-info-subject` event). Its foot line was sliced through its letters at every size (the open card had no fade), and
+  with the pointer captured the wheel could not scroll it (the wheel's target is the canvas; `wheelStays` only scrolls
+  a panel under the pointer), so the rest of More detail could only be read after Esc twice. Now, captured, the wheel
+  scrolls an open card that is taller than its box (deltaMode lines 16 px, pages a card's height; Shift and sideways
+  turns are not for it); the open card fades its last 16 px like every other capped card and has 18 px of bottom
+  padding, so at the end of the scroll the last line stands clear; and when the card's subject changes while More detail
+  stays open the scene sends an event and the card is scrolled as when More detail opens. With the pointer captured at 800 by 600, one wheel turn of 300 px took the open card from 539 to 839 px, and at the end
+  of its scroll (1,627 of 2,021) the last line, "Sources: GORDON2023", stood clear of the fade; at 1600 by 900 from 0 to
+  300. In the pictures at every size the card's foot line fades out instead of being sliced.
+- *Cards without More detail* (`INFO_FIT`, `caveatsToDrop`, `fitCaveats` in `ns-scene-three.mjs`; `INFO.caveats`). At
+  800 by 600 the glass card at the start look cut "The coloured areas are a simplified map" (`HONESTY.notExact`) at its
+  foot, behind the 30-word overlap line, and it cannot scroll. The short line comes first now, and a card taller than its
+  box drops its "Keep in mind" lines from the end, whole, until the last one shown ends above the fading foot. It is
+  measured in an animation frame only when the card's words, the reading level (R, through the scene's `refitInfo`),
+  the window or the body view change. A first version listened only for new words and did nothing on R (seen in the
+  browser: the second line still cut); that is why R, the window and the body view ask for it too. At 800 by 600 after R at the start look the glass card now ends with
+  "The coloured areas are a simplified map. They are not exact points for each muscle.", whole, the three lines after it
+  dropped (the card 321 px, nothing cut; before, 475 px of content in 394 with the second line sliced).
+- *The colour key after "Sources and rights"* (`ns-scene-three.mjs`, `quiet.css`). After a player opened and closed
+  it, the credits line stayed hidden for good at 1600 by 900: the open row's height had been taken for the whole row.
+  The credits line is now a block of its own and is measured itself; nothing is taken while "Sources and rights" is open
+  or focused; the stored heights go on a window change and on a toggle; when it lets go of the key the level waits for
+  the key's next measured height. A stack with less room for the key than `CORNER_STACK.minPx` hides it even while
+  "Sources and rights" is kept, and its cap is never 0 (which meant none; only in windows smaller than the supported
+  ones). With the check's own scenario at 1600 by 900, after opening and closing "Sources and rights" both ways (closed and
+  blurred in one step; closed with a click, then the scene clicked at once), the key stayed whole with its credits line
+  (before: the credits line dropped for good).
+- *The colour key during the tutorial at 800 by 600* (`GUIDE_CARD_SHORT` in `ns-app.mjs`). With the "Try this" line in
+  the status card the key had no room and was hidden, though the R row promises it. In the corner layout the card now
+  carries the step's short words with the count, the prompt's ("1/9 Look at a colour on the brain: a part moves",
+  10 words for 27): the status card is 296 px instead of 361, and the key shows at 191 px without its credits line, its
+  key items and its note, "Sources and rights" still in it.
+- *The limits list* (`LIMIT_TABLE`, `HONESTY.bodyWorlds.short`). It held atlas detail that is not honesty: the strip's
+  crown (premotor and primary motor cortex), the scalp muscles' offsets, the second set's muscle list, a repeat of the
+  step "See your body.", and the left-arm crossing (step "The brain." says it). It keeps the honesty core now: made up
+  and unitless, game controls, colours not muscle readings, the cone a picture, a simplified map, overlap and vary, the
+  lifted muscles in two sentences, the mirror body a picture, NeuroTranslate a name: 617 -> 323 words. The muscle-click
+  line went too: the simplified-map line says it, and so does the line shown after a tap. The crown and the both-halves
+  note are on the notes page now; the scalp offsets and the second set were there already. The full page is 1,810 words
+  (3,410 before this package).
+- *Smaller.* One short-page row "Drag, arrow tips" for the two rows with the same words (`tests/chunking.test.mjs`
+  allows 16 characters for it). The notes page: update 57's heart is "inside, out of sight in play" (section 158),
+  update 61 says "almost every movement" (140 of the 142, section 176), the toe limitation is rewritten from section
+  176, the opening says "a giant brain", the movement name is in quotes and "no line is drawn over the strip's
+  coloured blocks". This section no longer names the round's own folders or port.
+
+**Checked.** In the browser on this branch, one browser scenario at 800 by 600 and at 1600 by 900 each, and one at 900
+by 1200, 1280 by 720 and 1920 by 1080 (the scenarios are not in the repository), each word measured as
+the hunt measured it (shown, faded, cut or hidden in its card) and each picture opened. In none of the five sizes was a word of the status card faded or cut, and its model-name line (19 words) was whole every time: at 800 by 600 361 px with the "Try this" line in it and 224 px without (the key then 248 px, whole, without its credits line), 152 and 122 px at 1600 by 900 (the key whole at 285 px), 135 at 1280 by 720, 178 and 146 at 1920 by 1080, and 101 at 900 by 1200 (an upright window: the stack is not used there). The words the measure found cut in the key at the larger sizes are those inside the closed "Sources and rights" (hidden by design, as the hunt's reproducer noted). With R on the lower in-between area the card's title was shown at every size: opened at its top at 1600 by 900 (scroll 0, before 366 with the title gone) and at 1920 by 1080 (scroll 0), and scrolled to More detail under its title at 800 by 600 (539), 1280 by 720 (395) and 900 by 1200 (202). The short Esc page is 231 words and still fits a 1600 by 900 window without scrolling; the full page 2,110. The reload note: display block, 36 px at 800 by 600 and 18 px at 1600 by 900. The "Looking at" note on your own limbs: "Space chooses your right arm", "Space chooses your right leg · Shift: the brain behind it", "Space chooses your left leg · Shift: the brain behind it". The tutorial's step 2 on the lower in-between area: "2/9 Nothing moves there: look at a colour" and the card line in full. The start check (`s-bootcase.mjs`) printed "ok":true. Unit tests: the
+words, chunking and touched files (`tests/words2.test.mjs`, `hud-words`, `area-words`, `chunking`, `tutorial`,
+`guide-order`, `hud-layout`, `emap`, `fix63`, `quiet`, `limb-click`, `mirror-orbit`, `head-hold`, `move-key`,
+`arm-jerk`): 98 of 98 pass, with the eight new checks (and 26 of 26 for `words2`, `hud-layout`, `chunking` and the two words files after the last change). Browser tests: `startup`, `keyboard-aim`, `camera-resize` and `play-settings` passed on the first version; `player-focus` (run because it reads the Esc page's words) failed on it at the opened "Sources and rights" (above); after the change `player-focus`, `play-settings` and `camera-resize` pass. The colour key at 800 by 600 on an area was seen again after the change: whole, without its credits line, "Sources and rights" shown. The whole unit suite and the frame table were not run (the lead runs the suite; the round asked for neither). Second
+pass: the words, chunking, hud-layout, tutorial, guide-order, quiet, emap, fix63 and words2 files, 83 of 83 (with the
+four new checks); the start check "ok":true; pictures at the five sizes, each opened; browser tests `player-focus`, `startup`, `keyboard-aim` and `camera-resize` all pass.
+
+**Not done, or not right.**
+- An open card's lowest visible line fades out at the card's foot until it is scrolled; the wheel scrolls it with the
+  pointer captured, but nothing on the card says it can be scrolled. A card without More detail drops whole "Keep in
+  mind" lines it cannot show; it says nothing about the lines it dropped (they are on the Esc page).
+- At 800 by 600 the colour key gives up its credits line, and while the tutorial's line is in the status card also its
+  key items and its rough-map note, to keep the status card whole: a choice of this package, not asked of the owner. An
+  opened "Sources and rights" in a small window is still capped and fades at its foot, as before. The tutorial line in
+  that card is the step's short form; the full sentence is heard by a screen reader only.
+- The card's title stays at the top while More detail is open, but the heading "What is happening" and the R hint scroll
+  away under it.
+- The limits list keeps about 320 words of honesty lines; the full page is 1,810 words.
+- The notes page's entries for updates 57 to 66 are one or two sentences each, written from the published notes and
+  the sections, not from playing each update again.
+- The words were checked by reading the code and in the browser on the cases named above; not every line of every card
+  at every reading level and size was seen. Once, in the second pass, six small test files were run without the
+  round's queue wrapper (a few seconds).
+
+## 198. No flash, no flicker and no clutter on the strip and the picture (22 November)
+
+The owner, Message 133: "The game currently physically hurts to look at with your eyes" (light may rise, hold and
+fade, slowly; no blinking). Message 198, on the beams: "a lot thinner and a lot less opaque. As right now they're
+obstructing the view". Message 144: the strip is "so liney". Message 2: "the same corresponding color/shade across all 3
+items". Eight faults of a hunt of update 64 (H17 to H25 in the round's notes, not in the repository), each
+fixed at the cause the reproducer found, and one older fault from the electrical map's checks (the mirror body's edge at
+Low).
+
+**An arrow step no longer blinks a block dark before it lights (`POWER_UP.areaStrikeFloor` 0.6, `strikeAlbedo` 0.2 -> 1,
+ns-colors; H17).** The neon strike multiplied all of an area's light, the look's own glow and its white frame included,
+and it started from 0. The frame on which the glow turned on set the start and wrote the clock in the same frame, so
+it was drawn 1 to 3 ms into the strike (gain 0.02 to 0.07): an arrow step drew the new block in its look's glow, then
+one dull grey frame, then white (2 to 4 grey frames under reduced motion, whose 0.3 s ramp also started from 0). On an
+area the strike and the reduced ramp now start from 0.6 of the settled glow, the light the block already shows (its
+white core at 0.96 of display white), and rise from there; after the strike nothing differs (`powerUpEnvelope` and
+`powerUpGlsl` take the floor; `patchPowerUpShaders` gives it to the areas only). A muscle has no light before it lights
+and still rises from nothing, but takes its area's colour on its first frame: its surface took 20 % of it on that frame,
+and the rose red and an azure mixed into the dull grey-mauve the hunt measured (112, 79, 93). Not chosen: dating the
+start a frame back (the first frame would show the flash's peak at once, and the reduced ramp would still start dark).
+Measured, every drawn frame at real speed round the crosshair, the look on Left shoulder, one Left arrow onto Left
+elbow (luminance of the 17 x 17 px centre: last frame before the key, the step frame, the next frames):
+
+| page | before (port 18930) | now |
+|---|---|---|
+| High | 239, 143, **132**, 178 | 203, 141, 167, 175 |
+| Low | 232, 137, **123**, 159 | 199, 136, 158, 160 |
+| High, reduced motion | 240, 146, **117**, 125, 133, 146 | 199, 142, 161, 164 |
+
+The brightest 10 px cell near the crosshair went 196, 191, 253 (High) and now 196, 249, 253. (The first number, the
+shoulder block under the look before the key, differs between the two; 18930 serves the lead, not this branch's
+base, and that difference was not looked into.) Pictures: the close-up sheets `work/look2/before/A2/high-E1-sheet.jpg` and
+`work/look2/after2/A/high-E1-sheet.jpg` (frames 3 to 5: hover, dark, white before; hover, white, white now; frame 6 the
+mirror's lit muscle, white before and pale azure now).
+
+**A held arrow walks without lighting every block it passes (new module `scene/src/ns-look-calm.mjs`,
+`AREA_WALK_QUIET`, `walkQuietStep`; H18).** Each accepted step of a held arrow (the controls' gate lets one through
+about every 200 ms) put the look on a new block, and a look that arrives on a block switches it on at once: every block
+flared white and was cut by the next step, about four times a second at the crosshair. The controls now mark a step of
+the key's auto-repeat as held (`areaKey(..., { held })`) and queue `{ type: 'areaUp' }` when a held area key comes up
+(`areaKeyUp`). From the first held step the app records the gaze silently, as during a neck movement's carry; when the
+key comes up the block the walk stopped on is told as an arrival (the gaze event's `arrivedFrom`, the area the walk
+began on), so it switches on once. A single press lights its block at once as before. The walk waits while a step is
+still pending or the frame is silent for another reason (the arrival would be lost), and ends 450 ms (600 since the
+second pass, below) after the last held step if the key-up never comes (`keepMs`). The look's own soft glow and white frame still move from block to
+block with the walk. Measured over the same 3.6 s (Left arrow held 2.2 s from Left forearm turn, a repeat every 33 ms
+after 0.5 s, every frame):
+
+| page | areas switched on, before | now | pixels rising and falling 4 or more times a second (32-level step), before | now |
+|---|---|---|---|---|
+| High | 7 | 2 (the first press, the stop) | 38 302 | 502 |
+| Low | 8 | 2 | 23 237 | 895 |
+| High, reduced motion | 8 | 2 | 4 010 | 708 |
+
+(The pixel counts include the view's own jumps at each step: the walk itself.) Without the lit neck block's movement
+the walk no longer stops at the neck: it went on to the middle black block in 2.2 s. Sheet:
+`work/look2/after2/A/high-HOLD-sheet.jpg` (white frames moving, one white core at the start, the stop block lit after
+the release).
+
+**Low is drawn with multisampling and 2 x 2 outline ink (`MSAA_AT_LOW`, `antialiasFor`, ns-scene-three;
+`OUTLINE_AA.ssByLevel` [2, 2, 2, 2, 1, 1] -> all 2, ns-outline; H24 and the map checks' "old fault of update 64").** Low
+was the only level with no multisampling at all (the canvas's MSAA was off for Low, and Low has no HDR target whose
+own MSAA the full level gets), and its outline ink was worked out at one sample per pixel (the comment still named the
+old 0.5 / 0.4 scales; the levels are lite-0.7 and lite-0.6): edge pixels and the 1-px ink flipped with every sub-pixel
+movement, the heartbeat's swell included. The reproducer found that only both together make Low as clean as High.
+Measured, the start view, the look still, 4 s of every frame of the checkers' crop (880 x 600 at 360, 0): pixels rising
+and falling 4 or more times a second, Low: 117 and 78 before (worst pixel 14 and 15 a second, on the mirror body's
+shoulder in front of a leg block), 34 now (worst 6). High, unchanged code: 26 and 31 before, 40 now (worst 6 to 9):
+the noise between runs. Frames a second at Low while recording: 54.7 and 53.1 before, 53.6 now. Maps of the fast
+pixels: `work/look2/before/B2/low-STILL-hot.png` (dots along the brain's whole outline) and
+`work/look2/after1/B/low-STILL-hot.png`; close-ups: `low-CRAWL-at0716ms-x3.png` before (pale specks along the strip's
+outline, stepped arrow) and `after1/B/low-CRAWL-at0701ms-x3.png`.
+
+**A lit muscle peaks in its area's colour at High too (`HDR_BLOOM.muscleBoost` 0.6 -> 0; H25).** The reproducer's
+cause: the boost multiplied the muscle's whole flash by up to 1.81 on all three channels, so an azure muscle's weak red
+channel, already raised by the flash's whitening, reached display white with the other two. White pixels (lowest
+channel 235 or more) outside the lit key, Left forearm turn clicked: High 13 038 before (your own forearm a white blob,
+`work/look2/before/C/high-MUSCLE1-at0240ms.png`), 658 now (pale azure with its shading,
+`work/look2/after1/C/high-MUSCLE1-at0310ms.png`); the second click 369 and 183. Low 109 and 274 before, 58 and 32 now.
+
+**The beams to your own hand are thin lines (`LIGHT_BEAM.maxHalfPx` 4 with `beamHalfCapM`, `LIGHT_BEAM.ownPerLink` 1,
+ns-links; `emitBeam` and `emitAreaBeams`, ns-scene-three; H23).** The half width was capped in metres only, thin at the
+key 6.7 m away but not near the eye, and a hand area drew a cone to each forearm muscle it drives (five for Left hand,
+overlapping into a band with about 2.8 times one cone's light). Each point of a beam is now held to 4 CSS px a side on
+the screen, and a movement draws one cone to your own body, to the muscle it drives most, at one cone's light (the
+mirror body keeps a cone per muscle; at its key a mirror beam goes from about 6.6 to 4 px a side). Measured on Left
+hand reached by arrow steps and clicked, the cyan light the beam adds between the key and your arm (box 300 to 440 by
+240 to 420 px of the crop): High, pixels brightened by more than 15: 7 150 to 8 750 before, 1 080 to 1 290 now; the
+widest run across 91 to 97 px before, 12 to 13 now. Low the same way (3 000 before, 350 to 470 now, in the 0.6-scale
+buffer). Pictures: `work/look2/before/C/high-BEAM1-at0264ms.png` (a wide bright fan over the purple and pink blocks) and
+`work/look2/after1/C/high-BEAM1-at0254ms.png` (one thin line).
+
+**A tried block is marked by its darker shade only (`REGION_BORDER.activatedPx` 1.0 -> 0; H21).** The 1 px gold frame
+inside a tried block lay under the black gap that outlines every block (section 176), so only its antialiased fringe
+showed, on both blocks of a shared border: gold, black, gold. The darker shade of a tried block (`VISITED`, section 126)
+stays and is lifted under the look (section 191). The words that spoke of gold marks say "a shade darker" and "the marks
+on used areas" (four strings in `ns-text.mjs`), and the colour key's swatch for it is a darker tone without the gold
+edge (`neurosurge.css`). The small gold ring on very small tried areas (`SMALL_MARK`) was left; none showed after
+thirteen tries. Pictures, thirteen areas clicked, the look back at the start: `work/look2/cmp/tried-before-after.png`.
+
+**The leg blocks' borders bend smoothly, for the most part (`CREST_PER_POINT`, `crestStripV`, `crestBendFull`,
+`crestStripGlsl`, ns-brain; the area shader and `classifyRegionGaze`; H20).** The strip coordinate is bent below the
+trunk (`crestStripS`, infinitely steep at `crestV`) and was bent per vertex, then interpolated in straight lines over
+the strip's triangles (12 to 27 px at the start view): each leg border ran straight inside a triangle and turned at its
+edges. The vertex shader now takes each vertex's value back to the smooth along-gyrus v (`crestStripV`, the exact
+inverse: round trip under 1e-12), the fragment shader bends the interpolated v (`nsSq`, read by the borders, the gaps,
+the owner lookup and the light's band), and the picker does the same, so what is drawn is still what is picked. No
+block moves: the vertices' values and the owner runs are unchanged (the medial wall's values are all 0 and stay 0;
+checked on the atlas). The reproducer's measure of this very change (zigzag of each border in the surface's plane):
+the yellow Right leg's borders 16 to 26 degrees a mm with 5 to 8 turns sharper than 45 degrees before, 8 to 15 with 0
+to 4 now; the purple Left leg's 12 to 15 before, 11 to 13 now. Pictures (x4, nearest pixels):
+`work/look2/cmp/legs-yellow-before-after.png` (sharp zigzags before, smooth even curves now) and
+`work/look2/cmp/legs-purple-before-after.png` (fewer kinks; still wavy).
+
+**No light-blue frame round the game for a mouse player (`FOCUS_RING`, `focusRingInput`, `bindFocusRing`,
+ns-look-calm; `preview.css`; H19).** Since 17 November nothing is clicked before the game focuses its canvas by script,
+so the browser counted that focus as keyboard focus and drew the canvas's 2 px ring round the whole picture for the
+whole session, and again after every resume by mouse. The game keeps its own idea of focus-visible on the root element
+(`data-ns-input`): a pointer press anywhere sets 'pointer', and the canvas's ring is drawn only while it is not set
+(`html:not([data-ns-input="pointer"]) .ns-canvas:focus-visible`); a Tab key sets 'keys' and brings it back. Game keys do
+not change it. Every other control keeps its own ring. Read in the browser: before any pointer use the canvas has its
+ring (solid 2 px, as `tests/browser-play-settings.mjs` asks of a keyboard player); after the first click it is none
+(before: solid 2 px for the whole session); after Esc and Enter it stays off for a player who used the mouse (before:
+solid 2 px).
+
+**Second pass, after an independent check (22 November).** Four changes:
+- *A held walk stays quiet while its steps wait (`walkUiEvent`, ns-look-calm; the UI queue drain in ns-app).* The app
+  refreshed the quiet walk only for a held key repeat its step queue accepted (`AREA_REQUEST_LIMIT` 2). While the steps
+  waited, for a neck movement's swing after the first press had lit the neck block, every further repeat was thrown
+  away; after 450 ms the walk took the silence for a lost key-up, and once the steps ran it switched on the block under
+  the look with the key still down (the check saw Right index lit 1.7 s into a hold). Every held repeat now keeps the
+  walk quiet whether or not the queue takes it; `keepMs` 450 -> 600 (the gate below is 270 ms).
+- *Under four steps a second (`AREA_KEY_REPEAT_MS` 180 -> 270, ns-controls).* What still flickered in a walk was the
+  view jumping one block per step (hiding the look's glow changed nothing in the check's runs). With a 33 ms key
+  repeat a held key now steps every 297 ms, 3.4 a second, under 4 at any repeat rate, so no pixel can rise and fall
+  4 times a second from the steps alone.
+- *Only a block under the look starts its light from the look's glow (`nsPuFloor`, a uniform per area material).* The
+  floor of the first pass applied to every block: one switched on by a muscle click or a number key, with no look
+  light to carry, jumped from rest to 0.6 in one frame, and every block did so under reduced motion. The scene now sets
+  the area's floor at each NEW start: `areaStrikeFloor` when the block is under the look (`rec.hovered`), 0 when not,
+  under reduced motion too; a new start of a block that still glows (a second click) keeps the floor, so it does not
+  dip. `powerUpGlsl` takes the floor as a number or a uniform's name.
+- *For the lead: the tip beside the crosshair measures itself once per content (ns-quiet `createQuietUi`).* While it
+  avoids your hand (section 189) it read its own `offsetWidth` and `offsetHeight` every frame, a forced style and layout
+  pass (about 0.8 ms a frame in the check's profile); its size is now kept under its content key and the window size.
+Measured again (port 18964, every drawn frame at real speed): the arrow step onto Left elbow, High 203, 140, 166, 175;
+Low 199, 136, 158, 160; reduced motion 199, 142, 161, 163 (no dip, as after the first pass). The held walk from Left
+forearm turn (2.2 s): 7 steps (10 before), 2 areas switched on (the first press, the stop at Left thumb), at High,
+Low and reduced motion. Held walks, first pass against now, a fresh page each, pixels rising and falling 4 or more times
+a second counted from the key's first repeat to its key-up only:
+
+| walk | first pass | now |
+|---|---|---|
+| Right arrow from the middle black block, High: blocks lit while the key is down | the neck (first press), then Right index at 2.4 s | the neck (first press) only |
+| the same, Low | the neck, then Right index at 2.4 s | the neck only |
+| Left arrow from Left forearm turn, High: steps / pixels 4+ a second (3+) | 9 / 168 (7 436) | 6 / 67 (1 003) |
+| the same, Low | 8 / 93 (1 410) | 6 / 47 (497) |
+
+In the first walk nearly all fast pixels (23 454 and 24 344 at High, 9 225 and 16 781 at Low) come from the neck
+movement the first press switches on: the view swings off the strip into the black for about a second (hunt H27, not
+this package). The fastest pixel of the second walk still rises and falls 5 times a second, on your own hand and the
+mirror body moving with the view. Sheets: `work/look2/pass2/before-E2/high-W1-sheet.jpg` (Right index lit white with its
+beam, key down, frames 49 to 57) and `work/look2/pass2/after-E2/high-W1-sheet.jpg`, `low-W1-sheet.jpg` (a white frame
+only until the key-up, then the stop block lights).
+
+**How it was measured.** One scenario per group of faults (`work/look2/sc/`), each run once on port 18930 (before) and
+once on this branch (after), at 1600 x 900, High, Low and High with reduced motion where it matters: every drawn frame of
+a crop read in the frame it was drawn in, its luminance per pixel, the rises and falls of each pixel within any one
+second at a 32-level step, contact sheets and PNGs at set times.
+
+**Checked, second pass.** `tests/look-calm.test.mjs` (14 tests; new: held repeats a full queue drops during a carry keep
+the walk silent until the key-up, under 4 steps a second at any key repeat, the tip measured once per content and
+window; the floor's uniform in the area shader) and the touched files (`area-step`, `tutorial`, `chunking`,
+`activity-effect`, `shader-safe`, `quiet`, `seemove`, `capture-boundary`, `deferred-input`, `move-key`, `area-halo`):
+81 of 81 pass. `?case=boot` ok. Browser tests `keyboard-aim`, `punch-in` and `player-focus` pass.
+
+**Checked.** `tests/look-calm.test.mjs` (11 tests: the walk's rule, the controls' held step and release through the DOM
+binding, the focus ring's rule and binder and the stylesheet, the strike floor on the CPU and in both shaders, the
+boost, the tried mark and the words, the beam cap, the bend's inverse and its GLSL, the area shader, multisampling at
+Low) and 23 related test files: 151 of 151 pass. `?case=boot` ok. Browser tests `startup`, `keyboard-aim`,
+`punch-in`, `emap`, `muscle-shades`, `play-settings` (its keyboard player's 2 px ring) and `player-focus` pass. Frame
+table (frames a second, still / looking round / up and down / the limb turn), this branch and the lead in turn: 59.8 /
+40.2 / 42.4 / 48.1 (the automatic level had dropped to lite-0.9), lead 60.0 / 38.0 / 44.1 / 48.0 (full), this branch
+59.9 / 40.4 / 47.1 / 49.2 (full), lead 60.0 / 41.1 / 44.4 / 54.2 (lite-0.9). At the same level nothing is slower; the
+frame part the timer calls "hud" read 0.7 to 1.3 ms in the up-and-down and limb-turn parts on this branch against 0.3
+to 0.5 on the lead and on another branch of the same base, in both runs, and was not explained.
+
+**Not done, or not right.**
+- The leg borders are smoother, not smooth: the level lines of v itself wave next to the medial wall, where v is pinned
+  to 0 on a staircase of whole triangles chosen by a facing test; the purple Left leg block shows it most. A smoother
+  pin set or a finer strip mesh there would change the blocks' areas, which section 176 set; not done.
+- At Low 34 pixels of the start view still rise and fall 4 or more times a second (at most 6 a second), on the strip's
+  top borders, the mirror body's shoulders and a few points of the brain's outline.
+- During a held walk the look's soft glow and its white frame still step from block to block with the view, about five
+  times a second; only the switching on was removed. A fast look across the strip with the mouse still lights each
+  block it rests on.
+- The stop block switches on when the key comes up, not at the last step: after a hold of the arrow it lights about
+  0.1 s later than it would have. A held walk is slower since the second pass (3.4 steps a second, was about 5).
+- The first press of a walk onto a neck block still lights it, and its movement swings the view off the strip for
+  about a second (hunt H27, not this package); the walk then waits and goes on quietly.
+- A lit muscle at High peaks pale azure (the flash's 36 % whitening), with a few hundred white pixels at its brightest
+  point for a frame; the bloom still spreads what is above white.
+- The beam to your own body goes to one muscle of the movement only.
+- A block under the look that switches on jumps to 0.6 of its glow in one frame (it rose over 45 ms from nothing
+  before); under reduced motion its white core is therefore at once white. A block switched on from elsewhere still
+  rises from nothing (not looked at in the browser after the second pass).
+- The "before" pictures are of the lead on port 18930, not of this branch's own base. The shoulder block under the
+  look before the key reads 239 there and 203 here (its centre); I did not find out why, and did not take "before"
+  pictures of the base itself.
+- Not looked at: other browsers, twice the pixel density, the electrical map (M) with these changes, a touch screen,
+  Firefox's own focus ring rule.
+
+## 199. A limb you choose during a trunk movement still goes back, and no long frame sinks one limb into another (22 November)
+
+The owner, Message 206: "no permanent movements": a movement from the brain contracts and returns, and only the player's
+own placing stays. Message 174: a limb that collides pushes the other "out of the way rather than going through them".
+A check of Body update 67 found, stepping the game at 60 frames a second: with the right arm chosen, "Bend trunk
+forward" pushed the right leg, and if the right leg was chosen during the movement it stayed 86 mm off its place for
+good (90 mm with a side bend; finding 1); and one long frame let a knee sink deep into an arm, which the stop then held
+(finding 3). The SEEMOVE checks had left two cases of the right arm: keys used on it during a trunk movement undone when
+it is let go (R7), and a look turned while a newly chosen arm waits for the trunk not moving it (N2, 82 mm). And the
+frame table showed the limb turn about 6 % slower than on update 66.
+
+**A pushed limb you choose before the trunk is back still goes back (`PUSH_BACK.chosenKept`, `pushBackStep`'s `own`,
+`ns-limb-pace.mjs`; `stepPushBack` and `stepLimbHoldCore` in `ns-app.mjs`).** `stepPushBack` dropped a limb's way back
+as soon as that limb became the chosen one ("a pushed limb you choose is yours"). Choosing a limb is not moving it: the
+record is now kept and the way back goes on with the trunk's return. What the player then does to that limb is the
+player's own placing: the hold hands over the change it made this frame (`holdOwn`: from where the joints were), and
+the way back carries it into both ends of its path, so the push is undone and the player's move stays. Two faults
+found on the way and fixed: read from the joints' places alone, a change the hold made (a place it sets is also where
+the joint is) counted the joint's lag behind the way back as the player's, and a look that carried the leg during the
+return cancelled the whole way back (the leg ended exactly as on update 67); and the way back moving the leg's joints
+made the hold take the leg up afresh every frame, with the moving trunk as its reference, so the look carried the leg
+with the camera. While the chosen limb's way back runs, the hold now keeps its reference and its look and only takes
+the place again from where the end is (`backMoves`). Also: no way back of a push is recorded for the right arm while its
+own way back (`rightBack`, `holdArmBack`) runs, and creating that one drops a push record of the right arm (two records
+on one arm set opposite places every frame; the check found this in Node only). Tried and dropped: dropping a joint the
+player moves from the record, as the right arm's way back does for the limb turn (the push's part of it stayed); a
+chosen leg waiting, not taken up, until its way back is done (keys on it would then be undone, as on a waiting arm).
+`chosenKept` false gives the old rule.
+
+**The stop is tested before a move is taken (`LIMB_BLOCK.ahead`, `aheadSteps` 5, `aheadAllowM`, `aheadShare` in
+`ns-limb-pace.mjs`; `aheadCut` in `ns-app.mjs`).** The keys' step and the knee's pace grow with the frame's time (up to
+`MAX_FRAME_DT`, 0.1 s), so on a busy machine one frame took the knee 100 to 147 mm; the first touch was found after the
+move, and the stop then held whatever overlap that frame had left. Now a move of the chosen limb (the keys or the look,
+the trunk at rest) is first tested against every other limb it is not already blocked by: where it would sink in
+deeper than the overlap now and deeper than `deepM` past where the two first touched (`slackM` when they do not touch
+yet), only the share of the move that stays within is taken, found by five halvings; none of it, the move waits. The
+push and the stop then go on as on short frames. It costs one more pose a frame of the keys, and five more only when a
+move would sink in. Tried and dropped: refusing the whole move (on long frames a leg then stopped a step short of the
+arm and never touched it); the frame time capped at 1/30 s for the keys' step (the limbs slow down on a busy machine,
+and a long frame still sank the knee about 50 mm).
+
+**A look turned while a newly chosen right arm waits is carried when it is taken up (`HOLD_BODY.waitLook`,
+`holdWaitLook`, `stepLimbHoldCore`).** An arm chosen during a trunk movement waits until the trunk is at rest, riding on
+the trunk; a look turned meanwhile was lost. The look is now kept as the arm begins to wait (and again on a frame of
+the keys while it waits), and at the take-up the arm's place in the picture is the one it had with that look; the look
+since then carries it, at the hold's rejoin pace (`rejoinMps`, 1.2 m/s). The left arm is not changed: it rides on its
+own place beside the shoulder.
+
+**R7 is not fixed.** Keys on the held right arm while the trunk is not at rest, then the arm let go before the trunk is
+back: its way back takes it to its places from before the movement, and the keys' move is undone (88.4 mm off its
+control). A key's move made with the trunk bent has no one equal at rest. Tried in this round and dropped: going back
+to the places that put the hand where the view held it in the room, solved once with the trunk at rest as the arm is
+let go: R7 82.1 mm off its control, and the same with W, which barely moves the arm at rest (3.0 mm), 46.2 mm off it.
+Round 6 carried the keys' joint changes and left R2 232 mm off; even the view keeping the arm to the end, with no
+let-go (R7b), ends 33.7 mm off the control on both builds. The note is in the `HOLD_BODY` comment.
+
+**The limb turn: nothing of update 67 found that costs it a frame.** Profiled in the browser (the page's own CPU
+profile, 4 s of the held limb turn, update 66 against update 67, twice at the start view and twice at the frame table's
+own view): no function of `ns-app.mjs` or `ns-limb-pace.mjs` takes more than 0.02 ms a frame more on update 67;
+`stepLimbHold`, `stepLimbPush`, `stepPushBack` and `stepArmBack` are not among the 40 costliest `ns-app` functions on
+either build (each under 0.02 ms a frame). In the turn the twisted left forearm pushes the left leg 46 times in 4 s on
+both builds, and update 67's stop blocks 11 times (one overlap measure a frame). Timed without the profiler, in turns:
+at the start view at High 41.5 / 44.3 / 42.9 against 41.2 / 42.9 / 37.0 frames a second (the last with every part
+slower, the machine), the part where all the limb code runs ("other") 0.98 against 1.0 ms. The frame table's own
+sequence draws the limb turn wherever the look and up-down phases left the view, and they count mouse steps per loop,
+not per time, so a slower run ends elsewhere: four runs ended at four looks (yaw -1.01 to -0.64), and the drawing part
+followed the view (4.3 to 5.9 ms). With the mouse steps fixed (the same view every run): 38.5 / 39.3 against 37.9 /
+36.9 (update 66's second run at the lower picture level lite-0.9). Nothing was changed for this item; the new work of
+this section runs only on frames of the keys or the look on a body limb, or while a chosen limb's way back runs.
+
+**Measured** (the game stepped at 60 frames a second through its own QA step, this branch against port 18930, update 67;
+each sequence beside a control with the same inputs and no trunk movement; distances of the hand or ankle from the
+control's at the end, after everything has settled):
+- Finding 1, right arm chosen, "Bend trunk forward", right leg chosen at 0.1 / 0.3 / 0.6 s: 26.2 / 85.6 / 85.6 mm on
+  update 67, 1.4 / 1.4 / 1.4 now; with the side bend at 0.3 s 89.6, now 1.4. The leg chosen at 0.3 s and then the right
+  arm again at 0.5 s: 85.6, now 0. With D on the leg after the choice: 85.4, now 3.6; with S: 69.3, now 42.8 (S's joint
+  changes made at the pushed pose are kept, and they do not take the ankle where S takes it from the leg's own place); a
+  look moved during the return: 83.1, now 18.4; a limb turn after the choice: 85.6 (and 15.1 on the left leg), now 11.0
+  (0). The pictures of the end show the mirror body's right shin pulled in across the middle on update 67 and splayed out
+  as in the control now.
+- Finding 3, a leg swung into the arm on its side (right leg S 1.2 s, A 0.5 s, D 2 s; left leg S 1.2 s, A 2 s), the deepest
+  and the last overlap of the game's rods: at 60 frames a second 8 / 5 and 4 / 4 mm on update 67, 7 / 7 and 3 / 3 now; at
+  15 frames a second 74 / 74 and 46 / 46, now 3 / 2 and 1 / 0; at 10, 75 / 75 and 110 / 110, now 4 / 2 and 1 / 1. The knee
+  still goes up to 100 to 126 mm in one such frame (its pace in real time is unchanged), but no longer into the arm.
+- N2, the right arm chosen at 0.3 s during "Bend trunk forward", the look turned 6 degrees during the return: 82.2 mm on
+  update 67, now 1.4; turned while it waits (0.4 to 0.8 s): 81.3, now 1.7. With W on the waiting arm first and then the
+  look: 82.9, now 72.3 (not right). W on the waiting arm alone (K8w) 8.1, now 7.1; R2 3.0 on both.
+- No throw: the largest step a frame of each limb is the same on both builds in every sequence (the movement's own).
+
+**Checked.** `tests/limbs3.test.mjs` (new): the way back of a chosen limb with and without the player's change, through
+the activity's own events with the key made as the hold makes it (and the lag fault shown when the change is read from
+the places alone); the stop tested ahead, a long frame's knee in by under 12 mm instead of 147; the new switch. Unit files limbs3, limbs2,
+seemove, limb-hold, limb-pair-push, fix63 and words2: 80 pass, 0 fail. The start check `?case=boot` ok. Browser tests
+`startup`, `keyboard-aim` and `limb-controls` pass. Frame table (still / look / up and down / limb turn, this branch
+against port 18930 in turns): 60.0 / 41.1 / 46.4 / 47.1 against 60.0 / 39.0 / 43.5 / 48.9; 60.1 / 40.5 / 41.8 / 47.3
+against 60.0 / 38.0 / 43.8 / 48.6. The limb turn is lower in both pairs by about 3 %, though none of this section's code
+runs in it (the left arm chosen, no key, nothing pushed back); with the mouse steps fixed, so that both draw the limb
+turn from the same view, three pairs: 37.7 / 33.1 / 38.1 against 37.0 / 38.1 / 37.8 (in the second every part of
+the frame was slower, the input and the drawing too), the part where the limb code runs 2.56 / 3.31 / 2.71 against 2.67 /
+2.57 / 2.70 ms.
+
+**Not done, or not right.**
+- R7 above: keys on the held right arm during a trunk movement are undone if it is let go before the trunk is back.
+- Keys used on a pushed leg after choosing it during the movement are kept as joint changes: S ended 42.8 mm from where
+  S takes the leg with no push (update 67: 69.3). A look carrying it during the return ends 18.4 mm off; a limb turn
+  11.0 mm.
+- A look turned while the right arm waits is carried; keys on the waiting arm and then a look leave it 72.3 mm off. The
+  carried arm catches up at 1.2 m/s once the trunk is back, a quick move of up to about a second. The left arm, waiting,
+  is not carried.
+- The stop is still on rods, not the drawn surfaces, and still not for your left arm or during a trunk movement; it was
+  measured stepped at fixed long frames, not on a machine that is really slow.
+- The 6 % of the limb turn was not found in the limb code; the frame table's own phases leave the view where the
+  machine's speed puts it, so its limb-turn column compares different pictures from run to run.
+
+## 200. Letting go without one long frame, no false "behind you" from outside, labels off the map card, whole sentences on the cards, a steady brain edge at Low (22 November)
+
+The owner: "Performance and reliability should be our number one priority" (Message 134); "The game currently
+physically hurts to look at with your eyes" (Message 133); on the brain's beat, "far less noticeable. But there, if you
+really, really pay attention" (19 November); and the standing rules that a hint must be true, that words show whole or
+not at all (the short card's rule since Messages 44 and 48, on text that is easy to read: each part whole or left out)
+and that labels never cover a card. Six small faults left by the check of update 67 and by sections 192, 196 and 198, each measured on the lead's
+server (update 67) before and on this branch after, at 1600 x 900 unless said.
+
+**Letting go of the brain or the mirror body: the arrows' work is done one piece per frame** (`ARROW_REPLAN.stepped`,
+`holdFrames` 2, `holdMax` 0 in `ns-scene-three.mjs`; `RELEASE_STEPS`, `releaseStep`, `releaseCursorAt` in
+`ns-arrows3d.mjs`). Before, on the lead (quality forced to High, ten timed releases in each of two runs: the brain
+carried up with S three times, carried 170 px aside by the look three times, let go where it was once, the mirror body
+carried with S three times; the game's own frame callback timed for every frame): the fourth frame after the keyup,
+the one that plans, was the longest frame of 15 of the 20 releases: 33 to 68 ms after a carry aside (both frames were
+planned on it: the mirror body's kept tips lay on the moved brain's motor areas), 39 to 44 ms after the mirror body's
+own carry, against held frames of 7 to 13 ms and frames of 11 to 14 ms once a release had settled. A profile of that
+frame (83 ms with the profiler on) put 31 ms in the planner's search, most of it the sight lines against your own body
+and the cover of your body those lines are tested against, built on that same frame for each plan (its parts and its
+grid), and 8 ms in the opening fit of the mirror body's top tip. Now the frame that lets go and the next do no arrow
+work, as before; then one step per drawn frame: the motor-area grids and whether the mirror body's tips may stay; the
+cover of your body seen from the brain's plan view, built ahead (`sightAheadFor`; the plan's sight lines take it,
+`sightFor`); the brain's plan (or its keep); and, only when the mirror body's frame is planned too (its own release, or
+its tips may not stay), its cover and then its plan. Each item's arrows stay hidden until its own plan; at a brain
+release the mirror body's are hidden from the frame that decides they must move (their old places lay on motor areas
+and took the click there). The opening fit now reads the tutorial prompt's box from the HUD read during a release's
+plan instead of from the page, where it forced a layout inside the frame (1.4 to 2 ms with the profiler on; the
+start's plans read the page as before). A wait of the first step for still bodies (`holdMax`, tried at 12 frames) never held:
+in every measured release the pose counters were already unchanged when it could start (the third frame); it is kept
+off (0), since with a look that moves on through the release it would only hold the arrows back. The arrows are back about 85 ms (the brain's, at the fifth frame) to 115 ms (the mirror body's, at the
+seventh) after the keyup at 60 frames a second, against about 65 ms (the fourth frame) before. After, on this branch,
+the same scenario, two runs: the steps cost 0 to 5.2 ms (prepare; 10.7 and 17.5 ms on the first release of a run,
+with the code still cold), 1.0 to 9.0 ms (each cover), 1.2 to 8.5 ms (the brain's plan) and 1.0 to 7.9 ms (the mirror
+body's plan), read from the arrow readback (`releaseSteps`); the longest frame of each release was 32 to 49 ms after a
+carry aside (two of them, 43 and 45 ms, the release frame or the next, with no arrow work in them), 26 to 35 ms after the mirror body's carry, 26 to
+36 ms after the carry up, 21 and 27 ms for a brain let go where it was. Pooled, the first eight frames of all ten releases:
+before median 18.5 and 19.4 ms, 90th percentile 36.3 and 38.8, longest 64.8 and 67.8, 8 and 8 of 80 frames over 34 ms;
+after median 20.9 and 20.0, 90th percentile 32.1 and 30.6, longest 42.9 and 48.7, 4 and 4 of 80 over 34 ms. For
+comparison, an ordinary moving frame (the look swept for 3 s, in the same runs): median 15 to 21 ms, 90th percentile
+20 to 34, the longest 34 to 88. Two runs between (before the prompt box was read from the HUD) still had a 51 to 59 ms
+frame after a carry aside: the mirror body's plan step took 11 to 20 ms there (once a cover, 16 ms).
+
+**The frame timer keeps the last frames part by part** (`recent` and `FRAME_NOTES` in `ns-perf.mjs`;
+`inspect({ perfRecent })` in `ns-app.mjs`; `lastArrowsMs` / `lastOverlayMs` in the scene). To see which part made a
+long frame without a profiler, which doubles every time: the last frames' parts, and two notes inside the draw part
+(the arrows' visibility and plans; the overlay's layout), kept beside the parts and not added to the total. Worked out
+only when asked. It showed what is left after a release (below).
+
+**"The brain is behind you" waits while the brain fills the edges of the view from outside** (`BRAIN_LOST.boundsToo`
+and `brainSeenForTip` in `ns-reference-graph.mjs`, `brainBoundsMeet` in `ns-scene-three.mjs`). Before, on the lead
+(Space on the brain, S for 5.5 s, let go, E): the tip said "The brain is behind you" while pink pieces of the brain
+filled both edges of the picture; the brain lay round the camera, so none of its sample points was in the picture
+(share 0) although its surface was. Now the scene also says whether the box round the sample points in front of the
+camera meets the picture, and while it does the share counts as not known, so neither tip nor the cards' line shows.
+In the eye view after the same carry that box misses the picture and the tip shows as before. After, on this branch: eye view, tip shown (share 0, box false); view from outside, no tip (share 0, box true);
+outside with the look turned 120 px left, no tip (share 0.012); eye view again, tip shown.
+
+**Region labels keep off the electrical map's card** (`readHudRectsNow` in `ns-scene-three.mjs`). Before, on the lead
+at 800 x 600, Low, map on, start look: the "Face and neck" label lay 1,217 px² over the card's honesty line ("... Not
+a recording.") and "Right arm" 441 px² over the card. The card (`ns-emap-card`, shown by CSS while the map is on) is
+now one of the HUD boxes the region labels keep off, as the quiet layer's are (labels only: the arrows keep their
+places while the map comes and goes); it is watched for size even while hidden, since it shows by the app root's
+`data-ns-emap`, which the HUD watcher does not see. After: no label over the card at the start look or with the look
+turned up and right; the "Face and neck" pair sits below the card.
+
+**The card's lead sentence is shown whole or left out whole** (`INFO_WHOLE` and `leadSentenceMark` in
+`ns-scene-three.mjs`, `fitInfoCard`; two rules in `neurosurge.css`). Before, on the lead at 800 x 600, Low: the short
+right card is 150 px wide; the look passed over the whole strip met 14 areas, and the lead sentence of every one of
+them was cut by the short card's 3-line clamp in the middle of a word ("tells your left thi..."), while the card had
+room to spare (its words no taller than its box). The clamp is 2 lines in an upright window. Now the sentence has no
+clamp (`data-ns-lead="whole"`), and when the short card is then taller than its box, the sentence is left out whole
+first (`data-ns-lead="drop"`), the order the short card's other parts already go in, and the way the "Keep in mind"
+lines go (section 197). Key R's opened card scrolls, so there it is always whole. A first try that left out every
+sentence the clamp would cut was dropped before it was run: at 800 x 600 it would have taken the sentence off all 14
+cards that had room for it. After: 11 areas met, all 11 sentences whole (6 to 8 lines), every card fits; the left
+leg's card after S and A reads its whole sentence above "Muscles that pull".
+
+**At picture quality Low the brain does not swell with the beat** (`LIVE_AT_LOW.swellAtLow` and `liveRulesFor` in
+`ns-scene-three.mjs`). Before, on the lead at Low, the start view with the look still, 4 s twice (each pixel's rises
+and falls within any one second, the map checkers' measure): 25 and 23 pixels rose and fell 4 or more times a second at
+a 32-level step (at most 5), 210 and 265 at a 16-level step, most of them on the brain's right outline at the top of the
+picture and a few on the strip's borders and round the mirror body. With reduced motion (no beat at all) the same
+measure gave none, map off and on: all of it was the living brain. The beat's swell moves the outline about 1.3 CSS px,
+0.8 of a drawn pixel at Low's 0.6 scale, so edge pixels stepped between the pale brain and the dark ground with each
+beat and its small second bump. Now at the cheapest level (Low, which is also the automatic controller's last level)
+the brain does not grow with the beat or the breath; it still flushes and its wet light still slides with the beat,
+and every other level swells as before. After: 0 and 0 pixels at both steps. A close-up of the brain's edge before and
+after shows the same picture.
+
+**The map's two wire spots at Low: already steady on update 67; no change.** Section 192 left two spots on the mirror
+body's wires (782,338 and 817,340) rising and falling 15/5 and 16/10 times a second with the map on at Low. On the
+lead now (paired runs, map off, on, off, on, the checkers' measure and their per-pixel comparison): with the map on 1
+and 0 pixels rise and fall 4 or more times a second at the 32-level step, 1 and 0 of them only with the map on (two
+map-off runs differ by 8 and 12), and the two spots read 3/0 and 2/1, 2/0 and 2/1. The same comparison of the map's
+own pass-5 data gives 15/5 and 16/10 there, so the shimmer went between that pass and update 67; the likely cause is
+section 198's multisampling at Low (`MSAA_AT_LOW`), merged after it (not proven). On this branch: 0 and 0 at the
+32-level step with the map on.
+
+**Checked.** `tests/ui3.test.mjs` (new, 11 tests: the release's steps walked the way the scene calls the arrows, a pick
+before each drawing, for a brain release with and without the mirror body planned again and for a mirror body release;
+the cursor's cadence and the wait for still bodies; brainSeenForTip with brainLostWords; leadSentenceMark and the
+stylesheet's rules; the map card as a labels-only box; the frame timer's recent frames and notes; the living brain's
+rules at Low) with the touched `carry-release` and the neighbouring `perf`, `hud-layout`, `info-settle`, `words2`,
+`chunking`, `brain-live`, `look-calm`, `emap-view`, `shader-safe` and `outline-idle`: 90 of 90 pass. The start check:
+`"ok":true`. Browser tests `startup`, `keyboard-aim`, `brain-compass`, `mirror-compass`, `emap` and
+`camera-resize`: all pass (and `keyboard-aim`, `brain-compass`, `mirror-compass` again after `holdMax` went to 0). The frame table, in turns (still / look / up and down / limb turn, frames a second, full
+quality): this branch 59.5 / 37.7 / 42.8 / 46.7, the lead 60.0 / 36.7 / 43.7 / 54.0, this branch 60.0 / 37.3 / 43.1 /
+52.8, the lead 60.1 / 37.7 / 42.2 / 52.0 (this branch's first limb turn 7 frames a second below the lead's, the second
+pair level; of this section only the release's steps at the limb turn's start run there). How it was measured: one
+scenario per group of faults (the round's work folder, not in the repository), run on the lead's server and on this
+branch: the releases, the look sweep and the lost-brain tip at High (the game's frame callback timed round every
+frame, the frame timer's parts and the arrow readback after each release; a CPU profile of a few releases, cut to each
+frame by name); the cards and the map card at 800 x 600, Low (every card the look meets on a coarse pass over the
+strip; every shown label's box against the card's); the start view at Low with the map off, on, off, on (each pixel's
+rises and falls in its busiest second, compared pixel by pixel), and once with reduced motion. Pictures opened: the
+view from outside after the carry behind, before and after; the left leg's card and the map card at 800 x 600, before
+and after; a close-up of the brain's edge at Low, before and after; the mirror body's wires with the map on at Low.
+
+**Not done, or not right.**
+- The frames after a release are still longer than held ones. The first seven run about 15 to 30 ms against 7 to 13
+  while held and 11 to 14 once it has settled: the left hand going back to rest re-skins (up to 4 to 11 ms on the first
+  two frames), the outline pass and the pose redo (2 to 6 ms each), the arrows' visibility test runs again after each
+  plan, and frame 6 carries 3 to 7 ms the frame timer files under "other" that I did not trace. That is about what an
+  ordinary moving frame costs here (the look sweep's median 15 to 21 ms), but a step that coincides with a slow moment
+  still makes a frame of 40 to 49 ms in some releases. The same step's cost varies up to eightfold from one release to
+  the next (the same plan, the same 617 places and 1,395 sight lines: 1.2 ms in one release, 10 in another); I did not
+  find why (garbage collection is likely, not shown).
+- The arrows come back 20 to 50 ms later than before (about 85 to 115 ms after the keyup).
+- The wait for still bodies (`holdMax`) is off: tried at 12 frames, it never held in the measured releases (the pose
+  counters were unchanged by the third frame, where the steps start anyway). The two final timing runs, the start check
+  and the frame tables were made with it at 12, where it never held; `keyboard-aim`, `brain-compass` and
+  `mirror-compass` were run again at 0 and pass (`startup`, `emap` and `camera-resize` were not run again).
+- The timings come from one processor shared with other jobs (one heavy job at a time); single runs differ by more
+  than the change in places. Ten releases per run, two runs per build for the final code (and two of the code before its last change).
+- Item 2: a brain only partly round the camera whose box meets the picture while none of it is drawn there would keep
+  the tip away; not seen.
+- Item 3: at 800 x 600 with the map on, the arm labels ("Left arm", "Right arm") are now drawn faded at the start look
+  (seen in the picture; before, the right one lay partly on the card). Why the label layout fades both was not traced.
+- Item 4: at 800 x 600 the cards are taller (6 to 8 lines of lead sentence in a 150 px column: the left leg's card 343
+  px against 287) and cover more of the picture's lower right; a portrait window was not tried in the browser (there the sentence was clamped to 2 lines; now it
+  is whole, or left out when the card runs over).
+- Item 6: at Low the brain no longer visibly swells; the beat shows only in its flush and wet light. Measured at Low
+  only (section 198 counted 26 to 40 such pixels at High, as noise; not measured here).
+- Item 5 was not changed; its fix is only inferred.
+
+## 201. Your left arm is stopped by your other limbs, A brings a folded hand across the chest at the keys' pace, and what you do to a limb during a trunk movement ends where it ends at rest (22 November)
+
+The owner, Message 174: a limb that collides pushes the other "out of the way rather than going through them"; Message
+186 (section 185): A and D swing a limb "between medial and lateral", and "the limb keys never whip"; Message 206: "no
+permanent movements": a movement from the brain contracts and returns, and only the player's own placing stays. The
+check of update 68 and sections 195 and 199 left four gaps: your left arm was not stopped by your other limbs; A across
+the chest was a slow curl; keys or a look used on a pushed leg chosen during a trunk movement left it 18 to 41 mm off
+where the same input ends with no trunk movement; and keys used on the held right arm during a trunk movement were
+undone when it was let go (R7, 88 mm). Each was measured on port 18930 (update 68) and on this branch with the same
+scenario, the game stepped at 60 frames a second through its own QA step unless said (`work/limbs4/sc/s-l4.mjs`).
+
+**Your left arm pushes and is stopped like the other limbs (`LEFT_ARM_BLOCK`, `twoRodBendAt`, `leftArmMoveCut` in
+`ns-limb-pace.mjs`; `leftArmCut` in `ns-app.mjs`).** The left arm is the game arm: its own rig puts the hand at the place
+the view asks for, inside the simulation's step, so the stop of sections 195 and 199 (tested on a pose the joints' solve
+found) never saw it; the push already worked (it pushed 41 times while going 122 mm into a folded thigh that could not
+give way). Now the hand's place is cut before the step, with the same rules: a move of yours (the keys or the look, the
+trunk at rest) sinks into no other limb deeper than the overlap now and `deepM` (8 mm) past where they first touched
+(`aheadShare`'s halvings), and a move deeper into a limb that blocks it waits (`blockRefuses`). The arm at a trial place
+is two rods with their lengths kept and the elbow on its side of the shoulder-to-hand line: the rig's own elbow swings
+toward its side at most 240 degrees a second, so a frame's trial is within millimetres of what the step then draws.
+Deepest overlap of the left arm's rods with the other limb's (the game's own rods), update 68 against now: left leg S
+1.2 s, then the left arm D 1 s: 122 mm into the folded left thigh, now 13 (the hand waits against it; the look down that
+follows moves it no deeper); right leg S 1.2 s, then D 1.5 s: 105 into the right thigh, now 13; left leg S, D 0.4 s,
+then the look carries the hand down 40 degrees: 106, now 12; the first case at 15 frames a second: 122 (and 79 into the
+right arm), now 3. D, W, A and S alone, with nothing in the way, take the hand as far as before (581, 6, 564, 550 mm).
+
+**A on the folded right arm first turns the upper arm about its length (`LIMB_ACROSS`, `spinStepDeg` in
+`ns-limb-pace.mjs`; `spinAcross` in `ns-app.mjs`).** After S the hand lies by the shoulder and the forearm points out to
+the right. A asked the solve to turn the shoulder-to-hand line toward the left, and its cheapest answer was to raise the
+upper arm forward, which moves the elbow two to three times as far as the hand, so section 195's pace held the frame to
+a creep: on update 68, 2.5 s of A took the hand from 93 mm outside the right shoulder (along the line between the
+shoulders) to 51 mm outside, at 0.4 to 0.5 mm a frame after the first quarter second, for the keys' 10; held without a
+break for 1 s, to 33 mm outside, the elbow going 315 mm for the hand's 113; the forearm still pointed out to the right.
+The movement that brings a folded hand across is the upper arm's own turn inward (the joint the keys' solve already may
+turn for S across the chest, `r_shoulder_rot`): the forearm swings across in front of the body and the elbow stays
+where it is. Now A alone on a folded limb with that joint turns it first, by the angle that moves the hand the keys' own
+step (measured on the drawn pose for one degree), while that move goes the keys' way (within `offDeg`, 60 degrees) and
+the turn has range left; the frame is tested as every frame of the keys is (`limbKeyFollow`, the pace, the trunk and
+head keep-out, the other limbs' stop). Where it cannot go on, the frame falls back to the swing and the turn of the
+line, as before. D afterwards first turns the upper arm back to where A's turn began (the record `spinA` on the hold,
+kept through the other frames of the keys), then swings the folded arm out as section 195 has it. Now: the first 0.25 s
+of A move the hand 10.1 mm a frame with the elbow still (0 mm), from 93 mm outside the shoulder to 38 mm inside it; the
+next 0.25 s, by the swing, 6.7 mm a frame, the elbow at most 12.4 mm a frame, to 112 mm inside; then it stops at 115
+(the swing and the line's turn find nothing more; the body's middle is about 170). A 0.1 s tap moves the hand 60 mm and
+nothing after the key. S, A 1 s, D 2.5 s ends out at the side as before (42 mm outside). Tried first in a copy of the
+keys' frame on the game's body (`tests/limbs4.test.mjs`): A 0.5 s then D 0.5 s brings the hand back within 21 mm of
+where S left it (update 68: 128).
+
+**What you do to a limb during a trunk movement is played on its shadow at rest (`KEY_SHADOW`, `keyShadowNew`,
+`keyShadowStep`, `keyShadowCarry`, `keyShadowPoints`, and `pushBackStep`'s `ownTo` in `ns-limb-pace.mjs`; `shadowEnv`,
+`shadowTake`, `shadowFrame`, `stepKeyShadows`, `armShadow` and `rightBack.shadow` in `ns-app.mjs`).** A key's move made
+at the pushed or bent pose has no one equal at rest: the same joint changes taken back to the rest pose move the foot
+or hand somewhere else (W moves the right leg 2 mm at its place, at the leg pushed by the trunk it straightened the knee
+13 to 17 degrees). What does have one equal is the input. While a limb's way back runs (a pushed limb chosen during
+the movement: its push record; the right arm let go during it: `rightBack`) or the trunk carries the held right arm
+(from the frame the trunk leaves rest), a shadow of the limb stands at the place it goes back to, with the rest of the
+body at its places and no trunk bend. Each frame of the keys on the limb is played on the shadow by the same rules as
+the view's hold plays it at rest (the place on the keys' line within `leadM`, one solve a frame, `limbKeyFollow`,
+`keyMoveCut`, the pace with the swing and `LIMB_ACROSS`, the trunk keep-out of an arm, nothing under `HOLD_LIGHT`
+`minDeg`), and a look that carries the limb carries the shadow by the same look from the camera with the trunk at rest
+(its place in the picture taken as the hold takes it). The place the limb goes back to becomes the shadow's: the push
+and the trunk's carry are undone, and the input ends where it ends with no movement. The limb itself still answers the
+keys frame by frame as before; a drag or the limb turn is carried onto the shadow as joint changes. Off the control at
+the end (update 68, now): the pushed right leg chosen at 0.3 s, then W 0.4 to 1.8 s 35.4, 2.8; S 0.4 to 2.0 s 41.0, 0.0;
+A then D 19.8, 5.4; D 3.6, 2.8; a look moved 4 degrees down during the return 18.4, 2.8; with a side bend and a look 5
+across and 3 down 19.4, 2.2; nothing done to it 1.4, 1.4. The right arm with keys during the movement, let go at 0.3 s:
+D (R7) 88.4, 0.0; W 3.0, 1.0; S 28.1, 6.2; chosen again and W while it waits (R2) 3.0, 1.0. Not changed: the view keeping
+the arm to the end with no let-go (R7b) 33.7; W on a newly chosen right arm while it waits (K8w) 7.1; N2 1.4; W and
+then a look on the waiting arm (N2w) 72.3. The largest one-frame step of every limb is the same on both builds in
+every sequence. This is the rule section 199 asked to try first ("keys made during the movement are kept as the same
+joint changes, applied on top of the place the arm goes back to") taken one step further: the same joint changes are
+what update 68 already does for the pushed leg (35.4 mm with W), and round 6 had them for the arm (R2 232 mm); the same
+input is what the control is.
+
+**Measured** in the browser on this branch against port 18930 (update 68), 1600 by 900, the game stepped at 60 frames a
+second through its QA step (15 for the long-frame case), each sequence of items 3 and 4 beside a control with the same
+inputs at the same frames and no trunk movement; the left arm's overlaps from the game's own rods (radius 50 and 40 mm,
+the hand rod 70 mm past the hand); A's steps from the drawn hand and elbow every frame; and offline on the game's body
+loaded from disk (`tests/limbs4.test.mjs`).
+
+**Checked.** `tests/limbs4.test.mjs` (new): the two-rod arm at a trial place, the cut and the wait; the turn's step, its
+range and where D stops; A after S on the game's body at the keys' step with the elbow still, and D bringing it back;
+the shadow of a pushed leg ending at the control where the joint changes carried back end centimetres off (W); the
+shadow's keys at the keys' step and the pace, nothing after the key, a carry within reach and a wait beyond it; and
+`ownTo` taking the joint to the shadow's place with no jump. Unit files limbs4, limbs3, limbs2, limb-hold,
+limb-pair-push, seemove, fix63, limb-keys, limb-follow, hold-move and shader-safe: 98 pass, 0 fail. The start check `?case=boot` ok. Browser tests `startup`,
+`keyboard-aim`, `limb-controls`, `limb-touch` and `arm-collar` pass. Frame table (still / look / up and down / limb
+turn, this branch against port 18930 in turns): 60.0 / 37.9 / 44.7 / 46.6 against 60.0 / 34.7 / 46.6 / 52.7; 59.9 / 21.8
+/ 38.7 / 45.3 (every part of that run slower, the still view's drawing 7.9 ms against 5.1: the machine) against 60.1 /
+37.8 / 43.3 / 50.3. The limb turn was lower in both pairs, though none of this section's code runs in it (the left arm
+chosen, no key, no look); drawn from the same view (`s-turnab`, three pairs at High), 44.0 / 35.2 / 42.9 against 34.4 /
+41.6 / 38.2 frames a second, the part where the limb code runs 1.12 against 1.06 ms. The new work runs only on frames of
+the keys or the look on your left arm or on a folded right arm's A and D, and on a chosen limb's frames while a shadow
+stands (a still frame of a shadow does nothing).
+
+**Not done, or not right.**
+- A across the chest stops with the hand about 115 mm inside the right shoulder, short of the body's middle, and the
+  hand rises as it crosses: after a quarter second it stands up beside the face on the mirror body, after half a second
+  the folded arm lies in front of the right chest with the hand at the chin. Not compared with a person.
+- The left arm's stop is tested on two rods with the elbow kept on its side, not on the arm the rig then draws (a few
+  millimetres apart in one frame); the left hand still sinks up to 13 mm into a limb before the stop holds it, as the
+  other limbs do. A limb carried into your left arm by a trunk movement is not stopped (the stop is for moves of yours
+  with the trunk at rest).
+- The shadow does not model another limb in the way (the control's right leg pushed the left leg 44 mm in A then D;
+  the shadow pushes nothing), the contact of a leg with the trunk, two keys at once falling back to one, the head's
+  column in the eye view, or a look carrying a limb beyond its reach (the shadow then waits where it is). R7s still
+  ends 6.2 mm off; A then D 5.4.
+- R7b, K8w and N2w are not changed: a right arm held to the end, or chosen while it waits, has no way back for a
+  shadow to give its place to.
+- A drag on a chosen pushed limb after its shadow moved is carried onto the shadow as joint changes, as before the
+  shadow; not measured in the browser.
+
+## 202. Letting go in smaller pieces, the arm labels moved before they fade and back after M, shorter cards in small windows, leg borders without kinks (22 November)
+
+The owner: "Performance and reliability should be our number one priority" (Message 134); "Way too much text now. The
+amount of text is completely overwhelming." (Message 57); the strip "completely segmented, so it's a bunch of slice
+blocks with a little bit of gap in between" (Message 206); and the standing rule that a label never covers a card and
+is moved before it is faded. Four faults left by the combined check of update 68 (its findings 3, 4 and 5) and by
+section 198 (the purple Left leg block's borders), each measured on the lead's server (update 68) before and on this
+branch after, at 1600 x 900 unless said.
+
+**Letting go: the arrows' work in smaller pieces, and the cheap ones merged** (`RELEASE_STEPS_FINE`, `RELEASE_FINE`,
+`releaseStep` `steps`, `releaseCursorAt` merges in `ns-arrows3d.mjs`; `pendingFit`, `finishPendingFit`, `showPlanned`,
+`updateArrows(mergeOk)` in `ns-scene-three.mjs`). Before, on the lead (quality forced to High; eight timed releases a
+run: the brain carried up with S three times, carried 170 px aside by the look twice, the mirror body carried with S
+three times; the game's frame callback timed for every frame, the frame timer's parts and the arrow readback after each
+release): the first release of a run spent 13.7 and 15.2 ms on 'prepare' (a profile: two motor-area grids, one for the
+mirror body's keep test and one for the brain's plan view; a brain carry moves the brain's rest matrix, which is part
+of every grid's key, so both are real work at every brain release), the mirror body's cover 4.6 to 17.2 ms (two covers,
+its plan view and the opening view, on one frame) and its plan 1.2 to 10.5 ms (the planner's search, then its rescue
+pass, 4.7 of 9.2 ms with the profiler on, then the opening fit). Now: prepare (whether the mirror body's tips may stay,
+with that test's grid), grids (the grid of the frame that will be planned, also the brain's at the mirror body's
+release), the brain's cover, the brain's search, its rescue with its tips shown, the mirror body's cover, the opening
+view's grid and cover, the mirror body's search, its rescue with its opening fit and its tips shown. A plan made on its
+search step keeps its rescue in `pendingFit` until the next step; a new hold finishes it at once. A step whose work in
+the frame stayed under `mergeMs` (1.5 ms) lets the next run in the same drawn frame, at most `maxMerges` (3) more, and
+only from the drawing's own two calls: a pick at the start of the next tick still sees the frame before and never takes
+a step (merged from there, a cheap step could have put two costly ones on one tick). A fault found on the way: at a
+release that forces the mirror body's plan (its kept tips lay on the moved brain's motor areas), every later call in the
+search step planned it again, since that step was no longer the release's last; the forced plan is now made once. After,
+four paired runs (this branch, then the lead, in one run each; the last on the final code): most steps 1 to 4 ms
+(prepare 0 to 3.3 after the first release's 2.9 to 8.3; grids 0 to 7.3; each rescue 0 to 3.6), the largest 14.7 and 11.9
+ms (the first brain search of a run), 13.6, 12.2 and 11.9 (a cover, once each) and up to 9.7 otherwise, against the
+lead's single steps of up to 21, 17.2 and 10.5 ms in the same runs. The pooled first eight frames of the eight releases were not
+clearly shorter, because most of the long frames that remain are not the arrows' work (below): this branch 22.9 /
+33.8 / 88.1 ms (median / 90th percentile / longest), 6 of 64 frames over 34 ms; 22.7 / 40.0 / 74.2, 12; 22.2 / 36.9 /
+51.9, 8; final 20.1 / 30.2 / 42.9, 5; the lead in the same runs 23.4 / 55.9 / 108.8, 12; 23.9 / 38.6 / 77.4, 10; 21.9 /
+35.0 / 46.4, 8; 21.9 / 31.2 / 49.6, 4. The worst frame of each release in the final run: this branch 34.8, 28.2, 28.8,
+42.9, 35.3, 41.8, 31.3, 29.3 ms; the lead 49.6, 24.2, 24.2, 49.5, 40.6, 30.2, 32.2, 44.1. Ordinary moving frames (the
+look swept 3 s, the same runs): median 16 to 20 ms, 90th percentile 21 to 32. The page was ready in the same time on
+both builds (10.9 s). The UI3 list stays behind `RELEASE_FINE.on`.
+
+**The first grids after loading are built once in an idle moment** (`RELEASE_WARM`, `warmReleaseGrids` in
+`ns-scene-three.mjs`). The first release of a run built its grids with cold code (4.3 and 7.6 ms against 1.3 to 2.5
+later). Once after loading, in an idle callback after the start's plans (3 s at the latest), the grid code runs for the
+brain's plan view tilted 4 degrees up and down, and the grids are dropped (not kept in the memo). It took 12.8 and 15.6 ms
+there, outside any frame. After, two runs: the first release's prepare 2.9 and 4.1 ms (the lead 6.7 and 21 in the same
+runs), but its grids step still 7.3 and 7.0 ms, and the run's first brain search 4.0 and 14.7: the warm-up covers the
+grids' code only.
+
+**The hands' and feet's processor copies have a budget of their own** (`BODY_GPU_COPY` in `ns-scene-three.mjs`,
+`updateBodySkin`). Letting go after Space opens both hands and both feet at once, so all their muscles change pose on
+one frame. The graphics card skins them; `updateBodySkin` still made each one's processor copy (for the picks and the
+mirror body's measure) on that frame within the 60,000 vertices of the skin budget: 10.1 ms of 'skin' on a mirror body's
+release frame on the lead, 7.6 of a release frame's 10.1 ms of skin in a profile. Those copies now have 20,000 vertices
+a frame of their own; the rest wait for the next frames. The picture is not touched; a pick on one of those muscles sees
+its pose of a frame or two before until its copy is made, and the mirror body's measure makes every copy first, as
+before. Measured: the largest frame of copies in these runs wanted 32,926 vertices (when, not recorded: perhaps at
+loading), which now take two frames; how many a release wants was not counted.
+
+**The arm labels are moved to a clear place before they are faded** (`LABEL_LAYOUT.gridRetry`, `retryFrac` 0.125 in
+`declutterLabels`, `ns-scene-three.mjs`). Before, on the lead at 800 x 600, Low, map on, start look: "Left arm" and
+"Right arm" drawn faded (opacity 0.4) at 302 / 498, 105. A replay of that layout in Node from the game's own label
+readback reproduced it exactly: at their anchors the right label met the map card and the left one the mirror body's
+shoulders, every straight and diagonal offset of their two rings met one or the other or the tutorial card, and going
+further in put them nearer the leg and trunk areas than their own (the rule of hunt H17). A required unit with no clear
+place on the rings now tries every offset of the same rings in eighth steps of a ring, nearest first, with the same
+rules, before it is forced and faded; twins stay level and mirrored. The only clear heights were a band of 6 px between
+the tutorial card's foot and the mirror body's shoulders, which quarter steps (8 px) jumped over. The retry was first
+measured at about 0.9 ms a layout (a frame can lay the labels out twice while the look moves): each offset is now tested
+first against its rules and against the obstacles and labels within the pair's reach, stopping at the first overlap; the
+sorted offsets are kept per grid; at most `retryMax` (400) are tried, so a layout with no clear place does at most about
+a third of the grid. The place is the 132nd offset tried, about 0.03 ms more than a layout without the retry.
+After: the pair at 295 / 505, 93, at full strength, clear of the map card, the tutorial card and both bodies; the same
+replay of the start look, the map on with the look turned, and the map off gives the same places as before.
+
+**The map card's box leaves the labels as soon as M turns it off** (`emapRootChanged` in `layoutOverlay`). Before, on
+the lead, 1.5 s and 3 s after M off, both arm labels were still faded at 302 / 498, 121, and the label obstacles still
+held the card's box (562, 64, 792, 242) although the card was no longer drawn; they came back only when the look moved.
+The card shows and hides by the app root's `data-ns-emap`, which the HUD's mutation watcher does not see (it watches the
+HUD), and its size watcher reports the change only after the frame that hid it had laid out its labels with the card's
+old box; nothing else changed, so no later frame laid them out again. The attribute is now read once a frame (no
+layout) and a change reads the HUD's boxes again. After: both labels at full strength at 246 / 554, 121, 1.5 s and 3 s
+after M off.
+
+**At small windows the short card leaves out a lead sentence longer than four lines** (`INFO_WHOLE.maxLines` 4,
+`leadSentenceLines`, `leadSentenceMark` `lines` / `movesShown`, `fitInfoCard`). Before, on the lead at 800 x 600, Low:
+eight cards met on a pass over the strip, every lead sentence whole in 6 or 7 lines of the card's 112 px column, cards
+219 to 341 px tall (median 325); the left hip's card after S and A 343 px tall from y 241. In the short card the
+sentence is now shown whole only when it takes at most four lines; a longer one is left out whole where the card draws
+other lines under it (`othersShown`: the muscles that pull, or the numbered movements; the tip by the crosshair names
+the movement the look does). A card whose sentence is its whole body (an in-between area's) keeps it as long as the card
+fits (seen in a picture: left out, the card was a bare title). A list counts only when a row or a movement in it is
+drawn: the in-between card's rows are hidden by the short card's stylesheet while their list still takes height (its
+top rule). Key R's opened card always has the sentence. (Two first forms of that exception were wrong and corrected,
+each found in a picture or a run: one looked only for the numbered movements, which the short card does not draw for
+most areas, so the rule never applied; the next counted the in-between card's hidden rows.) The other way the check offered, a wider short card at 800 px, was not taken: four lines of such a
+sentence need a column of about 190 px, a card of about 230, nearly a third of the window over the picture. After, on the
+final code: 7 of the 8 cards met leave it out and the tongue's (it moves nothing, so its card has no other line) keeps
+it, cards 171 to 222 px tall (median 205) against 219 to 341 (median 308) on the lead in the same run; the left hip's
+card 205 px; the in-between area's card keeps its sentence (picture). At 1600 x 900 the sentence takes 2 or 3 lines and
+stays.
+
+**The leg blocks' borders are drawn from a coordinate whose gradient stays even next to the medial wall**
+(`STRIP_DRAWN`, `smoothStripDrawnV`, `segmentMotorStrips` `drawn`, `compactPart` `sDraw`, `classifyRegionGaze` in
+`ns-brain.mjs`; `borderAttributes`, `buildRegionFills`, the area halo and `hintVertexAlpha` in `ns-scene-three.mjs`).
+Section 198 left the purple Left leg block's borders wavy and named the cause: next to the medial wall the along-gyrus
+coordinate is pinned to 0 on a staircase of whole triangles (35 and 41 staircase edges). A probe on the atlas strips:
+the leg borders lie 2 to 5 mm from that staircase, in its first one or two rings of triangles, so several borders cross
+one triangle as parallel straight lines and all turn at its edges, where the coordinate's gradient jumps from one
+triangle to the next; on the crest that faces up they turn 11.6 and 12.0 degrees a mm in the surface's own plane, with
+11 and 13 kinks sharper than 45 degrees, against 5 to 9 degrees a mm and 0 to 3 kinks for the arm and face borders far
+from the wall. The coordinate that is drawn and picked per point now comes, below v 0.12, from vertex values that keep
+the gradient as even as they can across shared edges while staying near v (a least-squares solve: the jumps' squares
+weighted by the two triangles' area, plus `mu` 1 times each vertex's area times its distance from v); the staircase's own
+vertices are free in it, and every corner of a triangle that reaches `crestTop` keeps v, so from the trunk's end on
+(the arms, the face) nothing is drawn or picked any differently. Which block each triangle is, every area's mm2
+(section 176), the anchors and the owner runs keep coming from v itself; the parts carry the drawn values as `sDraw` and
+the strip tables as `uDraw`. A fill's range of a drawn value a little under 0 is clamped at 0, the strip's medial end,
+as the shader's owner lookup takes it. Tried and dropped, each measured the same way: a second harmonic solve with a
+soft, smoothed pull of the medial wall, matched back to the old areas (borders longer and kinkier, the toes 15 % larger);
+v from the distance to a smoothed medial edge (new creases); interpolating with per-vertex gradients inside each
+triangle (wiggles inside the triangles, 23 to 25 degrees a mm); smoothing v along its own level lines (kinkier); this
+solve with the staircase held at 0 (8 to 11 degrees a mm, 4 to 9 kinks). After: 7.1 degrees a mm, 1 and 2 kinks; each
+leg block's drawn area within 2.5 to 3.4 % (the toes give the most, 285 to 279 and 316 to 308 mm2, since the staircase's
+vertices rise; the trunk 331 to 330 and 335 to 334); every area's deepest pick point (each block and each movement of
+both strips, 108) picks the same area and movement as before. The solve takes 16 to 40 ms per half at load (Node, the
+first call with cold code). Pictures (start view, nearest pixels x4): the purple block's borders zigzag in sharp notches
+on the lead and run as even curves on this branch, with small bends left at the triangles' edges; the yellow block the
+same.
+
+**Readback for replays** (`labels` in `ns-app.mjs` inspect and the scene's state). Each label's placer fields, the
+obstacles' word flags and weights, and the brain group's world matrix with the camera in use (`brainView`), so a label
+layout and the strip's drawn borders can be replayed in Node as the player sees them. Made only when asked.
+
+**Checked.** `tests/ui4.test.mjs` (new, 15 tests: the finer step lists and the merge rule walked frame by frame with
+the drawing's two calls and a pick of the next tick; the pending rescue, the forced plan and the copies' budget read
+from the source; the lead sentence's line rule and its exception; the map-on layout read from the game, placed clear,
+level and mirrored with the retry, faded without it as update 68 drew it, and the retry's bound; the root attribute
+watch; on the atlas strips: the same triangles, areas, owner runs and parts' coordinate with the drawn coordinate, every
+area's deepest pick point unchanged, the leg borders' sharp turns at least 8 before and at most 3 after per half, the
+leg blocks' drawn areas within 4 %; the solver on a grid) with the touched or neighbouring `ui3`, `carry-release`,
+`strip-blocks`, `brain-part`, `hud-layout`, `hud-words`, `look-calm`, `area-halo`, `brain-gap`, `emap`, `info-settle`,
+`start-layout`, `small-fixes`, `shader-safe`, `words2` and `area-step`: 166 of 166 pass. The start check: `"ok":true`.
+Browser tests `startup`, `keyboard-aim`, `brain-compass`, `mirror-compass`, `emap` and `camera-resize`: all pass, on the
+final code and on the code before its last two fixes. The frame table, in turns (still / look / up and down / limb
+turn, frames a second): before the label retry's speed-up, this branch 59.2 / 31.1 / 35.6 / 44.2, the lead 60.0 / 29.8 /
+33.7 / 40.6, this branch 59.8 / 31.2 / 38.3 / 45.7, the lead 60.1 / 39.4 / 43.6 / 50.4; on the final code, this branch
+60.0 / 38.4 / 45.9 / 47.1 (full quality), the lead 59.9 / 30.2 / 34.2 / 41.5 (lite-0.9), this branch 59.2 / 30.7 / 36.0
+/ 41.5 (full), the lead 59.7 / 31.8 / 42.6 / 48.8 (lite-0.8). The means of the four runs each: look 32.9 against 32.8,
+up and down 39.0 against 38.5, limb turn 44.6 against 45.3; single runs of one build differ by up to 10. During the frame
+table's look and up-and-down sweeps the label retry ran 22 times in 7 s (4 found a place). How it was measured: one
+scenario per group (the round's work folder, not in the repository), each run on this branch and on the lead's server in
+one run: the releases at High (the game's frame callback timed round every frame, the frame timer's parts and the arrow
+readback after each release, a CPU profile of three releases on the lead); the cards, the labels with the map on and off
+at 800 x 600, Low (with the label readback for the replays); the start view's leg blocks at 1600 x 900, High (nearest
+pixels x4), and the brain view for a flat rendering of the blocks in Node; probes of the atlas strips in Node (the
+borders' turns, the drawn areas, the pick points). Pictures opened: the leg blocks x4, before and after, three times;
+the strip's blocks rendered flat with the start camera, before and after; the map on and the map off at 800 x 600,
+before and after, three times; the left hip's card after S and A, before and after; the probe's top views of the right
+half's leg stretch.
+
+**Not done, or not right.**
+- Letting go is not clearly shorter. The arrows' work is in smaller pieces, but the first eight frames after a
+  release still reach 40 to 52 ms in some releases on both builds, and the pooled numbers differ by less than the noise
+  of this shared machine (above; the final run's longest release frame 42.9 ms against the lead's 49.6). The long frames that remain carry 20 to 46 ms of drawing that is neither the arrows nor
+  the overlay (the outline up to 12 ms), and on some releases every frame, held ones too, ran two to three times slower
+  for a moment; I did not find their cause (garbage collection or the graphics card waiting are likely, not shown). The
+  covers of your own body and the run's first search are now the largest steps (up to 11.9 to 14.7 ms once each, 1.2 to 6
+  usually), and the visibility test after a plan still runs on the frame the tips are shown.
+- The arrows can come back later: a brain release takes 5 working steps where it took 3, the mirror body's 9 where it
+  took 5. Cheap steps merge, but when every step costs something a brain release ends at the 7th drawn frame after the
+  keyup (5th before) and a mirror body's at the 11th (7th before): about 115 and 180 ms at 60 frames a second, more on
+  a slower machine (counted from the steps, not timed).
+- The first release of a run is still the slowest: its grids step 7.0 and 7.3 ms after the warm-up, its first brain search
+  up to 14.7 ms (cold code the warm-up does not run).
+- The warm-up runs 12.8 ms of work once after loading in an idle callback; on a busy machine that callback may come
+  only at its 3 s limit and then shares a frame.
+- A pick on a muscle of the hands, feet or forearms just after letting go can see its pose of a frame or two before.
+- The arm labels' new place at 800 x 600 with the map on lies 4 px from the tutorial card and from the mirror body's
+  shoulders; a slightly different window or look can leave no clear place, and the pair is then faded as before. Only
+  this case and the replays of four other captured states were tried.
+- The short card at 800 x 600 now names a movement area by its title and the muscles that pull; the sentence that says
+  in words what the area moves is behind R (the tip by the crosshair names the movement). Between 900 and 1280 px wide
+  the line rule leaves it out where it takes five lines or more (not measured there).
+- The leg borders still bend a little at each triangle edge (7 degrees a mm against 5 to 9 elsewhere on the strip): the
+  drawing is still linear inside each triangle, and the staircase is smoothed, not gone. The toe block's drawn area is
+  2.5 to 3.4 % smaller. The drawn borders near the wall move by up to a fraction of a triangle, so a look exactly on a
+  border can pick its neighbour where it picked the other before (every area's deepest point picks the same).
+- The probe's measure (turns in the surface's plane on the crest that faces up) and the pictures at x4 are the only
+  evidence for the borders; not looked at at Low, twice the pixel density or in other browsers.
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**
@@ -3243,26 +7444,48 @@ at once when the head is still. The arrow tip's hover still trails a step (and a
 - Publication. Since 12 November the user asks for each finished version to be uploaded to the project's GitHub repository, and that is done. An upload is not an independent review.
 
 **Limits of this build that were looked at and left, each with its reason in the section named.**
+- Touching muscles: with the colour rule of 22 November (no pink, mauve or blood crimson) about 1 in 80 visible contacts between two muscles is drawn nearly equal and about 1 in 10 is weak (the lead's colours: 1 in 21 and 1 in 5); the darkest forearm flexors have the fewest colours; the left and right muscle of a pair share one colour at the midline; the pairs seen side by side, and the light on them, are known from eighteen views only (188).
 - Some motor areas cannot be aimed at until the brain is turned to one side; no view from above shows them. Section 13 counted four of the 44 areas the map had then. The map now has 54, and the count has not been redone (13, 55, 59).
 - The brain has its own proportions at the start look and stretches at steep looks (13).
 - The start picture holds your whole torso since section 91; the stomach is a narrow band in it (14, 79, 90, 91).
-- In a window of 1280 by 720 most short information cards leave out the muscle lines to fit; key R opens the card that has them (69).
+- In a window of 1280 by 720 most short information cards leave out the muscle lines to fit; key R opens the card that has them (69). At 800 by 600 they also leave out the first sentence where it would take more than four lines (an in-between area's card keeps it) (202).
+- At 800 by 600 with the full cards on, the colour key gives up whole parts so the status card under it stays whole: its credits line, and while the "Try this" line is in the status card also its key items and rough-map note (197). An open information card's lowest line fades at its foot until it is scrolled (the wheel scrolls it, also with the pointer captured), and a card without More detail drops whole "Keep in mind" lines it cannot show (197).
 - After “Tilt head back” and the key that brings the head back, the view ends 10 degrees above level, below the neck area, not on it (68).
 - While you look up at the brain, a held forward trunk bend is drawn smaller than the 80 degrees it holds (68).
 - Small upright windows, narrower than about 340 pixels or shorter than about 800, cannot start and say so; on a phone-sized screen the panels crowd the brain. The game needs a keyboard and a mouse or trackpad in any case (15).
 - When even the last good view cannot be drawn, the view turns part of the way back by itself (16).
+- Letting go of a carried brain or mirror body: the arrows' work is done in nine smaller pieces, cheap ones merged
+  (most 1 to 4 ms; up to 15 ms once, the first search of a run), and the hands' processor copies spread over two frames;
+  yet the frames after a release still run about 15 to 30 ms on the test machine against 7 to 13 while held, and a few
+  of 40 to 52 ms remain on both builds, mostly drawing that is not the arrows' work; the arrows can come back up to 2 to
+  4 frames later than in section 200 (196, 200, 202).
 - From one measured pose the view from behind cannot be shown until the hand or the look moves; the game says so (18).
 - Your own arm can hide part of the brain's left arrow (19). The overlap of the brain's top arrow with the mirror body's top arrow noted there is gone since section 59, which puts the brain above the mirror body.
 - The shoulder-girdle slide has not been compared with reference images (9).
 - At looks far to the left and down the eye is 4 to 7 cm from the left shoulder muscle: its front part shows a ragged border, the upper-arm bone shows past it, and during the limb turn a small gap can open between two of its parts (72).
 - The mirror body's four arrows stay on the frame of the upright body: a tilted body can reach past them, and at a downward look your left arm can hide its left arrow (73).
 - The switched-off floating-face code is still in the renderer (11). It draws nothing and was left to keep this change small.
+- An area that moves nothing (the black blocks, the tongue) shows no light of its own on a click, only the key's press and a soft glow round it: this package's rule (the brief's and the lead's), not asked of the owner (191).
+- The glow of the strip was looked at frame by frame mostly with the page's clock slowed, on a machine drawing a few frames a second; at real speed in two runs; never on the owner's display (191).
+- At the start view the face, jaw and throat movements travel under 6 pixels on the mirror body's face (the ink on the eyelids and lips makes most of them readable; the brows, the nose, the jaw's sideways move and the throat read by their light), and fourteen other small movements under 12 pixels; at the look on a hand area your own left arm stands wherever the look has brought it, sometimes with the hand beyond the frame (189).
+- The leg blocks' borders no longer zigzag next to the medial wall (drawn from a coordinate whose gradient stays even
+  there), but they still bend a little at each triangle edge, as every border of the strip does, and the toe block is
+  drawn 2.5 to 3.4 % smaller (198, 202).
+- At picture quality Low the brain does not swell with the beat (its edge only stepped a pixel; none of the start view
+  rises and falls now, map on or off); it still flushes with it. During a held arrow walk the look's soft glow and white
+  frame step from block to block with the view (198, 200).
+- The nerve data for the electrical map is typical and simplified: 74 of its 152 main roots are choices where the sources read mark none, a plexus is one bundle, the cranial nerves' openings in the skull are placed by offsets, and 1.4 % of the drawn length still lies in bone (most of it in the skull's own passages); nothing of it has been seen drawn in the game on its own branch (193).
+- With the right elbow fully bent, A turns the upper arm inward and brings the hand across at the keys' pace, then stops about 115 mm inside the shoulder, the hand rising toward the chin; D turns it back and swings the folded arm out to the side; a folded leg's A and D stop at the thigh's 45-degree sideways lift (195, 201).
+- Keys and the look on a limb during a trunk movement are played on its shadow at rest, so they end within about 0 to 6 mm
+  of where the same input ends with no movement (201); the shadow pushes no other limb, and a right arm held to the end of
+  the movement, or chosen while it waits, keeps section 199's rules (R7b 34 mm, N2w 72 mm off).
 
 **Asked for in the user's notes and not done yet.** These stay with the author of these changes.
+- The electrical map (the owner's notes of 20, 21 and 22 November: "a live brain scan map where you have electrical wire, electrical storm activity going everywhere"). It is there on M, as a live scan with storms, and no person has played it. The strip's blocks show under the dark ground, not over it as the lead asked (a second draw broke them into dark triangles); an activated block is not the brightest spot. The lit nerves at your own raised shoulder are a tangle, and lines kink at strongly bent joints; the beads cannot be told apart on the small mirror body; two lit areas that share a wire show one colour; the report's way up is a drawn convention; the first M press takes about 0.7 s (192).
 - Performance (Messages 42, 48 and 50). Holding and carrying the mirror body, the slow limb turn and the view over the shoulder still fall below 60 frames a second on the test machine (66, 71).
 - Part-way positions from the brain (Message 47). An activation takes a part to the end of its movement (59).
 - Controls (Message 46). Replaced on 17 November: a held thing follows the pointer across the view (80). The mirror body's top and bottom arrows turn it (73).
-- Limbs knocking each other about (Message 39). Your own limbs are not checked against each other and can pass through one another (33).
-- From the notes of 17 and 18 November, not done yet: limbs that do not look small in the start picture, with bulkier muscles, wider far ends of the limbs and chunky fingers and toes; a thicker neck; the mirror body magnified and nearer; a down arrow for the brain that is always reachable; vessels laid out as anatomy and a brain plainly different in shade from muscle; a neon blinking, shuddering effect on activity; muscles that swell as they contract; the colour code of the strip and the body redone from scratch with visible links between an area and its part; grouping ("chunking") of every overlay; a pass over all earlier notes for small fixes; collision effects and one limb pushing another; a limb hidden behind another limb staying visible; what the sweep of 87 still shows (the kneecap and the lower end of rectus femoris at a fully bent knee) and a rule for joint angles in combination; the move from the Borderlands look toward a more detailed, glossy, fleshy graphic-novel look.
+- Limbs knocking each other about (Message 39). Your own limbs are checked against each other as two rods each: the limb you move, your left arm too, pushes another aside and stops against it where it cannot give way, also after a long frame (139, 195, 199, 201); overlaps of a centimetre or two remain.
+- From the notes of 17 and 18 November, not done yet: limbs that do not look small in the start picture, with bulkier muscles, wider far ends of the limbs and chunky fingers and toes; a thicker neck; the mirror body magnified and nearer; a down arrow for the brain that is always reachable; vessels laid out as anatomy and a brain plainly different in shade from muscle; a neon blinking, shuddering effect on activity; muscles that swell as they contract; the colour code of the strip and the body redone from scratch with visible links between an area and its part; grouping ("chunking") of every overlay (the Esc page, its full instructions, the controls card and the tip are grouped; the cards are not: 115, 197); a pass over all earlier notes for small fixes; collision effects (one limb pushes another since 174, with the limits above); a limb hidden behind another limb staying visible; what the sweep of 87 still shows (the kneecap and the lower end of rectus femoris at a fully bent knee) and a rule for joint angles in combination; the move from the Borderlands look toward a more detailed, glossy, fleshy graphic-novel look.
 - Arrow places (Messages 7 and 31). The brain's bottom arrow is off the middle of its side (59).
 - The graphics as a whole (Message 41), and the review of earlier notes and versions asked for in Message 48, are done in part only.

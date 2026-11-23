@@ -31,6 +31,19 @@ try {
   });
   await page.addInitScript(() => {
     window.mediaRequests = 0;
+    window.speechStarts = 0;
+    class LocalRecognition {
+      get processLocally() { return this.local === true; }
+      set processLocally(value) { this.local = value; }
+      start() {
+        if (!this.processLocally) throw Error('Expected on-device dictation');
+        window.speechStarts++;
+        this.onresult({results:[[{transcript:'hopping on my left foot'}]]});
+        this.onend();
+      }
+      abort() {}
+    }
+    Object.defineProperty(window, 'SpeechRecognition', {value:LocalRecognition});
     Object.defineProperty(navigator.mediaDevices,'getUserMedia',{value() {
       window.mediaRequests++;
       return Promise.reject(new Error('No devices in the replay.'));
@@ -107,7 +120,58 @@ try {
   await page.keyboard.press('Escape');
   assert.equal(await page.evaluate(() => document.activeElement.id),'ns-canvas');
   await page.keyboard.press('f');
-  const field = page.getByRole('textbox',{name:'Move the body'});
+  const field = page.getByRole('textbox',{name:'Command box'});
+  const chat = page.locator('#ns-action-chat');
+  const matches = chat.getByRole('group',{name:'Matching whole-body recordings'});
+  const lookup = chat.getByRole('button',{name:'Find body recording'});
+  const beforeSearch = clips.length;
+  let releaseList;
+  const listRequested = page.waitForRequest('**/assets/spatial-motion/manifest.json');
+  const listHold = new Promise(resolve => { releaseList=resolve; });
+  await page.route('**/assets/spatial-motion/manifest.json',async route => {
+    await listHold;
+    await route.continue();
+  });
+  await field.fill('jumping forwards');
+  await field.press('Enter');
+  await listRequested;
+  await field.fill('hop on my right foot');
+  releaseList();
+  await page.unroute('**/assets/spatial-motion/manifest.json');
+  await lookup.click();
+  await chat.getByRole('status').filter({hasText:'No matching whole-body recording'}).waitFor();
+  assert.equal(await matches.isVisible(),false);
+  await field.fill('jump forward');
+  await field.press('Enter');
+  const jump = matches.getByRole('button',{name:'Jump forward'});
+  await jump.waitFor();
+  assert.equal(await jump.evaluate(el=>el===document.activeElement),true);
+  assert.equal(await chat.evaluate(el=>el.scrollWidth<=el.clientWidth),true);
+  assert.equal(await page.evaluate(()=>window.__nsQA.inspect().shell.mode),'paused');
+  assert.equal(await page.evaluate(()=>window.speechStarts + window.mediaRequests),0);
+  assert.equal(clips.slice(beforeSearch).filter(path=>!path.endsWith('manifest.json')).length,0);
+  await page.keyboard.press('Enter');
+  await panel.locator('[data-motion-info]').filter({hasText:'13_11'}).waitFor();
+  await time.focus();
+  await time.press('End');
+  assert.equal(await time.inputValue(),'103');
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('f');
+  await lookup.click();
+  await matches.waitFor();
+  assert.equal(await matches.getByRole('button').count(),3);
+  await chat.getByRole('button',{name:'Use voice'}).click();
+  assert.equal(await field.inputValue(),'hopping on my left foot');
+  assert.equal(await matches.isVisible(),false);
+  assert.equal(await page.evaluate(()=>window.speechStarts),1);
+  await field.press('Enter');
+  await matches.getByRole('button',{name:'Hop on the left foot'}).waitFor();
+  await page.keyboard.press('Enter');
+  await panel.locator('[data-motion-info]').filter({hasText:'132_23'}).waitFor();
+  assert.equal(await page.evaluate(()=>window.mediaRequests),0);
+  await page.keyboard.press('Escape');
+  assert.equal(await page.evaluate(()=>document.activeElement.id),'ns-canvas');
+  await page.keyboard.press('f');
   await field.fill('Replay a forward jump');
   await field.press('Enter');
   await panel.locator('[data-motion-info]').filter({hasText:'13_11'}).waitFor();
@@ -137,7 +201,9 @@ try {
   assert.equal(await page.evaluate(() => window.mediaRequests),0);
   assert.deepEqual(errors,[]);
   assert.deepEqual(external,[]);
-  console.log(JSON.stringify({threeRecordings:true,depthRotation:true,sourceCoordinates:true,offline:true,checksumRecovery:true,narrowWidth:360,mediaRequests:0,errors}));
+  console.log(JSON.stringify({threeRecordings:true,depthRotation:true,sourceCoordinates:true,offline:true,
+    checksumRecovery:true,typedCatalogueSearch:true,dictatedCatalogueSearch:true,wrongSideDeclined:true,
+    staleResultsCleared:true,keyboardReplay:true,narrowWidth:360,mediaRequests:0,errors}));
 } finally {
   await browser?.close();
   await new Promise(resolve => server.close(resolve));

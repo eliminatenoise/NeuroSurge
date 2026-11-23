@@ -899,6 +899,15 @@ const MUSCLE_EXTRA_CANDIDATES = Object.freeze([
 ]);
 const QUADRICEPS_RE = /\b(rectus femoris|vastus (lateralis|medialis|intermedius))\b/;
 /**
+ * 21 November 2026 (a browser hunt, H26: "a thin grey rod sticks out of the curled right hand at the thumb"): the
+ * extensor indicis and the extensor digiti minimi end in the extensor expansion of their finger, which runs over the
+ * proximal and middle phalanges to the base of the distal one; their source meshes run along the finger's back that far.
+ * Their packet hints end at the finger's proximal phalanx, so the part of the tendon over the middle and distal phalanges
+ * was carried by the proximal one: in a fist it stood straight out of the knuckle as a thin rod (the extensor digitorum
+ * beside it, hinted to the digits, folded with the finger). The finger's middle and distal phalanges are candidates too.
+ */
+const EXPANSION_RE = /\bextensor (indicis|digiti minimi)\b/;
+/**
  * 18 November 2026 (user: "No muscles ... should be pointy ..., detached"; the range-of-motion sweep's new measure of
  * stretched edges: in the belly wall, edges of under a millimetre were drawn up to 105 mm long as soon as the trunk
  * was bent away from the source pose, a band of shards across the belly). Cause: the nearest-two-bones rule
@@ -946,6 +955,8 @@ function muscleCandidates(entry) {
   // as their lower end. The kneecap is not on the path from the thigh to the shin in the segment tree (it hangs from
   // the thigh beside the shin), so it is added here: the tendon over the kneecap then goes with the kneecap.
   if (QUADRICEPS_RE.test(entry.name)) for (const sd of ['r', 'l']) if (segs.includes(`${sd}_thigh`) && segs.includes(`${sd}_shank`)) segs = [...segs, `${sd}_patella`];
+  // (EXPANSION_RE) the extensor expansion: the rest of the finger
+  if (EXPANSION_RE.test(entry.name)) { const fm = /^([rl])_(index|little)_pp$/.exec(d); if (fm) for (const ph of ['mp', 'dp']) { const sg = `${fm[1]}_${fm[2]}_${ph}`; if (BODY_SEGMENTS.includes(sg)) segs = [...segs, sg]; } }
   // (later: the collar bone is its own segment, CLAVICLE_STRUTS: a muscle on a girdle may lie on its collar bone)
   if (segs.includes('r_girdle')) segs = [...segs, 'r_clav'];
   if (segs.includes('l_girdle')) segs = [...segs, 'l_clav'];
@@ -3231,6 +3242,9 @@ function continuousSkinWeights(rig, p, avail, skin = null, groupForearm = false)
     }
   }
   if (quadSide) quadWrapWeights(rig, quadSide, p, ia, ib, wa, idx);
+  // 21 November 2026 (ELBOW_SKIN tailMm): a vertex shared across the right elbow hands its share to its own side's bone
+  // away from the joint (before the ARM_WRAP pass, which leaves every pair with the forearm alone)
+  if (ELBOW_SKIN.on && segs.some(s => ELBOW_FORE_RE.test(s)) && segs.some(s => !ELBOW_FORE_RE.test(s) && /^r_(upperarm|girdle|clav)$/.test(s))) elbowTailCut(elbowRigOf(rig), p, ia, ib, wa);
   // 18 November 2026 (ARM_WRAP): a share between another bone and the right upper arm goes through the half-way frame
   if (!groupForearm && segs.includes('r_upperarm')) {
     const U = SEG_INDEX.get('r_upperarm'), W = SEG_INDEX.get(ARM_WRAP.segment), F = SEG_INDEX.get('r_forearm');
@@ -3361,6 +3375,137 @@ export function anconeusPoseWeights(weights, flexDeg) {
   return { delta: weights.anconeusDelta, mix: weights.anconeusDelta ? anconeusBendBlend(flexDeg) : 0 };
 }
 
+/**
+ * 21 November 2026 (ELBOW; the published list of what is not done: "the right elbow at its full bend still folds its
+ * muscles"; the owner: "Any limited range of motion that's unnatural needs to be fixed"). THE RIGHT ELBOW'S SKIN AT A
+ * DEEP BEND. Looked at offline in close pictures of the elbow posed with the game's own rig and skin records (bent 90,
+ * 120 and 145 degrees, palm up and palm down), three faults, each with its own rule here:
+ *   tailMm   the far ends of the forearm's muscles kept a share of the upper arm's frame (the two-influence weights
+ *            fall off slowly with the distance to each bone: 6 cm down the forearm the long finger and wrist flexors
+ *            still followed the upper arm by 15 to 30 %, the brachioradialis 4 cm up the upper arm the forearm by 15 %;
+ *            the triceps 3 cm above the olecranon by 35 %). At a deep bend such a vertex is pulled 2 to 4 cm toward
+ *            the other bone: the forearm's flexors folded back into the crease and through the biceps. A vertex whose
+ *            two bones lie on either side of the elbow now hands its share over to the bone of its own side between
+ *            tailMm[0] and tailMm[1] from the elbow along that side's bone (forearm: toward the wrist; upper arm:
+ *            toward the shoulder); nearer the elbow its weights are the rule's own (an attachment on an epicondyle or
+ *            the olecranon keeps its bone).
+ *   spin     the plain linear blend of two frames bent 145 degrees apart pulls a vertex shared half and half most of
+ *            the way to the joint's axis (it keeps cos 72.5 = 30 % of its distance): the back of the elbow came to a
+ *            pinched point of crumpled triangles. Such a vertex now turns about the elbow's axis by its share of the
+ *            bend instead, for `spin` of the difference (1 = a full turn blend, which swelled the back of the elbow
+ *            into a ball; 0.5 keeps a round point). Only the bend about the elbow's axis is blended so; the forearm's
+ *            turn and anything else stays linear.
+ *   clamp    at a deep bend the forearm's flexors and the biceps / brachialis pass into each other. Past fromDeg of
+ *            bend (full from toDeg) a vertex on the inner side of the elbow (innerMm: from the elbow's axis toward
+ *            the inside of the bend) that has crossed the plane halving the bend, from the forearm's side or the
+ *            upper arm's, is put back on its own side (smoothly: within marginMm of the plane it is moved by under a
+ *            third of that). A vertex shared about half and half (its share between pure[0] and pure[1] of the way
+ *            from even to whole) is moved less, none at even shares, so nothing tears. The two masses then meet along
+ *            that plane, as a fully bent arm's front does.
+ * Display rules for the atlas surface, not a model of soft tissue; nothing here is measured on a body. Shared by the
+ * start-posture bake (bakeBodyPosture), skinBodyPositions, the skin records (handSkinRecords, which carry elbowRig) and
+ * the scene's processor skin (ns-scene-three), so every one draws the same arm.
+ */
+export const ELBOW_SKIN = Object.freeze({ on: true, tailMm: Object.freeze([20, 50]), spin: 0.5,
+  clamp: Object.freeze({ marginMm: 2.5, fromDeg: 50, toDeg: 100, innerMm: Object.freeze([-5, 15]), pure: Object.freeze([0.1, 0.6]) }) });
+const ELBOW_FORE_RE = /^r_(forearm|radius|hand|thumb_(mc|pp|dp)|(index|middle|ring|little)_(pp|mp|dp))$/;
+/** Per BODY_SEGMENTS index: true for a bone on the forearm's side of the right elbow (forearm, radius, hand, digits). */
+export const ELBOW_FORE_SEGMENT = Object.freeze(BODY_SEGMENTS.map(s => ELBOW_FORE_RE.test(s)));
+/** The right elbow's rest frame (source mm): { point (the pivot), axis (flexion, unit), wrist, shoulder } or null. */
+export function elbowRigOf(rig) {
+  const J = rig && rig.pivots, e = J && J.r_elbow, w = J && J.r_wrist, s = J && J.r_glenohumeral;
+  if (!e || !e.point || !e.axes || !e.axes.flex || !w || !w.point || !s || !s.point) return null;
+  return Object.freeze({ point: e.point, axis: norm(e.axes.flex), wrist: w.point, shoulder: s.point });
+}
+/** ELBOW_SKIN tailMm on two-influence weights (ia, ib: BODY_SEGMENTS indexes, wa: ia's share; changed in place) of a
+ * muscle at rest positions p (source mm). Pure apart from the arrays. */
+export function elbowTailCut(er, p, ia, ib, wa, o = ELBOW_SKIN) {
+  if (!er || !o.on) return;
+  const E = er.point, af = norm(sub(er.wrist, E)), au = norm(sub(er.shoulder, E)), [t0, t1] = o.tailMm, F = ELBOW_FORE_SEGMENT;
+  for (let v = 0, k = 0; k < p.length; v++, k += 3) {
+    const fa = F[ia[v]], fb = F[ib[v]];
+    if (fa === fb) continue;
+    const x = p[k] - E[0], y = p[k + 1] - E[1], z = p[k + 2] - E[2];
+    const hi = smooth01((x * af[0] + y * af[1] + z * af[2] - t0) / (t1 - t0)), lo = smooth01((x * au[0] + y * au[1] + z * au[2] - t0) / (t1 - t0));
+    if (!(hi > 0) && !(lo > 0)) continue;
+    const s = fa ? wa[v] : 1 - wa[v], s2 = s + (1 - s) * hi - s * lo;
+    wa[v] = fa ? s2 : 1 - s2;
+  }
+}
+/** The elbow's bend (radians, signed) of the forearm's frame against the upper arm's about the elbow's axis: the twist
+ * about er.axis of U^-1 F (both segment matrices, source -> posed). */
+export function elbowBendOf(er, U, F) {
+  if (!er || !U || !F) return 0;
+  // R = U3^T F3 (column-major); its quaternion's part along the axis gives the twist angle
+  const r = (i, j) => U[4 * i] * F[4 * j] + U[4 * i + 1] * F[4 * j + 1] + U[4 * i + 2] * F[4 * j + 2]; // (R)_{ij}
+  const m00 = r(0, 0), m11 = r(1, 1), m22 = r(2, 2), w = Math.sqrt(Math.max(0, 1 + m00 + m11 + m22)) / 2;
+  const qx = (r(2, 1) - r(1, 2)) / (4 * (w || 1e-9)), qy = (r(0, 2) - r(2, 0)) / (4 * (w || 1e-9)), qz = (r(1, 0) - r(0, 1)) / (4 * (w || 1e-9));
+  const a = er.axis, along = qx * a[0] + qy * a[1] + qz * a[2];
+  return 2 * Math.atan2(along, w);
+}
+/** ELBOW_SKIN spin: the change (source-frame vector, to be carried by the upper side's map's rotation) that turns a
+ * vertex at source point (x, y, z), shared s with the forearm's side, about the elbow's axis by s of the bend theta
+ * (radians) instead of blending the two frames linearly: (R(s theta) - (1 - s) I - s R(theta)) (q - pivot), times
+ * spin. Into out (3 numbers). Pure. */
+export function elbowSpinOffset(er, theta, s, x, y, z, out, spin = ELBOW_SKIN.spin) {
+  out[0] = 0; out[1] = 0; out[2] = 0;
+  if (!er || !(s > 0 && s < 1) || !(Math.abs(theta) > 1e-6) || !(spin > 0)) return out;
+  const k = er.axis, c = er.point, dx = x - c[0], dy = y - c[1], dz = z - c[2], dp = dx * k[0] + dy * k[1] + dz * k[2];
+  const px = dx - dp * k[0], py = dy - dp * k[1], pz = dz - dp * k[2];
+  const wx = k[1] * dz - k[2] * dy, wy = k[2] * dx - k[0] * dz, wz = k[0] * dy - k[1] * dx;
+  const al = (Math.cos(s * theta) - (1 - s) - s * Math.cos(theta)) * spin, be = (Math.sin(s * theta) - s * Math.sin(theta)) * spin;
+  out[0] = al * px + be * wx; out[1] = al * py + be * wy; out[2] = al * pz + be * wz;
+  return out;
+}
+/** The posed elbow frame for ELBOW_SKIN clamp from the segment matrices U (upper arm) and F (ulna), optionally carried
+ * into another frame by the rigid map M (e.g. a mesh's inverse matrix): { e, axis, bis (into the bend), n (normal of the
+ * plane halving the bend, toward the forearm) } or null. Pure. */
+export function elbowPlaneOf(er, U, F, M = null) {
+  if (!er || !U || !F) return null;
+  const ap = (m, q) => [m[0] * q[0] + m[4] * q[1] + m[8] * q[2] + m[12], m[1] * q[0] + m[5] * q[1] + m[9] * q[2] + m[13], m[2] * q[0] + m[6] * q[1] + m[10] * q[2] + m[14]];
+  const ad = (m, q) => [m[0] * q[0] + m[4] * q[1] + m[8] * q[2], m[1] * q[0] + m[5] * q[1] + m[9] * q[2], m[2] * q[0] + m[6] * q[1] + m[10] * q[2]];
+  let e = ap(U, er.point), sh = ap(U, er.shoulder), wr = ap(F, er.wrist), ax = ad(U, er.axis);
+  if (M) { e = ap(M, e); sh = ap(M, sh); wr = ap(M, wr); ax = ad(M, ax); }
+  ax = norm(ax);
+  const flat = v => { const d = dot(v, ax); return norm([v[0] - d * ax[0], v[1] - d * ax[1], v[2] - d * ax[2]]); };
+  const u = flat(sub(sh, e)), f = flat(sub(wr, e));
+  return { e, axis: ax, bis: norm([u[0] + f[0], u[1] + f[1], u[2] + f[2]]), n: norm(sub(f, u)) };
+}
+/** ELBOW_SKIN clamp on posed positions P (Float32Array, in the frame of `plane`; changed in place) with each vertex's
+ * share of the forearm's side `share(v)` (0..1), at bend flexDeg; N: the normals to lean with a moved vertex (or null).
+ * Returns the number of vertices moved. Pure apart from the arrays. */
+export function elbowCreaseClamp(P, N, share, plane, flexDeg, o = ELBOW_SKIN) {
+  if (!plane || !o.on) return 0;
+  const C = o.clamp, gF = smooth01((flexDeg - C.fromDeg) / (C.toDeg - C.fromDeg));
+  if (!(gF > 0)) return 0;
+  const e = plane.e, b = plane.bis, n = plane.n, m = C.marginMm, [i0, i1] = C.innerMm, [p0, p1] = C.pure;
+  let moved = 0;
+  for (let v = 0, k = 0; k < P.length; v++, k += 3) {
+    const x = P[k] - e[0], y = P[k + 1] - e[1], z = P[k + 2] - e[2];
+    const gIn = smooth01((x * b[0] + y * b[1] + z * b[2] - i0) / (i1 - i0));
+    if (!(gIn > 0)) continue;
+    const s = share(v), pure = smooth01((Math.abs(2 * s - 1) - p0) / (p1 - p0));
+    if (!(pure > 0)) continue;
+    const sg = s >= 0.5 ? 1 : -1, d = sg * (x * n[0] + y * n[1] + z * n[2]);
+    if (d >= m) continue;
+    const push = gF * gIn * pure * (m * Math.exp((d - m) / m) - d) * sg;
+    P[k] += push * n[0]; P[k + 1] += push * n[1]; P[k + 2] += push * n[2];
+    if (N) { // (the moved surface leans toward the plane's own direction, as far as it was moved)
+      const t = Math.min(1, Math.abs(push) / (2 * m)) * gF * gIn * pure;
+      const nx = N[k] + t * (sg * n[0] - N[k]), ny = N[k + 1] + t * (sg * n[1] - N[k + 1]), nz = N[k + 2] + t * (sg * n[2] - N[k + 2]), l = Math.hypot(nx, ny, nz) || 1;
+      N[k] = nx / l; N[k + 1] = ny / l; N[k + 2] = nz / l;
+    }
+    moved++;
+  }
+  return moved;
+}
+/** Whether two-influence weights cross the right elbow anywhere (a vertex with one bone on each side). */
+export function elbowCrossing(i0, i1) {
+  const F = ELBOW_FORE_SEGMENT;
+  for (let v = 0; v < i0.length; v++) if (F[i0[v]] !== F[i1[v]]) return true;
+  return false;
+}
+
 function elbowSkinWeights(rig, p, avail) {
   if (!avail.includes('r_upperarm') || !avail.includes('r_forearm') || !avail.includes('r_radius')) return null;
   return continuousSkinWeights(rig, p, avail, null, true);
@@ -3381,7 +3526,8 @@ export function bodySkinWeights(rig, meshId, restPositions, options = {}) {
     const n = p.length / 3, w0 = new Float32Array(n), w1 = new Float32Array(n);
     for (let v = 0; v < n; v++) { w0[v] = c.wa[v]; w1[v] = 1 - c.wa[v]; }
     const bend = anconeusSkinDeltas(rig, meshId, p, restPositions.indices, avail, c);
-    return { segments: BODY_SEGMENTS, i0: c.ia, i1: c.ib, w0, w1, ...bend };
+    const er = elbowCrossing(c.ia, c.ib) ? elbowRigOf(rig) : null; // (21 November 2026: ELBOW_SKIN)
+    return { segments: BODY_SEGMENTS, i0: c.ia, i1: c.ib, w0, w1, ...bend, ...(er ? { elbowRig: er } : {}) };
   }
   const n = p.length / 3;
   const elbow = elbowSkinWeights(rig, p, avail);
@@ -3399,7 +3545,9 @@ export function bodySkinWeights(rig, meshId, restPositions, options = {}) {
   }
   // R558: the right forearm's continuous twist, exactly as the bake (rForearmTwistPass).
   const tf = (options && options.twist === false) || !avail.includes('r_radius') ? null : rForearmTwistPass(rig, p, i0, i1);
-  return tf ? { segments: BODY_SEGMENTS, i0, i1, w0, w1, tf, twist: rForearmTwistFrame(rig) } : { segments: BODY_SEGMENTS, i0, i1, w0, w1 };
+  const er = elbowCrossing(i0, i1) ? elbowRigOf(rig) : null; // (21 November 2026: ELBOW_SKIN)
+  const out = tf ? { segments: BODY_SEGMENTS, i0, i1, w0, w1, tf, twist: rForearmTwistFrame(rig) } : { segments: BODY_SEGMENTS, i0, i1, w0, w1 };
+  return er ? { ...out, elbowRig: er } : out;
 }
 
 /**
@@ -3507,7 +3655,7 @@ export function handSkinRecords(rig, meshesById, options = {}) {
     if (!w) continue;
     out.set(m.id, { src: p instanceof Float32Array ? p : Float32Array.from(p), i0: w.i0, i1: w.i1, w0: w.w0, w1: w.w1, ...(w.tf ? { tf: w.tf, twist: w.twist } : {}),
       ...(w.anconeusDelta ? { anconeusDelta: w.anconeusDelta } : {}),
-      ...(w.anconeusDeepDelta ? { anconeusDeepDelta: w.anconeusDeepDelta } : {}) });
+      ...(w.anconeusDeepDelta ? { anconeusDeepDelta: w.anconeusDeepDelta } : {}), ...(w.elbowRig ? { elbowRig: w.elbowRig } : {}) });
   }
   return out;
 }
@@ -3522,6 +3670,11 @@ export function skinBodyPositions(segmentMatrices, weights, restPositions, out, 
   if (o.length !== p.length) throw new Error('ns:body_skin: out must match restPositions length');
   const mats = BODY_SEGMENTS.map(s => segmentMatrices.get(s) || null);
   const { delta, mix } = anconeusPoseWeights(weights, elbowFlexDeg);
+  // 21 November 2026 (ELBOW_SKIN): a muscle across the right elbow (weights.elbowRig) turns its shared vertices about the
+  // elbow's axis (spin) and keeps the two sides of a deep bend apart (clamp)
+  const er = ELBOW_SKIN.on && weights.elbowRig ? weights.elbowRig : null, F = ELBOW_FORE_SEGMENT;
+  const U = er ? segmentMatrices.get('r_upperarm') : null, Fm = er ? segmentMatrices.get('r_forearm') : null;
+  const theta = er && U && Fm ? elbowBendOf(er, U, Fm) : 0, off = [0, 0, 0], share = er ? new Float32Array(n) : null;
   for (let v = 0; v < n; v++) {
     const k = 3 * v, x = p[k], y = p[k + 1], z = p[k + 2];
     const shift = mix > 0 ? mix * delta[v] : 0;
@@ -3530,7 +3683,17 @@ export function skinBodyPositions(segmentMatrices, weights, restPositions, out, 
     for (let r = 0; r < 3; r++) {
       o[k + r] = wa * (a[r] * x + a[4 + r] * y + a[8 + r] * z + a[12 + r]) + wb * (b[r] * x + b[4 + r] * y + b[8 + r] * z + b[12 + r]);
     }
+    if (share) {
+      const fa = F[weights.i0[v]], fb = F[weights.i1[v]];
+      share[v] = (fa ? wa : 0) + (fb ? wb : 0);
+      if (fa !== fb && theta) {
+        const s = share[v], up = fa ? b : a;
+        elbowSpinOffset(er, theta, s, x, y, z, off);
+        for (let r = 0; r < 3; r++) o[k + r] += up[r] * off[0] + up[4 + r] * off[1] + up[8 + r] * off[2];
+      }
+    }
   }
+  if (share && U && Fm) elbowCreaseClamp(o, null, v => share[v], elbowPlaneOf(er, U, Fm), elbowFlexDeg);
   return o;
 }
 
@@ -4369,13 +4532,27 @@ export function bakeBodyPosture(rig, meshesById, { posture = DEFAULT_BODY_POSTUR
           const T = tw ? rForearmTwistTable(mats[SEG_INDEX.get('r_forearm')], mats[SEG_INDEX.get('r_radius')], tw) : null;
           const RF = SEG_INDEX.get('r_forearm'), mA = new Float64Array(16), mB = new Float64Array(16);
           const { delta, mix } = anconeusPoseWeights(w, angles.r_elbow_flex);
+          // 21 November 2026 (ELBOW_SKIN): across the right elbow, the same spin and clamp as the scene's skin
+          const er = ELBOW_SKIN.on && elbowCrossing(w.ia, w.ib) ? elbowRigOf(rig) : null, EF = ELBOW_FORE_SEGMENT;
+          const eU = er ? mats[SEG_INDEX.get('r_upperarm')] : null, eF = er ? mats[SEG_INDEX.get('r_forearm')] : null;
+          const theta = er ? elbowBendOf(er, eU, eF) : 0, eOff = [0, 0, 0], eShare = er ? new Float32Array(p.length / 3) : null;
           for (let i = 0, v = 0; i < p.length; i += 3, v++) {
             const x = p[i], y = p[i + 1], z = p[i + 2], f = T ? w.tf[v] : 0;
             const a = f > 0 && w.ia[v] === RF ? rForearmTwistMap(T, f, mA) : mats[w.ia[v]];
             const b = f > 0 && w.ib[v] === RF ? rForearmTwistMap(T, f, mB) : mats[w.ib[v]];
             const wa = mix > 0 ? w.wa[v] + mix * delta[v] : w.wa[v], wb = 1 - wa;
             for (let r = 0; r < 3; r++) positions[i + r] = wa * (a[r] * x + a[4 + r] * y + a[8 + r] * z + a[12 + r]) + wb * (b[r] * x + b[4 + r] * y + b[8 + r] * z + b[12 + r]);
+            if (eShare) {
+              const fa = EF[w.ia[v]], fb = EF[w.ib[v]];
+              eShare[v] = (fa ? wa : 0) + (fb ? wb : 0);
+              if (fa !== fb && theta) {
+                const up = fa ? b : a;
+                elbowSpinOffset(er, theta, eShare[v], x, y, z, eOff);
+                for (let r = 0; r < 3; r++) positions[i + r] += up[r] * eOff[0] + up[4 + r] * eOff[1] + up[8 + r] * eOff[2];
+              }
+            }
           }
+          if (eShare) elbowCreaseClamp(positions, null, v => eShare[v], elbowPlaneOf(er, eU, eF), angles.r_elbow_flex);
           // R558 (Message 32): the bake's displacement from the rigid rest fit, smoothed (BAKE_SMOOTH), except for the
           // muscles the scene skins per vertex. The correction is kept for the lifted copy (bakeLiftedPositions).
           if (BAKE_SMOOTH.passes > 0 && !sceneSkinnedMuscle(info, id) && mesh.indices) {

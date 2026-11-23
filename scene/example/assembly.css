@@ -1,10 +1,14 @@
 /* NeuroSurge: the loading picture (parts coming together) and the five-second picture of the main controls.
    17 November 2026: no start page and no loading page. */
 
-/* The loading picture covers the game canvas until the game has drawn its first frame, then fades out over it. */
+/* The loading picture covers the game canvas until the game has drawn its first frame, then fades out over it.
+   21 November 2026 (the owner, Message 208: "Background should still be more of an abyss."): before its own first
+   frame it shows the abyss as the page behind it does (.ns-app below: the black of ns-room ROOM.abyss.black, RGB 2, 2,
+   2, a few steps lighter in the middle; it was the old blue-black #05070b, flat), so the first paint, the canvas and
+   the loading picture's first frame follow each other without a step. */
 .ns-assembly {
   position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100dvh; display: block;
-  z-index: 8; background: #05070b; pointer-events: none; opacity: 1;
+  z-index: 8; background: #020202 radial-gradient(36% 54% at 51% 46%, #0b0c0d 0%, #060607 50%, #020202 100%); pointer-events: none; opacity: 1;
 }
 .ns-assembly.ns-assembly-out { opacity: 0; transition: opacity 0.8s ease; }
 .ns-assembly-static {
@@ -19,8 +23,12 @@
    the page shows the game's own dark backdrop (the tones of the room the game draws: nearly black, a little lighter
    low in the middle) with the loading bar; the game's canvas is held back and then fades in over that same backdrop,
    so loading and playing are one picture. (Under reduced motion neurosurge.css stops the fade: the game is there at
-   once.) */
-.ns-app { background: radial-gradient(120% 95% at 50% 64%, #1b2124 0%, #14191c 45%, #0f1316 78%); }
+   once.)
+   21 November 2026 (Message 208, the abyss): the page's very first paint, before the loading picture is there, was this
+   backdrop in the old room's greys (RGB 27, 33, 36 in the middle, 15, 19, 22 at the edges: a grey flash before a black
+   picture). It is now the abyss too: its black, a few steps lighter in the middle, where the loading picture then
+   shows the lit dark round its brain and bodies (about 11 there, 2 at the edges). */
+.ns-app { background: radial-gradient(36% 54% at 51% 46%, #0b0c0d 0%, #060607 50%, #020202 100%); }
 .ns-app[data-ns-phase="loading"] .ns-canvas { opacity: 0; }
 .ns-app[data-ns-phase="playing"] .ns-canvas { transition: opacity 0.45s ease-out; }
 

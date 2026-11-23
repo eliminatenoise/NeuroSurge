@@ -46,6 +46,8 @@ const hasOwn = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 // (0 pronated .. 1 supinated), and back.
 const PRONATION_END_DEG = PRONATION_STATES.pronated;
 const PRONATION_DEG_AT_VALUE = v => PRONATION_STATES.pronated + (PRONATION_STATES.supinated - PRONATION_STATES.pronated) * v;
+// (21 November 2026, SEEMOVE: the game arm's whole palm turn in degrees, and "the forearm is at that end" as a share of it)
+const TURN_RANGE_DEG = Math.abs(PRONATION_STATES.supinated - PRONATION_STATES.pronated), TURN_AT_END = 0.02;
 const isPlainObject = v => v !== null && typeof v === 'object' && !Array.isArray(v);
 const isFiniteNumber = v => typeof v === 'number' && Number.isFinite(v);
 
@@ -108,8 +110,8 @@ export const EXTRA_ARM_ACTIONS = deepFreeze({
   little_extension: { label: 'Extend little finger', roles: roles(['ED', 'EDM'], ['FDS', 'FDP']) },
   thumb_opposition: { label: 'Turn thumb across the palm (opposition)', roles: roles(['OP', 'FPB'], ['EPL']) },
   thumb_reposition: { label: 'Move thumb out from the palm', roles: roles(['EPB', 'EPL'], ['OP', 'FPB']) },
-  wrist_radial_deviation: { label: 'Bend wrist toward the thumb (radial deviation; display only on the game arm)', roles: roles(['FCR', 'ECRL', 'ECRB'], ['FCU', 'ECU']) },
-  wrist_ulnar_deviation: { label: 'Bend wrist toward the little finger (ulnar deviation; display only on the game arm)', roles: roles(['FCU', 'ECU'], ['FCR', 'ECRL', 'ECRB']) },
+  wrist_radial_deviation: { label: 'Bend wrist toward the thumb (radial deviation)', roles: roles(['FCR', 'ECRL', 'ECRB'], ['FCU', 'ECU']) },
+  wrist_ulnar_deviation: { label: 'Bend wrist toward the little finger (ulnar deviation)', roles: roles(['FCU', 'ECU'], ['FCR', 'ECRL', 'ECRB']) },
   // (BODYMAP: the shoulder's muscles have no movement-map key; they are lit by name, ns-bodymap's agonist lists, which
   // are the reach keys' own lists, REACH_MUSCLES)
   shoulder_flexion: { label: 'Raise arm forward (shoulder flexion)', roles: roles([]) },
@@ -134,18 +136,27 @@ function range(lo, hi) {
 
 const limits = {
   wrist_flex: range(-60, 70),
-  thumb_cmc_opp: range(0, 40),
+  // 21 November 2026 (SEEMOVE): the thumb's turn goes 15 the other way too (out from the palm), as the right thumb's
+  // does (ns-bodymap r_thumb_opp -15 .. 40), for "Move left thumb out from the palm" (thumb_reposition, below)
+  thumb_cmc_opp: range(-15, 40),
   thumb_mcp_flex: range(-10, 55),
-  thumb_ip_flex: range(-5, 70)
+  // 21 November 2026 (SEEMOVE): the thumb's IP joint extends to 20 (the adult norm), for "Straighten left thumb" (below)
+  thumb_ip_flex: range(-20, 70)
 };
 for (const d of DIGITS) {
   // Repair R2: MCP to 90 and PIP to 105 so the reference-grounded full fist (ns-rig FIST_POSE_DEG) is reachable.
+  // (21 November 2026, SEEMOVE, tried and dropped: MCP extension to 30 for the fingers' own "Straighten": see
+  // ACTION_TARGETS index_extension)
   limits[`${d}_mcp_flex`] = range(-10, 90);
   limits[`${d}_pip_flex`] = range(0, 105);
   limits[`${d}_dip_flex`] = range(0, 75);
   // Digit 3 (middle) is the abduction reference and is always 0.
   limits[`${d}_mcp_abd`] = d === 'middle' ? range(0, 0) : range(-5, 20);
 }
+// 21 November 2026 (browser hunt of update 62, H8): the wrist's sideways bend (ns-rig wrist_dev; + toward the thumb,
+// radial deviation; - toward the little finger, ulnar deviation), to 20 / 30 degrees: the commonly cited adult active
+// ranges (AAOS: radial deviation 0-20, ulnar deviation 0-30; cited from memory, not re-verified here). Display rig only.
+limits.wrist_dev = range(-30, 20);
 
 /**
  * Pose joint range limits (degrees). Semantic signs: positive = anatomical flexion, positive
@@ -154,13 +165,13 @@ for (const d of DIGITS) {
  */
 export const JOINT_LIMITS = Object.freeze(limits);
 
-/** The 20 pose joint names, in a fixed order. */
+/** The 21 pose joint names, in a fixed order (wrist_dev, the wrist's sideways bend, since 21 November 2026). */
 export const JOINT_NAMES = Object.freeze(Object.keys(JOINT_LIMITS));
 
 // R3-arm: the relaxed-hand "cascade" (ns-rig REST_HAND_POSE_DEG: each finger a little more bent than the one beside
 // it, index to little; thumb slightly turned toward the index; wrist 0). Round 2 used 15/20/10 on every finger, almost
 // the mesh's own straight rest on this rig.
-const rest = { wrist_flex: 0 };
+const rest = { wrist_flex: 0, wrist_dev: 0 };
 for (const j of ['thumb_cmc_opp', 'thumb_mcp_flex', 'thumb_ip_flex']) rest[j] = REST_HAND_POSE_DEG[j];
 for (const d of DIGITS) {
   rest[`${d}_mcp_flex`] = REST_HAND_POSE_DEG[`${d}_mcp_flex`];
@@ -169,7 +180,7 @@ for (const d of DIGITS) {
   rest[`${d}_mcp_abd`] = 0;
 }
 // Non-enumerable self alias so both `REST_POSE.wrist_flex` and `REST_POSE.joints.wrist_flex` work;
-// Object.keys / JSON / spreading see only the 20 joint angles.
+// Object.keys / JSON / spreading see only the 21 joint angles.
 Object.defineProperty(rest, 'joints', { value: rest, enumerable: false });
 
 /** Natural relaxed rest pose (ns-rig REST_HAND_POSE_DEG): a flat, frozen map of joint name -> degrees. */
@@ -217,7 +228,7 @@ export const ELBOW_ACTION_DEG = 90;
 // relax_release targets the declared passive rest on the HAND joints only. The movement map says the
 // wrist/elbow must "maintain supported pose without new forced motion", so the wrist is not driven
 // by release. The middle-finger abduction reference is never driven by any action.
-const RELAX_JOINTS = JOINT_NAMES.filter(j => j !== 'wrist_flex' && j !== 'middle_mcp_abd');
+const RELAX_JOINTS = JOINT_NAMES.filter(j => j !== 'wrist_flex' && j !== 'wrist_dev' && j !== 'middle_mcp_abd');
 
 /**
  * Full-drive targets per action: { joints: {joint: deg}, elbowFlexDeg: signed elbow-angle change (deg, + = flexion),
@@ -248,10 +259,19 @@ export const ACTION_TARGETS = Object.freeze({
   wrist_extension: actionTarget({ wrist_flex: -60 }),
   elbow_flexion: actionTarget({}, { elbowFlexDeg: ELBOW_ACTION_DEG }),
   elbow_extension: actionTarget({}, { elbowFlexDeg: -ELBOW_ACTION_DEG }),
+  // 21 November 2026 (SEEMOVE, section 189; Message 204: "make sure there's clear movement for each brain activation
+  // area"): a single finger's "Straighten" (-10 / 0 / 0: the finger as in the open hand) and "Straighten left thumb"
+  // moved no joint at all from the lower half of their areas. The cause was not their end but the look's closing of the
+  // hand (lookHandPose below has it); with that put right they uncurl the finger from its relaxed bend (22 to 40 degrees
+  // at the knuckle) to straight. The thumb's "Straighten" also takes its tip joint to 20 past straight, as its long
+  // extensor does. (Tried and dropped: the fingers to -30 / 0 / 0, 30 past straight at the knuckle like the right
+  // hand's. It gave no clearer picture from your eyes: your left hand is seen palm up, along the forearm, so a
+  // straightened finger lies flat pointing away from you and its upright end drops out of sight either way; on the
+  // mirror body it travelled a quarter more. It also widened the hand-fit envelope. Kept as it was.)
   index_flexion: actionTarget(digitFlex(['index'], 90, 105, 75)),
   index_extension: actionTarget(digitFlex(['index'], -10, 0, 0)),
   thumb_mcp_flexion: actionTarget({ thumb_mcp_flex: 50 }),
-  thumb_mcp_extension: actionTarget({ thumb_mcp_flex: -10 }),
+  thumb_mcp_extension: actionTarget({ thumb_mcp_flex: -10, thumb_ip_flex: -20 }),
   // R558 (Messages 14 / 15): the game-defined left-hand actions (EXTRA_ARM_ACTIONS), at the same joint limits.
   // 20 November 2026 (BODYMAP): to the joints' own stop, -5 (the fingers pressed together); at 0, the relaxed hand's
   // own place, "Bring left fingers together" moved nothing from the start.
@@ -263,10 +283,14 @@ export const ACTION_TARGETS = Object.freeze({
   little_flexion: actionTarget(digitFlex(['little'], 90, 105, 75)),
   little_extension: actionTarget(digitFlex(['little'], -10, 0, 0)),
   thumb_opposition: actionTarget({ thumb_cmc_opp: 40 }),
-  thumb_reposition: actionTarget({ thumb_cmc_opp: 0 }),
-  // The game arm's hand fit has one wrist axis (flexion / extension): the sideways bends colour their muscles only.
-  wrist_radial_deviation: actionTarget({}),
-  wrist_ulnar_deviation: actionTarget({}),
+  // 21 November 2026 (SEEMOVE): 0 -> -15. Its end was the hand's neutral place of that joint, 12 units from where the
+  // relaxed thumb rests (ns-rig REST_HAND_POSE_DEG): hardly a movement. Now the thumb swings out from the palm as far as
+  // the right hand's own "Move right thumb out from the palm" does (r_thumb_opp -15), 27 units from its rest.
+  thumb_reposition: actionTarget({ thumb_cmc_opp: -15 }),
+  // 21 November 2026 (H8): the sideways bends turn the hand at the wrist, to the joint's ends (wrist_dev); they used to
+  // colour their muscles only (the game arm had one wrist axis).
+  wrist_radial_deviation: actionTarget({ wrist_dev: 20 }),
+  wrist_ulnar_deviation: actionTarget({ wrist_dev: -30 }),
   // BODYMAP: the whole arm swung at the shoulder (SHOULDER_ACTION_DEG; no hand joint).
   shoulder_flexion: actionTarget({}, { shoulderLiftDeg: SHOULDER_ACTION_DEG.lift }),
   shoulder_extension: actionTarget({}, { shoulderLiftDeg: -SHOULDER_ACTION_DEG.drop }),
@@ -481,6 +505,75 @@ export function composePose(drives = {}, { targets = ACTION_TARGETS, rest: restP
   if (shoulderLiftDeg) out.shoulderLiftDeg = shoulderLiftDeg + 0;
   if (shoulderOutDeg) out.shoulderOutDeg = shoulderOutDeg + 0;
   return out;
+}
+
+/**
+ * 21 November 2026 (SEEMOVE, section 189; the owner, Message 204: "make sure there's clear movement for each brain
+ * activation area"): how the look's closing and opening of the left hand (19 November: "as we look down, the fingers
+ * close ... as we look up, they expand"; ns-app inputs.handLook) joins the pose the hand's own movements ask for.
+ *   rule 'under' (in force): the look's pose takes the place of the hand's REST, and a movement goes from there to its
+ *     own end. Per joint: pose + (look pose - rest) x (1 - share), share = how much of that joint the movements under
+ *     way command (the sum of their pose drives, at most 1; "Relax" commands none: its end is the rest itself). With
+ *     nothing under way the hand is exactly where the look puts it, as before; a movement at full drive is exactly at
+ *     its own end, whatever the look; in between it is a straight blend of the two, so it stays inside the joints'
+ *     limits. The Space grip (full drive on every digit) wins, as before.
+ *   rule 'max' (before; kept): the more closed of the two (looking down), the more open of the two (looking up). It
+ *     let the look CANCEL a movement: every strip area of the left hand lies where the look is a little below the
+ *     point at which the closing begins (8 degrees under level), and there the look's pose, the rest hand closed by
+ *     under 2 %, was "more closed" than any straightening, so "Open left hand", each finger's "Straighten",
+ *     "Straighten left thumb" and "Move left thumb out from the palm" moved NOTHING (measured in the browser: the pose
+ *     drive rose to 0.97 and no joint changed), while the same movements worked from a look a finger's width higher.
+ *     Looking up past 8 degrees it did the same to every bend.
+ * joints: the composed pose (composePose(drives).joints); drives: this frame's pose drives; look: { close, open }
+ * (0..1 each; closing wins when both are given). Returns `joints` itself when the look asks for nothing, else a new
+ * object. The wrist is never the look's. Pure. A display rule of this game, nothing measured.
+ */
+export const LOOK_HAND = Object.freeze({ rule: 'under', openSpread: 0.8 });
+// (the rule runs every frame while the look is off level, so nothing is worked out twice: which kind each pose joint
+// is and which actions name it as a main term are tables built once, and the look's own pose is kept while the look's
+// share stays the same. Timed in Node, millionths of a second a call: about 190 without these; with them about 4 while
+// the look is still and 45 while it moves; the rule before took about 75.)
+const LOOK_JOINT_KIND = new Map();
+for (const j of JOINT_NAMES) LOOK_JOINT_KIND.set(j, j === 'wrist_flex' ? null : /_flex$/.test(j) ? 'flex' : /_opp$/.test(j) ? 'opp' : /_abd$/.test(j) ? 'abd' : null);
+function lookJointActionsOf(targets) {
+  const m = new Map();
+  for (const j of JOINT_NAMES) m.set(j, Object.keys(targets).filter(id => id !== 'relax_release' && hasOwn(targets[id].joints, j) && !isSynergy(targets[id], j)));
+  return m;
+}
+let lookJointActions = null;
+const lookPoseMemo = { c: -1, op: -1, P: null };
+export function lookHandPose(joints, drives, look, { rule = LOOK_HAND.rule, targets = ACTION_TARGETS, rest: restPose = REST_POSE } = {}) {
+  const c = look && look.close > 0 ? Math.min(1, look.close) : 0, op = look && look.open > 0 ? Math.min(1, look.open) : 0;
+  if (!(c > 0 || op > 0) || !isPlainObject(joints)) return joints;
+  const own = targets === ACTION_TARGETS && restPose === REST_POSE;
+  let P;
+  if (own && lookPoseMemo.P !== null && lookPoseMemo.c === c && lookPoseMemo.op === (c > 0 ? 0 : op)) P = lookPoseMemo.P;
+  else {
+    P = composePose(c > 0 ? { grasp_close: c } : { open_hand: op, spread_fingers: op * LOOK_HAND.openSpread }, { targets, rest: restPose }).joints;
+    if (own) { lookPoseMemo.c = c; lookPoseMemo.op = c > 0 ? 0 : op; lookPoseMemo.P = P; }
+  }
+  const J = { ...joints };
+  const d = isPlainObject(drives) ? drives : {};
+  if (rule === 'max') {
+    if (c > 0) { for (const k of Object.keys(P)) if (/_flex$|_opp$/.test(k) && k !== 'wrist_flex' && isFiniteNumber(J[k]) && P[k] > J[k]) J[k] = P[k]; }
+    else if (!(d.grasp_close > 0.05)) { for (const k of Object.keys(P)) if (k !== 'wrist_flex' && isFiniteNumber(J[k]) && (/_abd$/.test(k) ? P[k] > J[k] : /_flex$/.test(k) ? P[k] < J[k] : false)) J[k] = P[k]; }
+    return J;
+  }
+  const acts = own ? lookJointActions || (lookJointActions = lookJointActionsOf(targets)) : lookJointActionsOf(targets);
+  for (const k of JOINT_NAMES) {
+    const kind = LOOK_JOINT_KIND.get(k);
+    if (kind === null || !isFiniteNumber(J[k]) || !isFiniteNumber(restPose[k]) || !isFiniteNumber(P[k])) continue;
+    const off = P[k] - restPose[k];
+    // (closing: the bends and the thumb's turn, toward the fist; opening: the bends toward straight, the spread outward)
+    if (!(c > 0 ? kind !== 'abd' && off > 0 : kind === 'abd' ? off > 0 : kind === 'flex' && off < 0)) continue;
+    let share = 0;
+    for (const id of acts.get(k)) { const v = d[id]; if (v > 0) share += v; }
+    // (a fist does not spread: the grip, which names no sideways joint, takes the look's spread with it)
+    if (!(c > 0) && kind === 'abd' && d.grasp_close > 0) share += d.grasp_close;
+    const lim = JOINT_LIMITS[k];
+    J[k] = clamp(J[k] + off * (1 - Math.min(1, share)), lim[0], lim[1]) + 0;
+  }
+  return J;
 }
 
 const MUSCLE_BASELINE = 0.08;
@@ -737,7 +830,44 @@ export const JOINT_LATCH = Object.freeze({
   // (reducedMotion) the part goes out and back on critically damped springs: no kick, no rebound, no bounce.
   omega: 21, zeta: 0.26, restitution: 0.55, driveS: 0.4, lightFadeS: 0.08, relaxOmega: 9, kick: 0.8, minSwingDeg: 70, minSwingRangeShare: 0.6, nearShare: 0.5,
   stopBounceShare: 0.5, stopBounceMaxDeg: 38,
-  reducedMotion: Object.freeze({ omega: 12, zeta: 1, restitution: 0, driveS: 0.45, lightFadeS: 0.08, relaxOmega: 9 }),
+  // 21 November 2026 (SEEMOVE, section 189; the owner, Message 204: "make sure there's clear movement for each brain
+  // activation area. And you can clearly identify what type of movement it is for each area"):
+  //   holdS        the HOLD: after the contraction (driveS, lit) the part STAYS at the movement's end for this long, then
+  //                returns. 0 -> 0.3 s. Measured in the browser at 60 frames a second, every movement of the map: with
+  //                0.4 s alone the part was within 80 % of its largest travel for 0.25 to 0.43 s, and still (after the
+  //                slam, the throw back and the second slam) for only about 0.15 s before the return began: less than
+  //                one glance at a part; on the small parts (fingers, toes, the mirror body's face) a reader missed what
+  //                had moved. Now the part rests at its end for about half a second after the second slam. The LIGHT is
+  //                unchanged: the area, its muscles and the display are lit for driveS exactly as before and dark when
+  //                it ends (the light of an activation is not this rule's to lengthen), so during the hold the part
+  //                stands at its end unlit, and the return is unlit as before, to where the part was. A press during
+  //                the hold is a further press (it kicks the part into its end again). 0 = the behaviour before.
+  //                (Tried and dropped: driveS itself 0.4 -> 0.7, which also lit everything for 0.7 s.)
+  //   backStop     a movement with little room (the part already near the movement's end: straighten a knee that is 6
+  //                degrees from straight, straighten the right elbow, bring the right arm in, swing the thigh in) is
+  //                kicked into its end so it shows (kick above), and the kick threw it back off the end PAST where it
+  //                started, the other way: "Straighten left knee" bent the knee 11.6 degrees (its largest movement on
+  //                screen, 33 px, against 7 px of straightening), "Straighten right elbow" bent it 9.8, "Swing right arm
+  //                in" swung it out 12.5. The movement then read as its neighbour on the strip. backStop: true makes the
+  //                place the part started from a stop for the contraction's throw back (it stops dead there and is
+  //                driven in again), so every movement's travel is in its own direction. Not for the stop bounce (the
+  //                twitch off a stop the part is already at), which has no room on its own side.
+  //   kickRoomOmega  with backStop on, a kick's speed is at most this many times the movement's room (degrees from
+  //                where the part started to the movement's end) times omega. 22 November 2026 (an independent check of
+  //                section 189): the kick (0.8 x swing x omega, the swing at least 70 degrees) crossed the end of a
+  //                movement with little room inside the press frame; the end threw it back and backStop stopped it dead
+  //                where it had started, so the part stood at its end for ONE frame and then jumped back: "Straighten
+  //                left knee" went 6.0, 0.0, 0.3, 1.3 ... 6.0 degrees frame by frame, your right arm in "Swing right arm
+  //                in" 0, 42.7, 0, 2.5 ... 42.7 px: a flash of the whole movement (the owner banned flicker). Before
+  //                backStop the throw back past the start hid it. With the cap the part covers about two fifths of its
+  //                room in the first frame at 60 frames a second (the knee 0.4 of its 6 degrees), arrives in the third
+  //                or fourth and slams in, as every other movement does. Also for a further press on such a movement
+  //                (it jumped from its end to its start in one frame). Twenty-four joint movements were capped, none
+  //                with more than 30 degrees of room. Not under reduced motion (no kick there).
+  holdS: 0.3, backStop: true, kickRoomOmega: 1,
+  // (reduced motion: the same hold; its soft spring is only at its end by about 0.35 s, so without one the part turned
+  // back almost as soon as it arrived)
+  reducedMotion: Object.freeze({ omega: 12, zeta: 1, restitution: 0, driveS: 0.45, holdS: 0.3, lightFadeS: 0.08, relaxOmega: 9 }),
   snapDeg: 0.02, snapDegS: 0.5, restEpsDeg: 0.5,
   armPoseTau: 0.022, reducedArmPoseTau: 0.12
   // (Message 206: gone with the latch: relax / relaxMaxShare (the part way back), hintLevel (the faint opposing hint),
@@ -777,11 +907,13 @@ export const ARM_OPPOSITES = Object.freeze({
   thumb_opposition: 'thumb_reposition', thumb_reposition: 'thumb_opposition',
   // BODYMAP: the left shoulder's swings
   shoulder_flexion: 'shoulder_extension', shoulder_extension: 'shoulder_flexion',
-  shoulder_abduction: 'shoulder_adduction', shoulder_adduction: 'shoulder_abduction'
-  // wrist_radial_deviation / wrist_ulnar_deviation move nothing on the game arm (it has no sideways wrist joint): they light only.
+  shoulder_abduction: 'shoulder_adduction', shoulder_adduction: 'shoulder_abduction',
+  // 21 November 2026 (H8): the wrist's sideways bends move the hand now (ns-rig wrist_dev)
+  wrist_radial_deviation: 'wrist_ulnar_deviation', wrist_ulnar_deviation: 'wrist_radial_deviation'
 });
-/** R558: game-arm actions that move nothing (the game arm has no sideways wrist joint): they light and move nothing. */
-const DISPLAY_ONLY_ARM_IDS = Object.freeze(['wrist_radial_deviation', 'wrist_ulnar_deviation']);
+/** R558: game-arm actions that move nothing: they light and move nothing. Empty since 21 November 2026 (H8): the two
+ * sideways wrist bends were the only ones, and the game arm's wrist now bends sideways (ns-rig wrist_dev). */
+const DISPLAY_ONLY_ARM_IDS = Object.freeze([]);
 /** The hand's own movements (a relax press sends every one of them under way into its return). */
 const HAND_ACTION_IDS = Object.freeze(['grasp_close', 'open_hand', 'spread_fingers', 'index_flexion', 'index_extension', 'thumb_mcp_flexion', 'thumb_mcp_extension',
   'fingers_together', 'middle_flexion', 'middle_extension', 'ring_flexion', 'ring_extension', 'little_flexion', 'little_extension',
@@ -1230,6 +1362,21 @@ export function reachMuscleShow(levels, xSign, minLevel = 0.02) {
 }
 
 const KEY_DISPLAY_IDS = Object.freeze(['grasp_close', 'open_hand', 'relax_release']);
+/**
+ * 22 November 2026 (browser hunt of update 64, H5; the owner, Message 206: "in returning to its previous place, you
+ * won't see corresponding activity and muscle activation. It will just return"; section 174: the four limbs close and
+ * open together). What letting go of the Space grip does to the game arm's LEFT hand:
+ *  openOnRelease  false: the hand goes back to its place (the pose drive's grip share eases to 0 at armPoseTau, about
+ *                 0.1 s), unlit, the same way as the right hand and the toes (ns-app GRIP_BOTH), and no "open hand"
+ *                 movement is switched on. true: the rule of 18 November (Message 48): the release switched on open_hand
+ *                 for spaceOpenSeconds (0.6 s): the hand opened past neutral, its finger straighteners and the strip's
+ *                 Left hand area lit for 0.6 s and, with that area in view, a light beam ran from it to both bodies for
+ *                 about half a second after every carry (measured on update 64: the beam from about 0.08 s to 0.55 s
+ *                 after the release, the right hand and the toes dark from about 0.14 s). Only the left hand had it,
+ *                 because only the game arm has a timed open_hand action.
+ * Kept behind the switch, not deleted. A display choice of this game, not a claim about real hands.
+ */
+export const GRIP_RELEASE = Object.freeze({ openOnRelease: false });
 const HEMISPHERES = Object.freeze(['right', 'left', 'both']);
 const BODY_SIDES = Object.freeze(['left', 'right', 'midline']);
 const ARM_ACTION_CHANNEL = Object.freeze({
@@ -1636,11 +1783,16 @@ export const DEFAULT_BODY_MAP = loadedBodyMap !== null ? loadedBodyMap : EMPTY_B
 /**
  * Create the virtual activation model.
  * Events (processed in time order each step; every event may carry `at`, seconds into the step):
- *   { type: 'gaze', kind?, regionId?, actionId?, u?, arrow?, yaw?, pitch?, moved?, seed? }  sent every frame
+ *   { type: 'gaze', kind?, regionId?, actionId?, u?, arrow?, yaw?, pitch?, moved?, seed?, arrivedFrom? }  sent every frame
  *       kind: GAZE_KINDS ('region' needs regionId; legacy events with only an arm actionId are 'strip');
  *       regionId: a BODY_MOTOR_MAP region; actionId: that region's action id (or its armActionId), else `u` picks the
  *       action by its share of the region extent, else the first action; arrow: the orbit arrow under the crosshair
  *       ('left' | 'right' | 'forward' | 'back'), which then counts as empty space and turns the next click into an orbit.
+ *       arrivedFrom (21 November 2026, late): the area (a state's gazeArea, or null for none) the look was on before the
+ *       PLAYER moved it while the gaze was being recorded silently (ns-app CARRY_ARRIVAL: a neck or trunk movement
+ *       carried the view). On an event that is not silent, an area other than that one is met as a new area although the
+ *       silent frames had already recorded it: its pulse starts and it switches on after the usual rest. Without the
+ *       field (the game's own slide of the view, a seed) a recorded area starts nothing, as before.
  *   { type: 'click' }   re-trigger the area under the crosshair, or orbit when an arrow is under it
  *   { type: 'turn', phase: 'step' | 'hold' | 'stop', safety? }   R558 (Message 40): the limb turn (ns-controls
  *       SPACE_GESTURE turns the Space key into these): 'step' = a double tap (one stroke per limb), 'hold' = that double
@@ -1677,7 +1829,11 @@ export const DEFAULT_BODY_MAP = loadedBodyMap !== null ? loadedBodyMap : EMPTY_B
  * gaze is recorded silently) and release leaves the brain where it is. { type: 'grip', on }: the left hand closes while
  * Space holds or keeps a grasp (graspHold; the hand area and the finger benders light) and opens when it lets go
  * (R558, Message 48). { type: 'limbPose', joints, regionId?, actionId? }
- * sets held own-limb joints at once (they stay, like a latch) and lights that area.
+ * sets held own-limb joints at once (they stay, like a latch) and lights that area. { type: 'limbPlace', joints } (22
+ * November 2026, SEEMOVE) moves the PLACE of those joints only: each springs there on its soft relaxOmega spring, unlit,
+ * and a contraction of it still under way goes on and returns to the new place. { type: 'contractStop', joints }
+ * stops a contraction still under way at those angles for the rest of its time (then it returns as usual; a joint not
+ * contracting is left alone; 20 November 2026, night: the trunk's contact stop in ns-app).
  *
  * Contract, then return (20 November 2026, the owner's Message 206; JOINT_LATCH). A deliberate activation (a look that
  * rests on a new area for latchS, a click, a muscle tap; not the restart of the same area by a small look movement)
@@ -1720,8 +1876,11 @@ export function createActivity({
   defaultRotation = ROTATION.defaultState, orbit: orbitOverrides, grabPitchLimitDeg = BRAIN_GRAB.pitchLimitDeg, initialBrainPlacement = null,
   introSeconds = INSTRUCTIONS.introSeconds, escLockDedupeSeconds = INSTRUCTIONS.escLockDedupeSeconds,
   resumeOnLock = INSTRUCTIONS.resumeOnLock, gazeDwell = GAZE_DWELL,
-  bodyRest = null, jointSpring = JOINT_LATCH, armPoseTau = JOINT_LATCH.armPoseTau, lookArms = LOOK_ARMS
+  bodyRest = null, jointSpring = JOINT_LATCH, armPoseTau = JOINT_LATCH.armPoseTau, lookArms = LOOK_ARMS,
+  gripRelease = GRIP_RELEASE
 } = {}) {
+  // 22 November 2026 (H5, GRIP_RELEASE): the release opens the hand (a timed open_hand) only with openOnRelease on
+  const openOnRelease = Boolean(gripRelease && gripRelease.openOnRelease === true);
   // 18 November 2026 (S4): a look arms, a click / number key presses (LOOK_ARMS).
   const armOnly = !(lookArms && lookArms.on === false);
   const armLevel = lookArms && isFiniteNumber(lookArms.muscleLevel) ? clamp(lookArms.muscleLevel, 0, 1) : LOOK_ARMS.muscleLevel;
@@ -1783,6 +1942,14 @@ export function createActivity({
   const contractS = isFiniteNumber(jointSpring.driveS) ? jointSpring.driveS : JOINT_LATCH.driveS;
   const lightFadeS = isFiniteNumber(jointSpring.lightFadeS) && jointSpring.lightFadeS >= 0 && jointSpring.lightFadeS < contractS ? jointSpring.lightFadeS : Math.min(JOINT_LATCH.lightFadeS, contractS / 2);
   const kickShare = isFiniteNumber(jointSpring.kick) && jointSpring.kick > 0 ? jointSpring.kick : 0;
+  // (21 November 2026, SEEMOVE: the hold at the movement's end after the lit contraction; JOINT_LATCH holdS. moveS: how
+  // long a movement drives its part in all: the contraction and the hold)
+  const holdS = isFiniteNumber(jointSpring.holdS) && jointSpring.holdS > 0 ? jointSpring.holdS : 0;
+  const moveS = contractS + holdS;
+  // (21 November 2026, SEEMOVE: the place a part started from is a stop for its contraction's throw back; JOINT_LATCH backStop)
+  const backStop = jointSpring.backStop === true;
+  // (22 November 2026: with backStop, the kick at most kickRoomOmega x the movement's room x omega; JOINT_LATCH)
+  const kickRoomOmega = backStop && isFiniteNumber(jointSpring.kickRoomOmega) && jointSpring.kickRoomOmega > 0 ? jointSpring.kickRoomOmega : Infinity;
   // (the stop bounce: the speed into a stop that throws the part back A degrees off it is A * omega / (restitution *
   // reach), reach being how far a unit speed away from the goal carries this spring: exp(-zeta / sqrt(1 - zeta^2) *
   // atan(sqrt(1 - zeta^2) / zeta)) / omega; 0.70 / omega at zeta 0.26)
@@ -1877,7 +2044,7 @@ export function createActivity({
       bodyJerk: {},                           // jointId -> [end angle, contraction seconds left (0 = on the way back), stop side] (Message 206)
       armJerk: {},                            // game-arm actionId -> [contraction seconds left (0 = on the way back), drive speed /s]
       rotationState: defaultRotation,         // persistent forearm posture (double-tap toggles)
-      rotation: { value: rotValue(defaultRotation), speed: 0, remaining: 0, channel: null, hold: null }, // pose value 0 pronated..1 supinated; speed: R3-arm ease; hold: R558 dance-held value (null = follow rotationState)
+      rotation: { value: rotValue(defaultRotation), speed: 0, remaining: 0, channel: null, hold: null, move: null }, // pose value 0 pronated..1 supinated; speed: R3-arm ease; hold: R558 dance-held value (null = follow rotationState); move: a strip turn under way, [its end 0 / 1, seconds left] (21 November 2026)
       armHumeral: armHumeralStart(), // R558 (Space dance): null = the coupled palm turn (R5-pronation); a number = the game arm's upper-arm turn set explicitly (degrees, + outward; ns-arm rotation.humeralDeg), rotation.value then being the radius' own turn. 18 November 2026, late: explicit from the start (the underside end)
       armTurnSeen: null,       // R558: { forearmDeg, humeralDeg } the game arm actually showed last frame ('armTurn' event from ns-app)
       dance: danceStart(),     // R558 (Space dance): ns-dance state (per-limb direction, stroke, levels; history)
@@ -1967,10 +2134,13 @@ export function createActivity({
       && (s.bodyVel === undefined || finiteMap(s.bodyVel, JOINT_IDS))
       && (s.bodyJerk === undefined || jerkMapOk(s.bodyJerk))
       && (s.armJerk === undefined || armJerkOk(s.armJerk))
+      && (s.isolatedRightForearm === undefined || typeof s.isolatedRightForearm === 'boolean')
       && ROTATION_STATES.includes(s.rotationState)
       && isPlainObject(s.rotation) && unit(s.rotation.value) && nonNegative(s.rotation.remaining) && rotOrNull(s.rotation.channel)
       && (s.rotation.speed === undefined || isFiniteNumber(s.rotation.speed))
+      && (s.rotation.axialAnchor === undefined || unit(s.rotation.axialAnchor))
       && (s.rotation.hold === undefined || s.rotation.hold === null || unit(s.rotation.hold))
+      && (s.rotation.move === undefined || s.rotation.move === null || (Array.isArray(s.rotation.move) && s.rotation.move.length === 2 && unit(s.rotation.move[0]) && nonNegative(s.rotation.move[1])))
       && (s.armHumeral === undefined || s.armHumeral === null || isFiniteNumber(s.armHumeral))
       && (s.armTurnSeen === undefined || s.armTurnSeen === null || (isPlainObject(s.armTurnSeen) && isFiniteNumber(s.armTurnSeen.forearmDeg) && isFiniteNumber(s.armTurnSeen.humeralDeg)))
       && (s.dance === undefined || isDanceState(s.dance))
@@ -2040,9 +2210,18 @@ export function createActivity({
       bodyPos: s.bodyPos === undefined ? restMap() : pick(s.bodyPos, JOINT_IDS),
       bodyVel: s.bodyVel === undefined ? zeroMap(JOINT_IDS) : pick(s.bodyVel, JOINT_IDS),
       bodyJerk: copyJerkMap(s.bodyJerk, 3),
+      ...(s.isolatedRightForearm && s.bodyJerk?.r_pronation ? { isolatedRightForearm: true } : {}),
       armJerk: copyJerkMap(s.armJerk, 2), // (a state without notes: nothing is contracting)
       rotationState: s.rotationState,
-      rotation: { value: s.rotation.value, speed: isFiniteNumber(s.rotation.speed) ? s.rotation.speed : 0, remaining: s.rotation.remaining, channel: s.rotation.channel, hold: isFiniteNumber(s.rotation.hold) ? s.rotation.hold : null },
+      rotation: {
+        value: s.rotation.value,
+        speed: isFiniteNumber(s.rotation.speed) ? s.rotation.speed : 0,
+        remaining: s.rotation.remaining,
+        channel: s.rotation.channel,
+        hold: isFiniteNumber(s.rotation.hold) ? s.rotation.hold : null,
+        move: Array.isArray(s.rotation.move) ? s.rotation.move.slice() : null,
+        ...(isFiniteNumber(s.rotation.axialAnchor) ? { axialAnchor: s.rotation.axialAnchor } : {})
+      },
       // R558 (Space dance): a state from before the dance starts with none (start angles, no history).
       armHumeral: isFiniteNumber(s.armHumeral) ? s.armHumeral : null,
       armTurnSeen: s.armTurnSeen ? { forearmDeg: s.armTurnSeen.forearmDeg, humeralDeg: s.armTurnSeen.humeralDeg } : null,
@@ -2090,7 +2269,8 @@ export function createActivity({
 
   /** 20 November 2026 (the owner, Message 206: "when you tap any area of the brain, you activate any area, it will
    * contract, then return to its previous place"): the CONTRACTION of body action `key`. Each joint it names gets a
-   * note [end angle, contractS]: integrate drives the joint to that angle with the jerk spring for contractS, then
+   * note [end angle, moveS]: integrate drives the joint to that angle with the jerk spring for moveS (the lit
+   * contraction, contractS, and the unlit hold at the end, JOINT_LATCH holdS, since 21 November 2026), then
    * springs it softly back to its place (bodyGoal) and drops the note there. The place itself is not touched, so the
    * part returns to where it was just before (the start posture, or where the keys, a drag, a Space carry or the turn
    * left it), never to the start posture when it was elsewhere.
@@ -2109,9 +2289,10 @@ export function createActivity({
    *    stays true at the peak; it returns to its place with the rest.
    * A joint the action wants at its start angle ("Purse the lips" wants the upper lip down) goes there and back with
    * the rest. Returns true when the action names a joint. */
-  function contractBody(s, key) {
+  function contractBody(s, key, isolateForearm = false) {
     const ends = ENDS.get(key);
     if (!ends) return false;
+    if (hasOwn(ends, 'r_pronation')) s.isolatedRightForearm = isolateForearm;
     if (!s.bodyJerk) s.bodyJerk = {};
     const J = jointSpring, minSwing = Number.isFinite(J.minSwingDeg) ? J.minSwingDeg : 0;
     const nearShare = Number.isFinite(J.nearShare) ? J.nearShare : 0, rangeShare = Number.isFinite(J.minSwingRangeShare) ? J.minSwingRangeShare : 1;
@@ -2132,8 +2313,9 @@ export function createActivity({
       const lim = limitsBody && hasOwn(limitsBody, j) ? limitsBody[j] : null;
       const atStop = still && lim ? (Math.abs(end - lim[0]) <= eps ? -1 : Math.abs(end - lim[1]) <= eps ? 1 : 0) : 0;
       const dir = dirRest !== 0 ? dirRest : Math.abs(left) > eps ? Math.sign(left) : atStop;
-      s.bodyJerk[j] = [target + 0, contractS + 0, dir];
-      if (kickShare > 0 && dir !== 0 && Number.isFinite(s.bodyVel[j])) {
+      s.bodyJerk[j] = [target + 0, moveS + 0, dir];
+      const isolatedAtRest = j === 'r_pronation' && isolateForearm && Math.abs(left) <= eps;
+      if (kickShare > 0 && dir !== 0 && Number.isFinite(s.bodyVel[j]) && !isolatedAtRest) {
         // (a small joint is not given a swing larger than most of its own range: a lip would rattle between its ends)
         const range = lim ? Math.abs(lim[1] - lim[0]) : Infinity;
         if (atStop !== 0) {
@@ -2141,7 +2323,11 @@ export function createActivity({
           if (A > 0 && springBounce > 0) s.bodyVel[j] = dir * A * springOmega / (springBounce * springReach) + 0;
         } else {
           const swing = Math.max(Math.abs(target - place), Math.min(minSwing, rangeShare * range));
-          if (Math.abs(left) < nearShare * swing) s.bodyVel[j] = dir * kickShare * swing * springOmega + 0;
+          // (22 November 2026, JOINT_LATCH kickRoomOmega: with backStop no faster than the part can be followed into its
+          // end: a kick that crossed the end inside one frame left that frame standing alone between two at the start)
+          const room = Math.abs(target - place);
+          const cap = backStop && room > eps ? kickRoomOmega * room * springOmega : Infinity;
+          if (Math.abs(left) < nearShare * swing) s.bodyVel[j] = dir * Math.min(kickShare * swing * springOmega, cap) + 0;
         }
       }
       // R558 (JOINT_CONFLICTS): the later of two movements of one shoulder wins its direction
@@ -2149,7 +2335,7 @@ export function createActivity({
         for (const k of JOINT_CONFLICTS[j]) {
           if (!hasOwn(s.bodyGoal, k) || hasOwn(ends, k)) continue;
           const d = REST[k] - (Number.isFinite(s.bodyPos[k]) ? s.bodyPos[k] : REST[k]);
-          s.bodyJerk[k] = [REST[k] + 0, contractS + 0, Math.abs(d) > eps ? Math.sign(d) : 0];
+          s.bodyJerk[k] = [REST[k] + 0, moveS + 0, Math.abs(d) > eps ? Math.sign(d) : 0];
         }
       }
     }
@@ -2157,11 +2343,11 @@ export function createActivity({
   }
 
   /** 20 November 2026 (Message 206): the CONTRACTION of game-arm action `id`: its pose drive is driven to 1 (the
-   * movement's end) with the jerk spring for contractS, then springs softly back to its place (poseTargets: 0, or the
+   * movement's end) with the jerk spring for moveS (the contraction and the hold), then springs softly back to its place (poseTargets: 0, or the
    * grip's) and the note is dropped there. A press that finds the drive near 1 kicks it into the end (the body's kick,
    * its whole travel being one unit). A contraction of the opposite action that is still under way goes straight into
    * its return (ARM_OPPOSITES). relax_release sends every hand movement under way into its return and is itself the
-   * relax pulse it always was (poseTargets). The two sideways wrist bends move nothing on the game arm. Returns true
+   * relax pulse it always was (poseTargets). Returns true
    * when something on the arm is driven. */
   function contractArm(s, id) {
     if (!s.armJerk) s.armJerk = {};
@@ -2171,7 +2357,7 @@ export function createActivity({
     if (opp && s.armJerk[opp]) s.armJerk[opp][0] = 0;
     const nearShare = Number.isFinite(jointSpring.nearShare) ? jointSpring.nearShare : 0, prev = s.armJerk[id];
     const speed = kickShare > 0 && 1 - s.drive[id] < nearShare ? kickShare * springOmega : prev ? prev[1] : 0;
-    s.armJerk[id] = [contractS + 0, speed + 0];
+    s.armJerk[id] = [moveS + 0, speed + 0];
     return true;
   }
 
@@ -2233,17 +2419,44 @@ export function createActivity({
   const hitMoves = hit => Boolean(hit) && ((hit.bodyKey !== null && hit.bodyKey !== undefined) || (hit.armAction !== null && hit.armAction !== undefined)
     || (hit.rotation !== null && hit.rotation !== undefined));
 
+  /** 21 November 2026 (SEEMOVE, section 189; Message 204: "make sure there's clear movement for each brain activation
+   * area"): the left forearm's turn asked for where the forearm already is ("Turn left palm up" at the start: the palm
+   * is up; measured in the browser: nothing moved at all). As for a body joint that is at the stop its movement ends at
+   * (JOINT_LATCH stopBounceShare / stopBounceMaxDeg: the right palm does this), the turn STRIKES its stop: the forearm is
+   * thrown off it by the same share of its whole turn (never more than stopBounceMaxDeg: 38 of its 160 degrees) and is
+   * drawn straight back onto it by the turn's own ease, a visible twitch against the stop. With the ease's time
+   * constant tau (critically damped) a start speed v away from the goal carries the turn v x tau / e at the most, after
+   * tau seconds. Only when the forearm is at that end (within TURN_AT_END of its whole turn); a turn with room turns.
+   * Not under reduced motion (no kick there, as for the body). */
+  function strikeTurn(s, channel) {
+    if (!(kickShare > 0) || !(stopShare > 0) || !(rotationTau > 0) || !isPlainObject(s.rotation) || !isFiniteNumber(s.rotation.value)) return;
+    const end = channel === 'supination' ? 1 : 0;
+    if (Math.abs(s.rotation.value - end) > TURN_AT_END) return;
+    const share = Math.min(stopMaxDeg, stopShare * TURN_RANGE_DEG) / TURN_RANGE_DEG;
+    if (share > 0) s.rotation.speed = (end === 1 ? -1 : 1) * share * Math.E / rotationTau + 0;
+  }
+
   /** 20 November 2026 (Message 206): commit a deliberate activation's movement: its CONTRACTION (contractBody,
    * contractArm; a forearm-turn area turns the forearm for the contraction and it turns back, integrate). The area's
    * pulse, when it is this activation's, becomes the contraction's light: exactly contractS long, with the short fade,
    * so the area, its muscles, the beam and the display are dark when the return begins. moveSeq / lastMove count it. */
   function commitMove(s, hit) {
     if (!hitMoves(hit)) return;
-    if (hit.bodyKey !== null && hit.bodyKey !== undefined) contractBody(s, hit.bodyKey);
+    if (hit.rotation) {
+      // A word command turns the radius around the stationary ulna. The reach
+      // solver uses the return posture for the contraction and the return.
+      if (hit.isolateForearm) s.rotation.axialAnchor = s.rotation.hold ?? rotValue(s.rotationState);
+      else delete s.rotation.axialAnchor;
+    }
+    if (hit.bodyKey !== null && hit.bodyKey !== undefined) contractBody(s, hit.bodyKey, hit.isolateForearm);
     if (hit.armAction !== null && hit.armAction !== undefined) contractArm(s, hit.armAction);
+    if (hit.rotation && !hit.isolateForearm) strikeTurn(s, hit.rotation);
     if (s.pulseRemaining > 0 && s.pulseRegion === hit.regionId && s.pulseBody === hit.bodyKey && s.pulseAction === hit.armAction && s.pulseRotation === hit.rotation) {
       s.pulseRemaining = contractS;
       s.pulseMove = true;
+      // (21 November 2026, SEEMOVE: the left forearm's turn stays turned through the hold too: its own note, [the end
+      // (0 palm down / 1 palm up), seconds left]; its light is the pulse's, contractS long, as for every movement)
+      if (hit.rotation !== null && hit.rotation !== undefined && isPlainObject(s.rotation)) s.rotation.move = [hit.rotation === 'supination' ? 1 : 0, moveS + 0];
     }
     s.moveSeq = (safeCount(s.moveSeq) ? s.moveSeq : 0) + 1;
     s.lastMove = { regionId: hit.regionId, actionId: hit.actionId, armAction: hit.armAction, bodyKey: hit.bodyKey, rotation: hit.rotation };
@@ -2377,6 +2590,14 @@ export function createActivity({
     // and while dragging the brain (the gaze moves with the brain, so nothing new was looked at).
     const silent = ev.seed === true || s.seedNextGaze || s.paused || s.brainGrab.active;
     s.seedNextGaze = false;
+    // 21 November 2026, late (FIX63; a check of update 63: "a look that arrives on an area while a neck or trunk movement
+    // carries the view stays dead after the carry ends: nothing switches on until the player looks off and back"). The
+    // silent frames of the carry record the area under the crosshair as looked at (the lines at the end of this
+    // function), so when the silence ended the area was "the same area" and started nothing. arrivedFrom: the caller
+    // says the player's own look movement brought the look here from that area (or from none: null) during the silence.
+    // An area other than that one is then a new area. Not given: nothing changes (a view the game slid by itself).
+    if (ev.arrivedFrom !== undefined && ev.arrivedFrom !== null && typeof ev.arrivedFrom !== 'string') fail('activity_event', 'gaze arrivedFrom must be an area (a string) or null');
+    const arrived = !silent && g.area !== null && ev.arrivedFrom !== undefined && g.area !== ev.arrivedFrom;
     const clickRunning = s.pulseClick === true && s.pulseRemaining > 0;
     // A look onto a new area starts its 1 s pulse at once, except that it does not replace a running CLICK pulse until
     // the gaze has stayed on it for replaceClickS (R3-fix M3); the look's persistent mark waits for markS (M5).
@@ -2392,7 +2613,7 @@ export function createActivity({
       s.pendingGaze = null;
       if (g.area !== s.gazeArea) s.markPending = null;
       setAnchor(s);
-    } else if (g.area !== s.gazeArea) {
+    } else if (g.area !== s.gazeArea || arrived) {
       s.markPending = null;
       if (clickRunning && replaceClickS > 0) s.pendingGaze = { area: g.area, since: s.t };
       else startLook('gaze');   // a new area (re)starts one pulse
@@ -2507,8 +2728,9 @@ export function createActivity({
    *   on true   graspHold: the pose closes the hand (grasp_close wins the fingers: a finger contraction under way
    *             ends), the hand area and the finger benders light for as long as the grip lasts. A running pulse of
    *             an action that competes for the fingers ends. Ignored while paused.
-   *   on false  the grip lets go: the hand opens for spaceOpenSeconds (open_hand: a game rule, a real hand can also
-   *             let go by relaxing). Always applies. (Message 206: no movement of the brain's holds the hand closed.)
+   *   on false  the grip lets go: the hand goes back to its place, unlit (22 November 2026, H5, GRIP_RELEASE); with
+   *             openOnRelease on, the old rule: it opens for spaceOpenSeconds (open_hand: a game rule, a real hand can
+   *             also let go by relaxing). Always applies. (Message 206: no movement of the brain's holds the hand closed.)
    */
   function applyGrip(s, ev) {
     if (typeof ev.on !== 'boolean') fail('activity_event', 'grip event needs a boolean on');
@@ -2521,7 +2743,7 @@ export function createActivity({
     } else if (s.graspHold) {
       s.graspHold = false;
       s.relaxRemaining = 0;
-      s.openRemaining = spaceOpenSeconds;
+      s.openRemaining = openOnRelease ? spaceOpenSeconds : 0;
       if (s.pulseAction !== null && DIGIT_FLEXING.includes(s.pulseAction)) cancelPulse(s);
     }
   }
@@ -2543,7 +2765,8 @@ export function createActivity({
    * upper-arm swivel likewise (rotation.hold keeps the eased forearm value where the dance left it). */
   function applyDanceAngles(s, a) {
     const v = clamp((PRONATION_END_DEG - a.l_forearm) / (2 * PRONATION_END_DEG), 0, 1);
-    s.rotation = { ...s.rotation, value: v, speed: 0, hold: v };
+    s.rotation = { ...s.rotation, value: v, speed: 0, hold: v, move: null }; // (the dance owns the forearm: a strip turn under way ends)
+    delete s.rotation.axialAnchor;
     s.rotationState = v >= 0.5 ? 'supinated' : 'pronated';
     s.armHumeral = a.l_shoulder_rot + 0; // the explicit mode (until Reset body)
     for (const j of DANCE_BODY_JOINTS) {
@@ -2638,7 +2861,7 @@ export function createActivity({
     s.openRemaining = 0;
     s.relaxRemaining = 0;
     s.rotationState = defaultRotation;
-    s.rotation = { value: rotValue(defaultRotation), speed: 0, remaining: 0, channel: null, hold: null };
+    s.rotation = { value: rotValue(defaultRotation), speed: 0, remaining: 0, channel: null, hold: null, move: null };
     s.armHumeral = armHumeralStart(); // 18 November 2026, late: back to the start side's upper-arm turn (was null: the coupled palm turn)
     // R558 (Message 40): Reset body also ends a limb turn under way; every limb is back at its start angle.
     if (s.dance.mode !== null || s.dance.active) s.dance = stopDance(s.dance);
@@ -2681,7 +2904,7 @@ export function createActivity({
           ? { regionId: r.id, actionId: null, armAction: null, bodyKey: null, rotation: null }
           : resolveGaze({ kind: 'region', regionId: r.id, actionId: ev.actionId === undefined ? null : ev.actionId }).hit;
         // (Message 206: a progressive press, a number key held, is an ordinary press: MOVE_HOLD)
-        if (hit !== null) startPulse(s, hit, 'click', at, collect);
+        if (hit !== null) startPulse(s, ev.isolateForearm === true ? { ...hit, isolateForearm: true } : hit, 'click', at, collect);
         return;
       }
       case 'muscleRelease':
@@ -2700,6 +2923,19 @@ export function createActivity({
       case 'grip':
         applyGrip(s, ev);
         return;
+      case 'limbPlace': {
+        // 22 November 2026 (SEEMOVE, ns-app HOLD_BODY: the right arm let go during a trunk movement goes back to its places):
+        // the joints' places only (bodyGoal). A joint springs to its place like any return; a contraction of it still under
+        // way is not ended (a limbPose would end it), it returns to the new place. Nothing is lit, nothing else changes.
+        if (s.paused) return;
+        if (!isPlainObject(ev.joints)) fail('activity_event', 'limbPlace needs joints { jointId: degrees }');
+        for (const [j, deg] of Object.entries(ev.joints)) {
+          if (!JOINT_IDS.includes(j)) fail('activity_event', `limbPlace joint ${JSON.stringify(j)} is not a body joint`);
+          if (!isFiniteNumber(deg)) fail('activity_event', `limbPlace joint ${j} needs finite degrees`);
+          s.bodyGoal[j] = limitJoint(j, deg) + 0;
+        }
+        return;
+      }
       case 'limbPose': {
         // R558 (user Messages 2, 12 and 40): one of your own limbs, held with Space and moved, or turned by a drag. The app
         // solves its joints inside their anatomical ranges and hands them here: { joints: { jointId: degrees },
@@ -2734,6 +2970,27 @@ export function createActivity({
             ? { regionId: r.id, actionId: null, armAction: null, bodyKey: null, rotation: null }
             : resolveGaze({ kind: 'region', regionId: r.id, actionId: ev.actionId }).hit;
           if (hit !== null && (s.pulseRegion !== hit.regionId || s.pulseBody !== hit.bodyKey || s.pulseRemaining < pulseSeconds / 2)) startPulse(s, hit, 'moved', at, collect);
+        }
+        return;
+      }
+      case 'contractStop': {
+        // 20 November 2026, night (review of updates 60 and 61, R2; the owner's Message 206: "no permanent movements"):
+        // { joints: { jointId: degrees } } (absolute degrees). A contraction of these joints still under way STOPS at this
+        // angle, because the part would otherwise run into something (ns-app: a trunk bend that would bring your head
+        // into the brain or the mirror body). The joint is set there and held there for the rest of the contraction's
+        // time (still lit, as the contraction is), then returns to its place like any contraction. Its place (bodyGoal)
+        // is not touched: the stop was a limbPose before, which is the player placing the limb, so a stopped trunk bend
+        // stayed bent for good. A joint with no contraction under way is left alone: a return is never stopped, so the
+        // part always gets back to where it was.
+        if (s.paused) return;
+        if (!isPlainObject(ev.joints)) fail('activity_event', 'contractStop needs joints { jointId: degrees }');
+        for (const [j, deg] of Object.entries(ev.joints)) {
+          if (!JOINT_IDS.includes(j)) fail('activity_event', `contractStop joint ${JSON.stringify(j)} is not a body joint`);
+          if (!isFiniteNumber(deg)) fail('activity_event', `contractStop joint ${j} needs finite degrees`);
+          const jk = s.bodyJerk ? s.bodyJerk[j] : undefined;
+          if (jk === undefined || !(jk[1] > 0)) continue;
+          const v = limitJoint(j, deg) + 0;
+          jk[0] = v; s.bodyPos[j] = v; s.bodyVel[j] = 0;
         }
         return;
       }
@@ -2815,6 +3072,7 @@ export function createActivity({
     // (Message 206: where a contraction ends inside h, its return starts exactly there)
     for (const k in s.bodyJerk) cuts.push(s.bodyJerk[k][1]);
     for (const k in s.armJerk) cuts.push(s.armJerk[k][0]);
+    if (Array.isArray(s.rotation.move)) cuts.push(s.rotation.move[1]);
     const cutsIn = cuts.filter(b => b > 0 && b < h).sort((a, b) => a - b);
     const bounds = [0];
     for (const c of cutsIn) if (c > bounds[bounds.length - 1]) bounds.push(c);
@@ -2877,6 +3135,10 @@ export function createActivity({
           let q = p, w = v;
           // the movement's end is a stop for its contraction: crossing it the part rebounds off it, as off a limit
           if (driving && jk[2] !== 0 && (was - goal) * jk[2] <= 0 && (p - goal) * jk[2] > 0) { q = goal; w = springBounce > 0 && Math.sign(v) === jk[2] ? -springBounce * v : 0; }
+          // 21 November 2026 (SEEMOVE, JOINT_LATCH backStop): thrown back off the end, the part stops dead at the place it
+          // started from and is driven in again, so a movement with little room never shows as its opposite (not for a
+          // stop bounce, whose end is its place)
+          else if (backStop && driving && jk[2] !== 0 && Math.abs(goal - place) > JOINT_LATCH.restEpsDeg && (was - place) * jk[2] >= 0 && (q - place) * jk[2] < 0) { q = place; w = 0; }
           const ql = limitJoint(j, q);
           if (ql !== q) { w = springBounce > 0 && Math.sign(w) === Math.sign(q - ql) ? -springBounce * w : 0; q = ql; }
           s.bodyPos[j] = q + 0;
@@ -2896,12 +3158,21 @@ export function createActivity({
       }
       // (Message 206: a forearm-turn area turns the forearm for its contraction, pulseMove, and it turns back to where it
       // was: the turn's held angle or rotationState, which a press no longer changes)
-      const goal = pulseOn && !armed && s.pulseMove === true && s.pulseRotation !== null ? (s.pulseRotation === 'supination' ? 1 : 0)
+      // (21 November 2026, SEEMOVE: and for the hold after it, rotation.move)
+      const turn = Array.isArray(s.rotation.move) && b0 < s.rotation.move[1] ? s.rotation.move : null;
+      const goal = turn && !armed ? turn[0]
+        : pulseOn && !armed && s.pulseMove === true && s.pulseRotation !== null ? (s.pulseRotation === 'supination' ? 1 : 0)
         : isFiniteNumber(s.rotation.hold) ? s.rotation.hold : rotValue(s.rotationState);
       // R3-arm: critically damped ease (smooth start, ~0.30 s settle with the default poseTau); see stepRotationEase.
       const eased = stepRotationEase(s.rotation.value, s.rotation.speed, goal, seg, rotationTau);
       s.rotation.value = eased.value;
       s.rotation.speed = eased.speed;
+      if (!turn && !(pulseOn && s.pulseRotation) && isFiniteNumber(s.rotation.axialAnchor) &&
+          Math.abs(eased.value - s.rotation.axialAnchor) < 0.0001 && Math.abs(eased.speed) < 0.001) {
+        s.rotation.value = s.rotation.axialAnchor;
+        s.rotation.speed = 0;
+        delete s.rotation.axialAnchor;
+      }
       // R558 (Space dance): history of every limb's turn, then the dance itself while Space is held.
       danceStep(s, seg);
     }
@@ -2927,6 +3198,7 @@ export function createActivity({
     s.relaxRemaining = countdown(s.relaxRemaining, h);
     s.rotation.remaining = countdown(s.rotation.remaining, h);
     if (s.rotation.remaining === 0) s.rotation.channel = null;
+    if (Array.isArray(s.rotation.move)) { const left = countdown(s.rotation.move[1], h); s.rotation.move = left > 0 ? [s.rotation.move[0], left + 0] : null; }
     s.t += h;
   }
 
@@ -3142,7 +3414,8 @@ export function createActivity({
    * 20 November 2026 (the owner, Message 206: "no permanent movements"): what is moving because of the brain right now,
    * plain data for the display and for checks. (It replaces latchView: nothing is held, so there is nothing to bring
    * back, no "already there" and no opposing hint.)
-   *   contracting  [jointId]    body joints being driven to a movement's end (their contraction's time runs)
+   *   contracting  [jointId]    body joints being driven to a movement's end (their contraction's time runs, or,
+   *                             since 21 November 2026, the hold at the end after it: JOINT_LATCH holdS, unlit)
    *   returning    [jointId]    body joints on their way back to their place (no activity is shown for these)
    *   arm          { contracting: [actionId], returning: [actionId] }   the same for the game arm's movements
    *   lit          the area whose contraction is lit now (regionId), or null

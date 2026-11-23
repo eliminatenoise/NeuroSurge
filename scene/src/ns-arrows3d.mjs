@@ -344,7 +344,21 @@ export function convexHullPx(xy) {
  * each point; indices: optional triangle indices into the points (every covered cell is marked). Returns { cellPx, gw,
  * gh, count (occupied cells), hits(box) (occupied cells under { x0, y0, x1, y1 }, CSS px; parts off the grid count 0) }.
  */
-export function occupancyGrid(xy, { width, height, cellPx = 4, dilate = 1, indices = null } = {}) {
+export function occupancyGrid(xy, opts = {}) {
+  return OCCUPANCY_GRID.fast ? occupancyGridFast(xy, opts) : occupancyGridSimple(xy, opts);
+}
+/**
+ * 22 November 2026 (browser hunt of update 64, H6: letting go of a carried brain hung the game for one frame of 83 to
+ * 117 ms; the profile put 40 of the 55 ms of arrow planning in this grid, built twice, from the motor areas' 8,000
+ * vertices and their triangles). fast: the same cells by the same test (a cell is marked when its middle or one of its
+ * four corners lies in a triangle, with the same arithmetic in the same order, so every answer is unchanged), worked out
+ * without a new array per cell: each corner of the triangle's box is tested once, not once for each of the four cells
+ * that share it, the middle only for a cell no corner marked, and with no margin (dilate 0) a cell already marked is
+ * not tested again. false: the plain loop of before (occupancyGridSimple), kept for the tests that compare the two.
+ */
+export const OCCUPANCY_GRID = Object.freeze({ fast: true });
+/** The triangle loop of occupancyGrid as it was before 22 November 2026 (see OCCUPANCY_GRID). Pure. */
+export function occupancyGridSimple(xy, { width, height, cellPx = 4, dilate = 1, indices = null } = {}) {
   if (!(width > 0 && height > 0) || !(cellPx > 0)) fail('occupancyGrid needs width, height and cellPx > 0');
   const gw = Math.ceil(width / cellPx), gh = Math.ceil(height / cellPx), occ = new Uint8Array(gw * gh);
   const n = (xy && xy.length) >> 1, d = Math.max(0, Math.round(dilate));
@@ -379,6 +393,98 @@ export function occupancyGrid(xy, { width, height, cellPx = 4, dilate = 1, indic
       if (hit) mark(i, j);
     }
   }
+  return occupancyQuery(occ, gw, gh, cellPx, count);
+}
+// (OCCUPANCY_GRID.fast) the corner flags of one triangle's box, reused from triangle to triangle (255 = not tested yet)
+let occCorners = new Uint8Array(1024);
+/** occupancyGrid's fast loop (OCCUPANCY_GRID): the same cells as occupancyGridSimple. Pure (the scratch array holds
+ * nothing between calls). */
+export function occupancyGridFast(xy, { width, height, cellPx = 4, dilate = 1, indices = null } = {}) {
+  if (!(width > 0 && height > 0) || !(cellPx > 0)) fail('occupancyGrid needs width, height and cellPx > 0');
+  const gw = Math.ceil(width / cellPx), gh = Math.ceil(height / cellPx), occ = new Uint8Array(gw * gh);
+  const n = (xy && xy.length) >> 1, d = Math.max(0, Math.round(dilate));
+  // The cells the points and triangles cover are marked first (the core); the margin (dilate) is added once at the end:
+  // the union of every marked cell's (2 d + 1) square is the same set as marking each square as it is found.
+  // (a point just off the grid still marks the cells of its margin that are on it: kept aside and added after the margin)
+  let off = null;
+  const mark = (X, Y) => {
+    if (X >= 0 && Y >= 0 && X < gw && Y < gh) occ[Y * gw + X] = 1;
+    else if (d > 0 && X >= -d && Y >= -d && X < gw + d && Y < gh + d) (off || (off = [])).push(X, Y);
+  };
+  for (let i = 0; i < n; i++) {
+    const x = xy[2 * i], y = xy[2 * i + 1];
+    if (!isNum(x) || !isNum(y)) continue;
+    mark(Math.floor(x / cellPx), Math.floor(y / cellPx));
+  }
+  if (indices && indices.length >= 3) for (let t = 0; t + 2 < indices.length; t += 3) {
+    const a = indices[t], b = indices[t + 1], c = indices[t + 2];
+    const ax = xy[2 * a] / cellPx, ay = xy[2 * a + 1] / cellPx, bx = xy[2 * b] / cellPx, by = xy[2 * b + 1] / cellPx, cx = xy[2 * c] / cellPx, cy = xy[2 * c + 1] / cellPx;
+    if (!(isNum(ax) && isNum(ay) && isNum(bx) && isNum(by) && isNum(cx) && isNum(cy))) continue;
+    const i0 = Math.max(0, Math.floor(Math.min(ax, bx, cx))), i1 = Math.min(gw - 1, Math.floor(Math.max(ax, bx, cx)));
+    const j0 = Math.max(0, Math.floor(Math.min(ay, by, cy))), j1 = Math.min(gh - 1, Math.floor(Math.max(ay, by, cy)));
+    if (i0 > i1 || j0 > j1 || (i1 - i0) * (j1 - j0) > 40000) continue;
+    const den = (by - cy) * (ax - cx) + (cx - bx) * (ay - cy);
+    if (Math.abs(den) < 1e-12) { for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) mark(i, j); continue; }
+    // the same products as occupancyGridSimple's test (each factor the same float), so every answer is the same
+    const A1 = by - cy, B1 = cx - bx, A2 = cy - ay, B2 = ax - cx;
+    const LW = i1 - i0 + 2, nC = LW * (j1 - j0 + 2);
+    if (occCorners.length < nC) occCorners = new Uint8Array(Math.max(nC, 2 * occCorners.length));
+    const C = occCorners;
+    C.fill(255, 0, nC);
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+      if (occ[j * gw + i]) continue; // (already in the core: marking it again changes nothing)
+      let hit = false;
+      // the four corners, each tested once for the whole box
+      for (let k = 0; k < 4 && !hit; k++) {
+        const px = i + (k & 1), py = j + (k >> 1), at = (py - j0) * LW + (px - i0);
+        let v = C[at];
+        if (v === 255) {
+          const l1 = (A1 * (px - cx) + B1 * (py - cy)) / den, l2 = (A2 * (px - cx) + B2 * (py - cy)) / den;
+          v = C[at] = l1 >= 0 && l2 >= 0 && l1 + l2 <= 1 ? 1 : 0;
+        }
+        if (v === 1) hit = true;
+      }
+      if (!hit) {
+        const px = i + 0.5, py = j + 0.5;
+        const l1 = (A1 * (px - cx) + B1 * (py - cy)) / den, l2 = (A2 * (px - cx) + B2 * (py - cy)) / den;
+        hit = l1 >= 0 && l2 >= 0 && l1 + l2 <= 1;
+      }
+      if (hit) occ[j * gw + i] = 1;
+    }
+  }
+  // the margin: the square of side 2 d + 1 round every core cell, as a row pass then a column pass (a square is the
+  // sum of a row and a column of that length), each a running count over the window
+  if (d > 0) {
+    const tmp = new Uint8Array(gw * gh);
+    for (let y = 0; y < gh; y++) {
+      const r = y * gw;
+      let run = 0;
+      for (let x = 0; x < Math.min(d, gw); x++) run += occ[r + x];
+      for (let x = 0; x < gw; x++) {
+        if (x + d < gw) run += occ[r + x + d];
+        if (x - d - 1 >= 0) run -= occ[r + x - d - 1];
+        tmp[r + x] = run > 0 ? 1 : 0;
+      }
+    }
+    for (let x = 0; x < gw; x++) {
+      let run = 0;
+      for (let y = 0; y < Math.min(d, gh); y++) run += tmp[y * gw + x];
+      for (let y = 0; y < gh; y++) {
+        if (y + d < gh) run += tmp[(y + d) * gw + x];
+        if (y - d - 1 >= 0) run -= tmp[(y - d - 1) * gw + x];
+        occ[y * gw + x] = run > 0 ? 1 : 0;
+      }
+    }
+    if (off) for (let k = 0; k < off.length; k += 2) {
+      for (let Y = Math.max(0, off[k + 1] - d); Y <= Math.min(gh - 1, off[k + 1] + d); Y++) for (let X = Math.max(0, off[k] - d); X <= Math.min(gw - 1, off[k] + d); X++) occ[Y * gw + X] = 1;
+    }
+  }
+  let count = 0;
+  for (let k = 0; k < occ.length; k++) count += occ[k];
+  return occupancyQuery(occ, gw, gh, cellPx, count);
+}
+/** The summed-area table of an occupancy grid and its box query (occupancyGrid's return value). */
+function occupancyQuery(occ, gw, gh, cellPx, count) {
   const W1 = gw + 1, S = new Uint32Array(W1 * (gh + 1));
   for (let y = 0; y < gh; y++) { let row = 0; for (let x = 0; x < gw; x++) { row += occ[y * gw + x]; S[(y + 1) * W1 + x + 1] = S[y * W1 + x + 1] + row; } }
   const hits = b => {
@@ -519,9 +625,14 @@ export function frameArrowSpots(rect, { halfAlongPx, halfAcrossPx, bounds = null
     // inwardMaxFrac of the way from its base to the frame's middle
     // (R558, Messages 55 / 56: above 1 a tip may pass the frame's middle, e.g. the brain's bottom tip going up the hollow
     // of the motor strip's U; the pair's two tips then still keep their hit boxes apart, see `apart`)
-    const fr = isNum(R.inwardMaxFrac) ? clamp(R.inwardMaxFrac, 0, 1.9) : 1;
+    // 21 November 2026 (hunt H15): inwardMaxFracBy { dir: frac } caps one tip of the pair on its own (the brain's TOP
+    // tip keeps the default: only its bottom tip goes up the strip's hollow; with the mirror body lifted over the brain's
+    // top the top tip went 146 px down into the gap between the halves, beside the crosshair, above the mirror body's
+    // down tip). A tip with no place inside its cap is then moved along its side (ns-scene-three rescueTips).
+    const frOf = dir => { const v = R.inwardMaxFracBy && isNum(R.inwardMaxFracBy[dir]) ? R.inwardMaxFracBy[dir] : R.inwardMaxFrac; return isNum(v) ? clamp(v, 0, 1.9) : 1; };
+    const fr = Math.max(frOf(dA), frOf(dB));
     const mMin = { [dA]: Math.min(0, Math.max(isNum(needA) ? needA : -half, -half) - base[dA]), [dB]: Math.min(0, Math.max(isNum(needB) ? needB : -half, -half) - base[dB]) };
-    const mMax = { [dA]: fr * Math.max(0, half - base[dA]), [dB]: fr * Math.max(0, half - base[dB]) };
+    const mMax = { [dA]: frOf(dA) * Math.max(0, half - base[dA]), [dB]: frOf(dB) * Math.max(0, half - base[dB]) };
     // the shared place across the pointing axis: the frame's centre line, clamped into the bounds once for both
     const pMid = sideP ? my : mx;
     const p0 = b ? (pHi - pLo >= 2 * hP ? clamp(pMid, pLo + hP, pHi - hP) : (pLo + pHi) / 2) : pMid;
@@ -691,6 +802,120 @@ export function frameArrowAnchors(spots, { cam, centre } = {}) {
     out[dir] = add3(c.pos, apply(c.R, [xc, yc, -D]));
   }
   return out;
+}
+
+/** 22 November 2026 (browser hunt of update 64, H7): where the sight line through CSS px (x, y) of the camera in use
+ * `viewCam` meets a frame's anchor plane (the plane through `centre` square to the view axis of the frame's reference
+ * camera `planCam`, as frameArrowAnchors), as CSS px of `planCam` (pure). A frame planned in a reference view other than
+ * the one the player is in (the brain's frame after a carry is planned along the brain's placement direction) uses it
+ * to keep its tips off the crosshair the player actually sees. Returns { x, y } or null (the centre or the meeting point
+ * not in front). */
+export function viewPointInPlan(planCam, centre, viewCam, x, y) {
+  if (!centre || centre.length !== 3 || !Array.from(centre).every(isNum) || !isNum(x) || !isNum(y)) return null;
+  const c = camOf(planCam), fwd = apply(c.R, [0, 0, -1]);
+  const D = dot3(sub3([centre[0], centre[1], centre[2]], c.pos), fwd);
+  if (!(D > 1e-6)) return null;
+  const r = pixelRay(x, y, viewCam), den = dot3(r.dir, fwd);
+  if (!(Math.abs(den) > 1e-9)) return null;
+  const t = (D - dot3(sub3(r.origin, c.pos), fwd)) / den;
+  if (!(t > 0)) return null;
+  const q = projectWorldPx(add3(r.origin, mul3(r.dir, t)), planCam);
+  return q.depth > 0 && isNum(q.x) && isNum(q.y) ? { x: q.x, y: q.y } : null;
+}
+
+/** 22 November 2026 (browser hunt of update 64, H7, and a check of it): may tips that stay where they were stay there?
+ * True when none of `boxes` (CSS px, anchorBoxesPx: each tip's click area or hovered size) lies on a marked cell of
+ * `grid` (occupancyGrid; each box grown by padPx, as the planner's tipBlocker does) nor overlaps one of `avoid` (boxes;
+ * null entries are skipped; strict overlap, touching edges do not count). Pure. */
+export function keptTipsClear(boxes, { grid = null, avoid = null, padPx = 0 } = {}) {
+  const list = Array.isArray(avoid) ? avoid.filter(Boolean) : [];
+  for (const b of Array.isArray(boxes) ? boxes : []) {
+    if (!b) continue;
+    if (grid && typeof grid.hits === 'function' && grid.hits({ x0: b.x0 - padPx, y0: b.y0 - padPx, x1: b.x1 + padPx, y1: b.y1 + padPx }) > 0) return false;
+    for (const a of list) if (b.x0 < a.x1 && b.x1 > a.x0 && b.y0 < a.y1 && b.y1 > a.y0) return false;
+  }
+  return true;
+}
+
+/** 22 November 2026 (H6, second pass): what the arrows of an item let go do `age` drawn frames after the release, with
+ * the plan spread over `spread` frames (ns-scene-three ARROW_REPLAN.spreadFrames): 'hold' (hidden, nothing worked out,
+ * as while held), 'prepare' (still hidden; the last frame before the plan builds what the plan needs) or 'plan'. With
+ * spread 0 the first frame plans, as before. Pure. */
+export function releasePlanStage(age, spread = 0) {
+  const n = Number.isFinite(spread) && spread > 0 ? Math.floor(spread) : 0;
+  if (n === 0 || !(Number.isFinite(age) && age < n + 1)) return 'plan';
+  return age >= n ? 'prepare' : 'hold';
+}
+
+/** 22 November 2026 (UI3; H6 measured again on update 67: the one frame that planned after a release was 29 to 70 ms
+ * against an ordinary 12 to 14 ms, most of it the planner's search, the cover of your own body its sight lines are
+ * tested against, built on that frame, and, when the mirror body's frame was planned too, all of it twice). The work of
+ * a release, one piece per drawn frame after the frames that only hold (ns-scene-three ARROW_REPLAN.stepped):
+ *  prepare        the motor-area grids the plans need, and whether the mirror body's tips may stay;
+ *  tester-brain   the cover of your own body as seen from the brain's plan view, built ahead of the plan;
+ *  plan-brain     the brain's frame (planned again, or kept);
+ *  tester-mirror  the same for the mirror body's plan view(s), only when its frame is planned too (its own release, or
+ *                 its tips may not stay where they are);
+ *  plan-mirror    the mirror body's frame.
+ * The brain's frame comes first, as it always did (the mirror body's tips keep off the brain's). */
+export const RELEASE_STEPS = freeze(['prepare', 'tester-brain', 'plan-brain', 'tester-mirror', 'plan-mirror']);
+/** 22 November 2026 (UI4; the combined check of update 68, finding 3: letting go still made frames of 40 to 47 ms: the
+ * mirror body's cover took 13.5 ms and its plan 10.7 ms, each on one frame, and the first release of a run spent 17.9 ms
+ * on 'prepare'; measured again on update 68, 1600 x 900 at High, eight releases: 'prepare' 13.7 ms on the first (a
+ * profile: two motor-area grids, the mirror body's keep test and the brain's plan view), 'tester-mirror' 6.6 to 7.8
+ * (two covers: the mirror body's plan view and the opening view), 'plan-mirror' 7.6 (the planner's search, then its
+ * rescue pass, 4.6 of 9.2 ms with the profiler on, then the opening fit)). The same work in smaller pieces:
+ *  prepare         whether the mirror body's tips may stay (the keep test, with its grid when one is needed);
+ *  grids           the motor-area grid of the frame that will be planned (the brain's, or the mirror body's);
+ *  tester-brain    as before;
+ *  plan-brain      the planner's search for the brain's frame;
+ *  fit-brain       its rescue pass (a tip left on your body moved along its side) and the brain's tips shown;
+ *  tester-mirror   the cover of your own body seen from the mirror body's plan view;
+ *  tester-opening  the opening view's grid and cover (only in a landscape window at the start look, for its fit);
+ *  plan-mirror     the planner's search for the mirror body's frame;
+ *  fit-mirror      its rescue pass, the opening fit of its up tip, and the mirror body's tips shown.
+ * A step with nothing to do costs nothing, and the scene takes the next step in the same drawn frame while the work of
+ * that frame is still small (releaseCursorAt mergeMs), so a cheap step does not make the arrows come back later. */
+export const RELEASE_STEPS_FINE = freeze(['prepare', 'grids', 'tester-brain', 'plan-brain', 'fit-brain', 'tester-mirror', 'tester-opening', 'plan-mirror', 'fit-mirror']);
+/** (UI4) on: the scene goes through RELEASE_STEPS_FINE (false: RELEASE_STEPS, as in section 200); mergeMs: a further
+ * step is taken in the same drawn frame while the release's work in that frame is under this (ms); maxMerges: at most
+ * this many further steps in one frame. Display / timing choices. */
+export const RELEASE_FINE = freeze({ on: true, mergeMs: 1.5, maxMerges: 3 });
+/** PURE (RELEASE_STEPS): the step of a release at `cursor` (0: still holding; 1: the first working frame; one more per
+ * drawn frame). released: 'brain' | 'mirror'; mirrorPlan: the mirror body's frame is planned too (always at its own
+ * release); steps: the step list (RELEASE_STEPS, or RELEASE_STEPS_FINE: its brain part ends before 'tester-mirror').
+ * Returns { step ('hold', a step name, or 'done' after the last), last (this step ends the release), hidden: { brain,
+ * mirror } (whose arrows stay hidden on this frame: the released item's until its set is shown, and the mirror body's,
+ * once it is known that it is planned again, until its set is shown; the step that shows a set ('plan-brain' /
+ * 'plan-mirror', or 'fit-brain' / 'fit-mirror' in the fine list) shows it on its own frame) }. */
+export function releaseStep(cursor, { released = 'brain', mirrorPlan = false, steps: all = RELEASE_STEPS } = {}) {
+  const list = Array.isArray(all) && all.length ? all : RELEASE_STEPS;
+  const brainEnd = list.indexOf('tester-mirror') >= 0 ? list.indexOf('tester-mirror') : list.length;
+  const steps = mirrorPlan || released === 'mirror' ? list : list.slice(0, brainEnd);
+  const k = Number.isFinite(cursor) ? Math.max(0, Math.floor(cursor)) : steps.length + 1;
+  const step = k === 0 ? 'hold' : k <= steps.length ? steps[k - 1] : 'done';
+  const showAt = (fit, plan) => (steps.indexOf(fit) >= 0 ? steps.indexOf(fit) : steps.indexOf(plan)) + 1;
+  const planB = showAt('fit-brain', 'plan-brain'), planM = showAt('fit-mirror', 'plan-mirror');
+  const hidden = {
+    brain: released === 'brain' && k < planB,
+    mirror: planM > 0 && k < planM && (released === 'mirror' || k >= 1)
+  };
+  return { step, last: k >= steps.length, hidden };
+}
+/** PURE (RELEASE_STEPS): the release's cursor after a call in drawn frame `serial` (the scene counts drawn frames):
+ * one step on for the first call in each drawn frame once more than `hold` frames have been drawn since the release
+ * (`releaseAt`); a second call in the same frame (a pick, the overlay) keeps the step. The first step also waits while
+ * the bodies still move (`still` false: the hand going back to rest after the grip, whose skin and outline already make
+ * those frames longer), but no longer than `holdMax` frames.
+ * (UI4, RELEASE_FINE) A later call in the same frame takes one more step while the release's work in this frame,
+ * `spentMs`, is under `mergeMs` (a step that found nothing to do), at most `maxMerges` more; `merges` counts them.
+ * Returns { cursor, at, merges }. */
+export function releaseCursorAt({ cursor = 0, at = -1, serial = 0, releaseAt = 0, hold = 2, still = true, holdMax = Infinity,
+  spentMs = Infinity, mergeMs = 0, merges = 0, maxMerges = 0 } = {}) {
+  const age = serial - releaseAt;
+  if (age > hold && at !== serial && (cursor > 0 || still || age > holdMax)) return mergeMs > 0 ? { cursor: cursor + 1, at: serial, merges: 0 } : { cursor: cursor + 1, at: serial };
+  if (age > hold && at === serial && cursor > 0 && mergeMs > 0 && spentMs < mergeMs && merges < maxMerges) return { cursor: cursor + 1, at: serial, merges: merges + 1 };
+  return mergeMs > 0 ? { cursor, at, merges } : { cursor, at };
 }
 
 /** R558 (performance, P3): frameArrowAnchors for one spot at a time from one camera and centre, worked out once: the
