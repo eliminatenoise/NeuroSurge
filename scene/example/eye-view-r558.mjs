@@ -132,12 +132,12 @@ const FACE_COMPLETENESS_ERROR = 'ns:app_args: configured viewGraph requires the 
 const FRIENDLY_FACE_ERROR = 'The face anatomy could not finish loading. Reload the page to try again.';
 const params = new URLSearchParams(window.location.search);
 const mode = params.get('case') || 'boot';
-const lite = params.get('edition') === 'lite';
+const packProfile = editionPacks(params);
+const lite = packProfile.codec === 'brotli';
 if ([...params.keys()].some(k => k !== 'case' && k !== 'edition') || !['boot', 'stop-during-body', 'missing-face'].includes(mode)
-    || (params.has('edition') && (!lite || mode !== 'boot'))) {
+    || (params.has('edition') && params.get('edition') !== 'lite') || (lite && mode !== 'boot')) {
   throw new Error('Unsupported game edition or test case');
 }
-const packProfile = editionPacks(params);
 document.title = lite ? 'NeuroSurge Lite' : 'NeuroSurge';
 document.body.dataset.edition = lite ? 'lite' : 'full';
 document.body.dataset.meshCompression = packProfile.codec || 'gzip';

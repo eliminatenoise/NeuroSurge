@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-24-fresh-camera-frames",
-  "source": "Full and Lite share motion commands, opt-in video tracking, a shoulder and hip tutorial and an optional local model. Escape can resume play with a free pointer. The recorder lets players choose limbs before starting video and shows which limbs are following, need a knee bend, or need a clearer view. The recorder follows new camera frames and releases tracking on a stall in browsers that report when a frame is displayed.",
+  "version": "experimental-2026-11-24-lite-offline",
+  "source": "Full and Lite share motion commands, opt-in video tracking, a shoulder and hip tutorial and an optional local model. Escape can resume play with a free pointer. The recorder lets players choose limbs before starting video and shows which limbs are following, need a knee bend, or need a clearer view. The recorder follows new camera frames and releases tracking on a stall in browsers that report when a frame is displayed. The Lite download assembles the same game from this inventory with one set of packs and the assets it uses.",
   "experimental": true,
   "incomplete_acceptance": true,
   "root_checksum_includes_this_manifest": true,
@@ -104,8 +104,8 @@
     },
     {
       "path": "README.md",
-      "bytes": 3185,
-      "sha256": "6e55186de856022da78c6cb7671b6ae78197a27b45a535fcd48b869a1df402e8"
+      "bytes": 3328,
+      "sha256": "394b64ae767b70d26e40d7bb8623d24ca0d99a693a3f4097d60a0003ee4b02eb"
     },
     {
       "path": "START.html",
@@ -283,6 +283,16 @@
       "sha256": "a2010f343487d3f7618affe54f789f5487602331c0a8d03f49e9a7c547cf0499"
     },
     {
+      "path": "lite/OFFLINE-TECHNICAL.md",
+      "bytes": 1625,
+      "sha256": "cb919323cd6fedc0d6a0c7fcaca0d825ab8cc3f1a446160c0c2d568fa92cf4c4"
+    },
+    {
+      "path": "lite/OFFLINE.md",
+      "bytes": 2196,
+      "sha256": "047032ee27cc075cb6580b17b10f6636fdae064774a74d62696d8740beeffbca"
+    },
+    {
       "path": "lite/Play NeuroSurge Lite on Linux.sh",
       "bytes": 217,
       "sha256": "e6bb08752de94acd8af15a85b6060895eb9b2c5865dd303156904f52e8a68477"
@@ -299,8 +309,8 @@
     },
     {
       "path": "lite/README.md",
-      "bytes": 1568,
-      "sha256": "f8b22473cef2be84f59e852f4ba587817ddff1ab0bd18f916cccabe634a8ed7c"
+      "bytes": 1752,
+      "sha256": "686e25ad20eb65a55e856e0dce754d5040e55d826f21fb1eda068e68fa1fe94f"
     },
     {
       "path": "lite/asset-pin.mjs",
@@ -326,6 +336,11 @@
       "path": "lite/lite.css",
       "bytes": 539,
       "sha256": "e71bc03af559e6da5e3c1861cdd93b90e58940d0ee0ffbd55803a79d20c5abf2"
+    },
+    {
+      "path": "lite/offline-menu.html",
+      "bytes": 1263,
+      "sha256": "ad5b43a72e7b90d5ac4b8b11da82e7db06db1bc4c54c1c13470e16c02259bab5"
     },
     {
       "path": "lite/packs/BODY-RIG.json",
@@ -364,13 +379,13 @@
     },
     {
       "path": "lite/simple.html",
-      "bytes": 3282,
-      "sha256": "8d45efb3a78a06b22c2ab59c43a1b00639d793388fa69ee4f8f7d5efad885b8a"
+      "bytes": 3391,
+      "sha256": "0944d118e9dba5e42779700a12f61cf17ce893568b220ff1a510310c0bac0c6f"
     },
     {
       "path": "lite/technical.html",
-      "bytes": 2459,
-      "sha256": "f55ad4eba27913182b0fe50f8ecd223dba8a3895fed3a9adc0a0d4796671bd11"
+      "bytes": 2522,
+      "sha256": "e754e3c18f7de2e751a3e6b59a42c2f999af805fae4432bde27feeb8666cf72e"
     },
     {
       "path": "media/game-view.webp",
@@ -4089,13 +4104,13 @@
     },
     {
       "path": "scene/example/edition.mjs",
-      "bytes": 378,
-      "sha256": "1c775b01347d5b835ed6edf1231a34c5a1356dffef61d94e65befdedd264d75d"
+      "bytes": 419,
+      "sha256": "a3fd0397cb3fb40c6d23a6fd5134c81b30088e908d942f218014e68f98a6fab3"
     },
     {
       "path": "scene/example/eye-view-r558.mjs",
-      "bytes": 61767,
-      "sha256": "f46777278ad0070c3fa1d7a9b8207ab198b3004926ec40782707be79e9f897f4"
+      "bytes": 61800,
+      "sha256": "c42b01088fc3627c0eb515d34eaeef9cd6f120bade03e09f9dbb5f5d7bd9c162"
     },
     {
       "path": "scene/example/guide-cues.css",
@@ -6188,6 +6203,11 @@
       "sha256": "792a6ac1e98f0e497c7d3c3f47fd00f14e924aa30d62e539205f401865b35016"
     },
     {
+      "path": "tools/build-lite-offline.py",
+      "bytes": 11485,
+      "sha256": "d724b048ce91373648bf9ce0e755cd0ee73081275d8b6a57e433f3a964751401"
+    },
+    {
       "path": "tools/build-lite-packs.mjs",
       "bytes": 4396,
       "sha256": "4076611f931c8bfde58cb8b24e204054a5dfc1ad30fa957233ff8ec64932f870"
@@ -6211,6 +6231,11 @@
       "path": "tools/fit-shoulder-wrists.py",
       "bytes": 3613,
       "sha256": "bac3e35b6939ba0d07efe1fd1a37ec1d3af607da7fd64b453a5aa7053d140b16"
+    },
+    {
+      "path": "tools/lite-build-requirements.txt",
+      "bytes": 193,
+      "sha256": "1b985601865c204986f6e632fa32a637338149c5d754b146449c4beffdb04158"
     },
     {
       "path": "tools/load-body.mjs",
