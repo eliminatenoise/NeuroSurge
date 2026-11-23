@@ -67,8 +67,8 @@
     },
     {
       "path": "README.md",
-      "bytes": 2808,
-      "sha256": "8b1e6768b2174c2c886d767835f67d14f5d33a139d1110d229b121a340d51ee7"
+      "bytes": 3165,
+      "sha256": "9d11873007c37c00891ba6c4ef2cf69544254b3c6c4b792f135389db3841a046"
     },
     {
       "path": "START.html",
@@ -77,8 +77,8 @@
     },
     {
       "path": "index.html",
-      "bytes": 3689,
-      "sha256": "27a74539347db26c220e00022ff5c94ac37d3ac2ea66c3a7e9b711835a8a92c8"
+      "bytes": 3912,
+      "sha256": "8f748c2a4b5f809c4ecf3d808057d8705d50ea8de82250c8a8d8d40615fd5583"
     },
     {
       "path": "inputs/FULLBODY-MESH-MANIFEST.json",
@@ -232,13 +232,13 @@
     },
     {
       "path": "lite/simple.html",
-      "bytes": 3400,
-      "sha256": "e5945ab015916401fa8812535a3cdd4646d5272d7dc97eab5bad516754d4c4e8"
+      "bytes": 3621,
+      "sha256": "d9286f84461e1acc7d362651d086842fef0c414472dc3e8728b109fa3521908c"
     },
     {
       "path": "lite/technical.html",
-      "bytes": 2531,
-      "sha256": "13ba5e34cb4081a386d755060bc180dd863690dc5e4b9965a7b76b2b5c4478d3"
+      "bytes": 2756,
+      "sha256": "ee377be4b9faaa7c3860add17ebe3f47e5865a30f1595371079646b79f500d2e"
     },
     {
       "path": "media/game-view.webp",
