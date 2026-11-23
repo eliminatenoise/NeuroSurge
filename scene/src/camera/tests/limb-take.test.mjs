@@ -166,3 +166,54 @@ test('a paired video take has two visible samples per limb in the current window
   window.advance(8160);
   assert.equal(window.hasSamples, false);
 });
+
+test('timed pictures can include both ends of an eight-second sequence', () => {
+  const timeline = createTakeTimeline('rightArm', 250, {includeEnd: true});
+  timeline.observe({joints:right}, 250);
+  timeline.observe({joints:right}, 8250);
+  assert.deepEqual(timeline.finish(8250).frames.map(frame => frame.time), [0,8000]);
+});
+
+test('picture playback moves between visible endpoints without adding samples to the saved take', t => {
+  let now = 0, nextFrame;
+  const events = [];
+  const element = () => ({style: {}, setAttribute() {}, addEventListener() {}, append() {}});
+  for (const [key, value] of Object.entries({
+    document: {createElement: element},
+    requestAnimationFrame: fn => { nextFrame = fn; return 1; },
+    cancelAnimationFrame: () => { nextFrame = null; }
+  })) {
+    const previous = Object.getOwnPropertyDescriptor(globalThis, key);
+    Object.defineProperty(globalThis, key, {value, configurable: true});
+    t.after(() => previous ? Object.defineProperty(globalThis, key, previous) : delete globalThis[key]);
+  }
+  t.mock.method(performance, 'now', () => now);
+  const take = {source:'pictures', name:'Both arms', limb:'bothArms', duration:2200, frames:[
+    {time:0, pose:{leftArm:{bearing:[1,0,0],upper:[0,1,0],elbowDeg:0}, joints:right}},
+    {time:1000, pose:{leftArm:{bearing:[0,1,0],upper:[-1,0,0],elbowDeg:90}, joints:{...right,r_shoulder_abd:100}}},
+    {time:1500, pose:null},
+    {time:2200, pose:{joints:{...right,r_shoulder_abd:55}}}
+  ]};
+  const original = structuredClone(take);
+  const ui = createLimbTake({panel:element(), onReplay() {}, emit(pose) {events.push([now,pose]);}});
+  ui.play(take);
+  now = 500;
+  nextFrame();
+  assert.equal(events.at(-1)[1].joints.r_shoulder_abd, 50);
+  assert.equal(events.at(-1)[1].leftArm.elbowDeg, 45);
+  assert.ok(Math.abs(events.at(-1)[1].leftArm.bearing[0] - Math.SQRT1_2) < 1e-12);
+  for (now of [1000,1250,1500,1700,2200,2210]) nextFrame();
+  assert.deepEqual(events.map(event => event[0]), [0,500,1000,1500,2200,2210]);
+  assert.equal(events.find(event => event[0] === 1500)[1], null);
+  assert.deepEqual(take, original);
+  assert.equal(ui.playing, false);
+
+  now = 0;
+  ui.play(take, 'First second', {start:0, end:1000});
+  now = 500;
+  nextFrame();
+  assert.equal(events.at(-1)[1].joints.r_shoulder_abd, 50);
+  now = 1000;
+  nextFrame();
+  assert.equal(events.at(-1)[1], null);
+});

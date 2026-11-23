@@ -85,7 +85,8 @@ export function bindNamedTakes(details, getLatestTake) {
     }
   }
   function describe(take) {
-    return (take.source === 'video' ? 'Video · ' : '') + take.name + ' · ' + takeSeconds(take.duration) + ' s';
+    const prefix = take.source === 'pictures' ? 'Pictures · ' : take.source === 'video' ? 'Video · ' : '';
+    return prefix + take.name + ' · ' + takeSeconds(take.duration) + ' s';
   }
   function lookup(name) {
     return entries.get(tidy(name).toLowerCase());

@@ -56,6 +56,15 @@ With the local model launcher, choose **Record a limb take** to open this record
 
 The tracker estimates joints in the picture. The virtual body moves from those estimates. The game simulates its electrical activity.
 
+## Make a take from timed pictures
+
+1. Press **C** and choose **Timed pictures** under **Source**. In the local model game, use **Record a limb take** to open the recorder. Choose the limb or pair you want the body to follow.
+2. Add two to 256 local pictures. Use pictures up to 32 MiB each. Enter one time in seconds per picture in the displayed order. Use zero or positive times. For example, `0, 0.5, 1.25` gives a half-second first step and a longer second step. You can leave the times field blank and use filenames such as `0.jpg`, `0.5.jpg` and `1.25.jpg`. Use different times for each picture and keep the first and last within eight seconds of each other.
+3. Choose **Track pictures** and wait for the result. A take needs two tracked pictures for a single limb, two per side for a pair, or two from any one limb in **Both arms and knees**. For knees, start with two pictures that show a clear bend of at least 45 degrees and add another clear view so there are enough poses to save. Use **Save picture take** once it appears.
+4. Press **F** and type **replay my take**. Save a name under **Named takes** to call the movement back later in this tab. The virtual body moves between the poses from the pictures. If a timed picture loses a limb, the game releases that limb at that time. Comparisons and forecasts use the tracked pictures at their assigned times.
+
+Changing the pictures, times or selected limb starts a fresh attempt. An earlier saved take stays available until you save another. The pictures stay on your device. The take keeps joint estimates and their times in the browser tab.
+
 ## See what moved
 
 Press **R** to show more information about the area you are looking at. Press it again to hide the cards, then once more to return to the short cards.

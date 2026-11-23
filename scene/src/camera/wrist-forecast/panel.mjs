@@ -158,7 +158,7 @@ export function bindWristForecast(panel, getLatestTake, dismiss) {
     q('[data-use-take]').hidden = !example;
     q('[data-example]').hidden = example;
     report.textContent = example ? 'Authored example · two synthetic wrist paths sampled every 50 ms, with a break on the left.' :
-      haveWrist ? (take.source === 'video' ? 'Last video take' : 'Last camera take') +
+      haveWrist ? (take.source === 'pictures' ? 'Last picture take' : take.source === 'video' ? 'Last video take' : 'Last camera take') +
         ' · tracked arm positions at the original frame times. This take stays in this tab.' :
       'No wrist samples in the last take. Use the recorder to save an arm take, or try the example below.';
     if (!haveWrist) return;

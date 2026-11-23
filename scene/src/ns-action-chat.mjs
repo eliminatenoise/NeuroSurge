@@ -473,7 +473,7 @@ export function bindActionChat({ dialog, trigger, canvas, canOpen, pause, resume
       const name = latest?.name;
       if (!name) {
         message.textContent = 'No finished take in this tab. Return to the game. ' + takeRecorderInstruction +
-          ' In Live camera, choose Record take and Finish take. In Recorded video, choose Save video take.';
+          ' Use Record take and Finish take for a live camera, Save video take for a video, or Track pictures and Save picture take for timed pictures.';
         field.focus();
         return;
       }

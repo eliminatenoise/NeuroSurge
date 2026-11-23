@@ -30,6 +30,12 @@
 - A seek, limb change or new file clears the unsaved window. An explicit save replaces the latest take. Press **F** and enter **replay my take**, or use **Named takes** and **Save last take** to replay it by name. The take retains projected data. Picture and sound stay in the source file.
 - Select **Start camera** under **Live camera** to grant video access. In the local model launcher, **Record a limb take** opens this recorder. The separate Movement mirror also accepts video and timed pictures. Electrical activity is simulated.
 
+## Make a take from timed pictures
+
+- Open **Timed pictures** in the recorder. Use **C** in the standalone game or **Record a limb take** with the local model. Select 2–256 local images up to 32 MiB each. Enter one distinct time in seconds per listed file or give each file a numeric name such as `1.25.jpg`. Times must be zero or positive. The images are processed in time order within an eight-second span. Replay time starts at the earliest assigned time.
+- Choose **Track pictures**, then **Save picture take**. One limb needs two accepted poses. The paired modes need two per side. **Both arms and knees** needs two from at least one tracked limb. A knee first needs two consecutive visible bends of at least 45° to calibrate. The second bend can count toward the two accepted poses.
+- Press **F** and enter **replay my take**. Use **Named takes** to save a name. Replay blends joint angles and left-arm directions between adjacent accepted poses on the render clock. An absent limb releases at its stated image time. The stored poses and times used for comparisons or forecasts come from the individual images. An unsaved take clears when its inputs change. The local images remain on the device and the saved poses remain in tab memory.
+
 ## Shared engine and assets
 
 Both editions use the same simulation, region picking, body rig, materials, tutorial and camera. Lite’s compressed files reduce transfer by 996,262 bytes across the five mesh packs, index and rig. The separate decoder adds 142,385 bytes when the browser lacks built-in support. The decoded bytes are identical. [Pack checks and local launchers](lite/README.md).

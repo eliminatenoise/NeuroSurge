@@ -7966,8 +7966,8 @@ export function start(params = {}) {
   if (takeRecorder?.hidden === false) {
     const cameraHelp = doc.getElementById?.('ns-camera-key-help');
     const recorderHelp = doc.getElementById?.('ns-take-recorder-help');
-    if (cameraHelp) cameraHelp.textContent = 'Press C to follow your movement with the camera. ' +
-      'To record for replay, choose “Record a limb take” in the game toolbar.';
+    if (cameraHelp) cameraHelp.textContent = 'Press C for the Movement mirror. ' +
+      'To save a take from a camera, video or timed pictures, choose “Record a limb take” in the game toolbar.';
     if (recorderHelp) recorderHelp.textContent = takeRecorderInstruction;
   }
   const dialogControls = {

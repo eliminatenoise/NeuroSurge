@@ -35,7 +35,7 @@
   <canvas id="ns-canvas" class="ns-canvas" tabindex="0"
           aria-label="NeuroSurge game view. You move a simulated body and brain with game controls (no real stimulation or decoding)."
           aria-describedby="ns-game-keys"></canvas>
-  <p id="ns-game-keys" class="ns-sr-only">Press F to open the Command box. Type a movement or ask for recorded brain activity. <span id="ns-camera-key-help">Press C to open the recorder. Select Start camera to follow live movement, or choose Recorded video to use a file on this device.</span> Press M for the simulated electrical map. Press Escape for controls and settings.</p>
+  <p id="ns-game-keys" class="ns-sr-only">Press F to open the Command box. Type a movement or ask for recorded brain activity. <span id="ns-camera-key-help">Press C to open the recorder. Choose Live camera, Recorded video or Timed pictures.</span> Press M for the simulated electrical map. Press Escape for controls and settings.</p>
   <div id="ns-hud" class="ns-hud-root"></div>
   <div id="ns-shell-root" class="ns-shell-root"></div>
   <noscript><p class="ns-fatal">This game needs JavaScript and 3D graphics (WebGL) to run.</p></noscript>
@@ -64,7 +64,7 @@
       <p data-start-local-model><a href="../../START.html#local-model">Open the local NeuroTranslate model</a> for movement goals and fingertip touch forecasts.</p>
       <p>Type “show recorded brain activity” to compare finger cues from a human recording.</p>
       <p>Type “generate walk” or “generate run” to see the model draw a stride in 3D. Type “forecast heel movement” to predict right heel travel and force on a plate. Try “forecast my usual walk” or “forecast fast walking without running” to compare two walking instructions. Type “forecast my balance” for head and pelvis movement after a visual rotation. Type “forecast muscle and movement” to see a leg voltage forecast alongside a path for the pelvis. Try “forecast my wrist lift” or “forecast my pelvis path” to compare a model trained on two studies with one trained on your chosen task.</p>
-      <p>To save a movement for replay, close the Command box. <span id="ns-take-recorder-help">Press C to open the recorder.</span> Choose a limb. In <strong>Live camera</strong>, select <strong>Start camera</strong>, allow video when asked, then use <strong>Record take</strong> and <strong>Finish take</strong>. In <strong>Recorded video</strong>, play a local file and choose <strong>Save video take</strong>. Press F and type “replay my take”. To keep it under a name, open <strong>Named takes</strong>, enter a name and choose <strong>Save last take</strong>.</p>
+      <p>To save a movement for replay, close the Command box. <span id="ns-take-recorder-help">Press C to open the recorder.</span> Choose a limb. In <strong>Live camera</strong>, select <strong>Start camera</strong>, allow video when asked, then use <strong>Record take</strong> and <strong>Finish take</strong>. In <strong>Recorded video</strong>, play a file and choose <strong>Save video take</strong>. In <strong>Timed pictures</strong>, give each picture a time, then choose <strong>Track pictures</strong> and <strong>Save picture take</strong>. Press F and type “replay my take”. To save a name, open <strong>Named takes</strong>, enter a name and choose <strong>Save last take</strong>.</p>
       <p>After saving an arm take, type “forecast my wrists” to estimate the next half second of a wrist path. Choose a lead arm to try the shoulder model. Type “match my arm reach” to compare the path with eight recorded macaque reaches.</p>
     </details>
   </form>
@@ -96,7 +96,7 @@
       <h3 id="ns-comparison-title" tabindex="-1">Angles by capture time</h3>
       <label>Joint <select></select></label>
       <p data-angle-description></p>
-      <p>Each take starts at Record take. Times are rounded down to milliseconds. Half-second rows keep each take’s own times and gaps.</p>
+      <p>Live takes start when you choose Record take. Video takes start at their first retained pose. Picture takes start at their earliest assigned time. Times are rounded down to milliseconds. Half-second rows keep each take’s own times and gaps.</p>
       <p>The range runs from the lowest to the highest visible reading. The frame count includes saved tracking losses. A timeout adds no frame. Movement between readings is unknown.</p>
       <p>Change per second uses consecutive angle readings 50–250 ms apart. A positive rate means the angle grew. Gaps break the sequence. Camera perspective and tracking jitter affect the rates.</p>
       <table></table>

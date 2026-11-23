@@ -11,6 +11,8 @@ Use a desktop browser with WebGL, a keyboard and a mouse or trackpad. Press **F*
 
 After showing a movement from a file, choose **Save video take**. Press **F** and type **replay my take** to see the virtual body repeat the recent movement. The take keeps up to eight seconds of tracked joint movement in this browser tab.
 
+To use still pictures, choose **Timed pictures**. Add at least two local pictures, give each a time in seconds and choose **Track pictures**. **Save picture take** keeps the tracked poses for the same replay command. The first and last pictures can be up to eight seconds apart.
+
 For a separate forecast from NeuroTranslate, extract the model beside the game folder and use the **Play movement mirror** launcher. That optional route uses Python 3.10 or later with NumPy. The game download supplies its own examples.
 
 The archive omits the Full edition's pack files, original meshes already covered by Lite's packs, and development checks. Licences, other game assets and the shared game are included. The file named `SHA256SUMS` lists a digital fingerprint for each included file. It can help you check that the files survived the download and extraction. The source repository provides the original meshes and build tools. The Technical guide explains how to make the ZIP from the source. That separate build uses Python to turn the player guides into pages with clickable links. [NeuroSurge source](https://github.com/eliminatenoise/NeuroSurge)

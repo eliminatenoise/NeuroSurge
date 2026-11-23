@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-24-video-takes",
-  "source": "Full and Lite share motion commands, opt-in video tracking, a shoulder and hip tutorial and an optional local model. Escape can resume play with a free pointer. The recorder lets players choose limbs before starting video and shows which limbs are following, need a knee bend, or need a clearer view. The recorder follows new camera frames and releases tracking on a stall in browsers that report when a frame is displayed. The Lite download assembles the same game from this inventory with one set of packs and the assets it uses. The standalone recorder follows supported movement in a local video and releases tracking during pause or seek. Players can save up to eight seconds of tracked movement from a local video and replay the take through the Command box.",
+  "version": "experimental-2026-11-24-timed-pictures",
+  "source": "Full and Lite share motion commands, opt-in video tracking, a shoulder and hip tutorial and an optional local model. Escape can resume play with a free pointer. The recorder lets players choose limbs before starting video and shows which limbs are following, need a knee bend, or need a clearer view. The recorder follows new camera frames and releases tracking on a stall in browsers that report when a frame is displayed. The Lite download assembles the same game from this inventory with one set of packs and the assets it uses. The standalone recorder follows supported movement in a local video and releases tracking during pause or seek. Players can save up to eight seconds of tracked movement from a local video and replay the take through the Command box. Timed pictures can be tracked locally and replayed as a picture take. Animation between pictures does not add stored sample rows.",
   "experimental": true,
   "incomplete_acceptance": true,
   "root_checksum_includes_this_manifest": true,
@@ -54,18 +54,18 @@
     },
     {
       "path": "PLAYER-GUIDE-TECHNICAL.md",
-      "bytes": 7147,
-      "sha256": "5788cbf6c89e00ad73d4c524bd18f28df526981dc97a8b76146d01abf1ca2f4a"
+      "bytes": 8395,
+      "sha256": "2654528524163b8db4e722c62bfb70122f38c77ca2946241b763ba4a454532fb"
     },
     {
       "path": "PLAYER-GUIDE.md",
-      "bytes": 10589,
-      "sha256": "d29b535401d6611961464abfbb11e0a48a977ea8d346b4d50de39a06a8cf0b4f"
+      "bytes": 12194,
+      "sha256": "6403f723ae6418a8001cd6c8eb2ccf22ae2a214a8d6239ebeab7c9deb61755b4"
     },
     {
       "path": "PREVIEW-NOTES.html",
-      "bytes": 5774,
-      "sha256": "ac7bf949d8ff9185366e6327593f296f7a1a677f3e36ad104bc329886157e1b5"
+      "bytes": 6024,
+      "sha256": "7f48b1c6cfe400a55f01681ee86831ba3b344eb74913231d36bdb75eadf04a83"
     },
     {
       "path": "PROJECT-CONTEXT.json",
@@ -104,8 +104,8 @@
     },
     {
       "path": "README.md",
-      "bytes": 3404,
-      "sha256": "f8794cd1b7cf319f43147f67295f6450551174577f9c828b21c1bf73eae77f11"
+      "bytes": 3407,
+      "sha256": "32867e8f00b73e3529229221b84702b66358af1648223024d7bbb1115f9e13d4"
     },
     {
       "path": "START.html",
@@ -284,13 +284,13 @@
     },
     {
       "path": "lite/OFFLINE-TECHNICAL.md",
-      "bytes": 1826,
-      "sha256": "d201faa7d2ab4399a1dd1702e09383c7c9b394cf2aa1e6a2dd0fab91df8c146e"
+      "bytes": 2036,
+      "sha256": "0e7004bf298a6523ab96119b1ff1170b45966cec10fd4d0d3a3ce2a3938f389d"
     },
     {
       "path": "lite/OFFLINE.md",
-      "bytes": 2501,
-      "sha256": "118dfc44dc93c77675e96184460a4e03198ff5395e5c3272c622dc1c99343b15"
+      "bytes": 2781,
+      "sha256": "fb297f201ac08c24054860e68f08144cbf139fa2e2e0c4bb32d1f99a9b5a4059"
     },
     {
       "path": "lite/Play NeuroSurge Lite on Linux.sh",
@@ -309,8 +309,8 @@
     },
     {
       "path": "lite/README.md",
-      "bytes": 1756,
-      "sha256": "658dcae51c0ea3f127e9ec88f4e474130763660fe28c294a247aecc1e817e4e7"
+      "bytes": 1759,
+      "sha256": "7329f9af79adf4430de5c8a9af2c37eb2f015e53d82ec769ff8e76392626eb0c"
     },
     {
       "path": "lite/asset-pin.mjs",
@@ -379,13 +379,13 @@
     },
     {
       "path": "lite/simple.html",
-      "bytes": 3395,
-      "sha256": "8d725aee8339743bccbfcedb0ef0f0ff8a21bd7f1307a2a81a0debe8c12bf241"
+      "bytes": 3398,
+      "sha256": "023e4f67f9785baa394b6968a2f0516e3d438bcc1e1ac6a346043e12ea4da7bd"
     },
     {
       "path": "lite/technical.html",
-      "bytes": 2526,
-      "sha256": "57e77ea9743da513011d73eeb2f7c2981fe3849de0f2acd70bf4d5c7dd2b8057"
+      "bytes": 2529,
+      "sha256": "660e4546616536e205348eb4ccb672bff0d5a7046aedafe1261d9cd66145644c"
     },
     {
       "path": "media/game-view.webp",
@@ -4139,8 +4139,8 @@
     },
     {
       "path": "scene/example/preview.html",
-      "bytes": 73279,
-      "sha256": "9d33e5eb344372adf2762486b947e762006ad24ca1eb0ee767b03fb6db46a685"
+      "bytes": 73478,
+      "sha256": "4c823f02c51b22bc8e61cfb7438a9b97445fc95df85f5dd30f38ab400e70596d"
     },
     {
       "path": "scene/example/quiet.css",
@@ -4664,13 +4664,13 @@
     },
     {
       "path": "scene/src/camera.mjs",
-      "bytes": 28889,
-      "sha256": "abe6513662652c89616ebe39360d90972f93aafb6214050b427add3f0bbc0265"
+      "bytes": 35183,
+      "sha256": "25dfab53258a504a39109d4a9e16b3ff1598479a7c875469fd6b904f5132e0a2"
     },
     {
       "path": "scene/src/camera/README.md",
-      "bytes": 17741,
-      "sha256": "1832b0cf6bcb63268ca15884f45cdaa8d6253888aeb80b4475f35078e4edb12a"
+      "bytes": 18109,
+      "sha256": "c5dc5189f8553aa9cc69dafe1a40b5606289f24833caa488f74baf816ac6c06c"
     },
     {
       "path": "scene/src/camera/THIRD-PARTY-SHA256SUMS",
@@ -4689,13 +4689,13 @@
     },
     {
       "path": "scene/src/camera/limb-take.mjs",
-      "bytes": 12513,
-      "sha256": "b5c69f36cbc526ebae5d7938090a1a48fbd63be878175daa75083e05fd793b4b"
+      "bytes": 14192,
+      "sha256": "d28e6ed7410219ac3d19f3dff9ddcbba8320a839e5317395b54a3dd0e656bc97"
     },
     {
       "path": "scene/src/camera/named-takes.mjs",
-      "bytes": 6598,
-      "sha256": "faa4c221293072d93aa8389f2e2fd3fbe4e911aa7c6a512475edf0cf3f6bb4be"
+      "bytes": 6669,
+      "sha256": "1c12789214b080426cbbce972bd854ec6249d90ae6af9eaa9373d3cf0b69c27c"
     },
     {
       "path": "scene/src/camera/pose-worker.js",
@@ -4764,8 +4764,8 @@
     },
     {
       "path": "scene/src/camera/tests/limb-take.test.mjs",
-      "bytes": 7631,
-      "sha256": "e5e3266500fb8d7788461b6aded6e6b0a923e06763fdefee178875a28a6aa7f6"
+      "bytes": 10003,
+      "sha256": "51011282e030349e17184bbd955174c9c2b29cd26b55294a97affc2eb0fe2575"
     },
     {
       "path": "scene/src/camera/tests/paired-routing-browser.mjs",
@@ -4834,8 +4834,8 @@
     },
     {
       "path": "scene/src/camera/wrist-forecast/panel.mjs",
-      "bytes": 9236,
-      "sha256": "0f4b1379c711b63b74861f03dd3d8b535d0b2eccac9f66587d2cd494283e9263"
+      "bytes": 9287,
+      "sha256": "c768e681dbe87b99a2985437a41b61fa4b7a728a34364619b0e0fd5bf989ecde"
     },
     {
       "path": "scene/src/camera/wrist-forecast/role-model.mjs",
@@ -4924,8 +4924,8 @@
     },
     {
       "path": "scene/src/joint/media.mjs",
-      "bytes": 7524,
-      "sha256": "55bdcff03aee46e41379f8569894a49a72b7a12879214215d69df561b6fdfffd"
+      "bytes": 7560,
+      "sha256": "97c399ea639ac0bb1d357fee8438aac77cae979a532e2438800ea1dba80a2c22"
     },
     {
       "path": "scene/src/joint/route.mjs",
@@ -4949,8 +4949,8 @@
     },
     {
       "path": "scene/src/ns-action-chat.mjs",
-      "bytes": 26178,
-      "sha256": "dd872024797dd6914c2e58823b7223e7e9fcf86c9c934396c4e37a0a2e659a2a"
+      "bytes": 26223,
+      "sha256": "a3fe4a62df6958bfed886584f7cb2d20bcb6c14b9538d319ea0f356703979a80"
     },
     {
       "path": "scene/src/ns-actions.mjs",
@@ -4959,8 +4959,8 @@
     },
     {
       "path": "scene/src/ns-app.mjs",
-      "bytes": 1136635,
-      "sha256": "cda2cf5b1286d857b528233349dbdd88253e2e17e6ff458e682f5f29464ea658"
+      "bytes": 1136652,
+      "sha256": "64f5fb9c6406b8b357fa8e4d478dae20d50d2d461b052da10dee4bf38d18730f"
     },
     {
       "path": "scene/src/ns-area-halo.mjs",

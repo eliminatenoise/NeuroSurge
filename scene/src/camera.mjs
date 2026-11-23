@@ -1,8 +1,8 @@
 // Opt-in control. No camera, worker, or model asset is opened during construction.
-import {createLimbTake, createVideoTakeWindow} from './camera/limb-take.mjs';
+import {createLimbTake, createTakeTimeline, createVideoTakeWindow, TAKE_LIMIT_MS} from './camera/limb-take.mjs';
 import {createCameraPreview} from './camera/preview.mjs';
 import {trackedLimbs} from './camera/limb-pose.mjs';
-import {captureSource, MAX_LOCAL_VIDEO_BYTES} from './joint/media.mjs';
+import {captureSource, readKeyframes, MAX_LOCAL_VIDEO_BYTES} from './joint/media.mjs';
 const choices = {
   rightArm: {name: 'Right arm', frame: 'Face the lens. Show both shoulders, your right elbow and wrist.', motion: 'Right shoulder and elbow', parts: ['rightArm']},
   leftArm: {name: 'Left arm', frame: 'Face the lens. Show both shoulders, your left elbow and wrist.', motion: 'Left arm reach and elbow', parts: ['leftArm']},
@@ -108,6 +108,7 @@ function createTrackingFeedback(document) {
 export function createCameraCapture({ onPose, onArmPose, returnFocus = () => {}, host = document.body }) {
   let current = null, panel, video, preview, feedback, status, startButton, button, select, disposed = false;
   let sourceMode = 'camera', sourceSelect, fileWrap, fileInput, videoSave, videoSaveStatus, videoTake;
+  let pictureWrap, pictureFiles, pictureTimes, pictureNames, pictureSave, pictureTake;
   let limb = 'rightArm', selection = 0;
   let take;
   const emit = onPose || (result => onArmPose({joints: result?.joints ?? null}));
@@ -117,11 +118,26 @@ export function createCameraCapture({ onPose, onArmPose, returnFocus = () => {},
     if (videoSave) videoSave.disabled = true;
     if (videoSaveStatus) videoSaveStatus.textContent = '';
   }
+  function clearPictureTake() {
+    pictureTake = null;
+    if (pictureSave) pictureSave.hidden = true;
+  }
+  function clearFiles() {
+    clearVideoTake();
+    clearPictureTake();
+    fileInput.value = '';
+    pictureFiles.value = '';
+    pictureTimes.value = '';
+    pictureNames.replaceChildren();
+    pictureNames.hidden = true;
+  }
   const framing = () => choices[limb].frame + (kneeJoints[limb]?.length === 1 &&
     !current?.knees[kneeJoints[limb][0]]?.ready ? ' First show a clear bend.' : '');
-  const beforeStart = () => sourceMode === 'clip'
-    ? 'Choose a video file, then select Play video. The file stays on this device.'
-    : framing() + ' Select Start camera when ready. Video stays on this device.';
+  function beforeStart() {
+    if (sourceMode === 'stills') return 'Choose two or more pictures and set their times, then select Track pictures.';
+    if (sourceMode === 'clip') return 'Choose a video file, then select Play video. The file stays on this device.';
+    return framing() + ' Select Start camera when ready. Video stays on this device.';
+  }
   function trackingMessage(result) {
     if (!result) return framing();
     if (limb === 'armsAndKnees') {
@@ -156,11 +172,16 @@ export function createCameraCapture({ onPose, onArmPose, returnFocus = () => {},
     if (!current && !fromChooser) return;
     limb = value;
     clearVideoTake();
+    clearPictureTake();
     selection++;
     select.value = value;
     if (current) {
       if (current.kind === 'clip') {
         current.capture?.reset('Limb changed.');
+        return;
+      }
+      if (current.kind === 'stills') {
+        stop('Limb changed. Select Track pictures to start again.');
         return;
       }
       resetTracking(current);
@@ -201,8 +222,7 @@ export function createCameraCapture({ onPose, onArmPose, returnFocus = () => {},
         if (!current && sourceMode === 'camera') take.clear();
         if (current) stop();
         else {
-          clearVideoTake();
-          fileInput.value = '';
+          clearFiles();
           panel.hidden = true;
         }
         returnFocus();
@@ -213,9 +233,11 @@ export function createCameraCapture({ onPose, onArmPose, returnFocus = () => {},
       sourceSelect = document.createElement('select');
       sourceSelect.add(new Option('Live camera', 'camera'));
       sourceSelect.add(new Option('Recorded video', 'clip'));
+      sourceSelect.add(new Option('Timed pictures', 'stills'));
       sourceSelect.addEventListener('change', () => {
         if (current || take?.playing) stop();
         clearVideoTake();
+        clearPictureTake();
         sourceMode = sourceSelect.value;
         show(beforeStart(), false);
       });
@@ -231,6 +253,50 @@ export function createCameraCapture({ onPose, onArmPose, returnFocus = () => {},
         show(beforeStart(), false);
       });
       fileWrap.append(fileInput);
+      pictureWrap = document.createElement('div');
+      const pictureLabel = document.createElement('label');
+      pictureLabel.append('Local pictures ');
+      pictureFiles = document.createElement('input');
+      pictureFiles.type = 'file';
+      pictureFiles.accept = 'image/*';
+      pictureFiles.multiple = true;
+      pictureFiles.style.maxWidth = '100%';
+      pictureLabel.append(pictureFiles);
+      pictureNames = document.createElement('ol');
+      pictureNames.setAttribute('aria-label', 'Selected pictures in time-entry order');
+      Object.assign(pictureNames.style, {maxHeight:'6rem', overflowY:'auto', overflowWrap:'anywhere'});
+      pictureNames.tabIndex = 0;
+      pictureNames.hidden = true;
+      const timeLabel = document.createElement('label');
+      timeLabel.append('Picture times (seconds) ');
+      pictureTimes = document.createElement('input');
+      pictureTimes.type = 'text';
+      pictureTimes.autocomplete = 'off';
+      pictureTimes.placeholder = '0, 0.5, 1.25';
+      pictureTimes.style.maxWidth = '100%';
+      timeLabel.append(pictureTimes);
+      const timeHelp = document.createElement('p');
+      timeHelp.textContent = 'Enter one time per picture in the order above, or leave this blank and name each file with its time, such as 0.5.jpg.';
+      timeHelp.id = 'ns-picture-times-help';
+      pictureTimes.setAttribute('aria-describedby', timeHelp.id);
+      pictureWrap.append(pictureLabel, pictureNames, timeLabel, timeHelp);
+      function recheckPictures() {
+        if (sourceMode !== 'stills') return;
+        clearPictureTake();
+        if (current?.kind === 'stills') stop();
+        show(beforeStart(), false);
+      }
+      pictureFiles.addEventListener('change', () => {
+        pictureNames.replaceChildren();
+        pictureNames.hidden = !pictureFiles.files.length;
+        for (const file of pictureFiles.files) {
+          const name = document.createElement('li');
+          name.textContent = file.name;
+          pictureNames.append(name);
+        }
+        recheckPictures();
+      });
+      pictureTimes.addEventListener('input', recheckPictures);
       const label = document.createElement('label');
       label.append('Follow ');
       select = document.createElement('select');
@@ -261,12 +327,22 @@ export function createCameraCapture({ onPose, onArmPose, returnFocus = () => {},
           videoSaveStatus.textContent = 'Play a section with at least two tracked frames for the selected limbs.';
           return;
         }
-        take.saveVideo(movement, choices[limb].name);
+        take.save(movement, choices[limb].name, 'video');
         videoSaveStatus.textContent = 'Video take saved. Press F and type “replay my take”.';
         returnFocus();
       });
       videoTakeControls.append(videoSave, videoSaveStatus);
-      panel.append(sourceLabel, label, fileWrap, preview.element, status, feedback.element, startButton, button, videoTakeControls);
+      pictureSave = document.createElement('button');
+      pictureSave.type = 'button';
+      pictureSave.textContent = 'Save picture take';
+      pictureSave.addEventListener('click', () => {
+        if (!pictureTake || current || sourceMode !== 'stills') return;
+        take.save(pictureTake, choices[limb].name, 'pictures');
+        show('Picture take saved. Press F and type “replay my take”.', false);
+        returnFocus();
+      });
+      panel.append(sourceLabel, label, fileWrap, pictureWrap, preview.element, status, feedback.element, startButton, button,
+        videoTakeControls, pictureSave);
       take = createLimbTake({
         panel, emit, returnFocus,
         onFinish: () => stop(),
@@ -276,18 +352,22 @@ export function createCameraCapture({ onPose, onArmPose, returnFocus = () => {},
     }
     panel.hidden = false;
     const recorded = sourceMode === 'clip';
+    const pictures = sourceMode === 'stills';
     preview.element.hidden = !video.srcObject && !video.getAttribute('src');
     fileWrap.hidden = !recorded;
     fileInput.disabled = active;
+    pictureWrap.hidden = !pictures;
+    pictureFiles.disabled = pictureTimes.disabled = active;
     if (status.textContent !== message) status.textContent = message;
-    startButton.textContent = recorded ? 'Play video' : 'Start camera';
+    startButton.textContent = pictures ? 'Track pictures' : recorded ? 'Play video' : 'Start camera';
     startButton.hidden = active;
     startButton.disabled = active;
-    button.textContent = active ? (recorded ? 'Stop video' : 'Stop camera') : 'Dismiss';
+    button.textContent = active ? (pictures ? 'Stop tracking' : recorded ? 'Stop video' : 'Stop camera') : 'Dismiss';
     videoSave.hidden = !recorded || (!active && !videoTake?.hasSamples);
     videoSave.disabled = !videoTake?.hasSamples;
     videoSaveStatus.hidden = !recorded;
-    take.setCamera(active && !recorded, limb, choices[limb].name, recorded);
+    pictureSave.hidden = !pictures || !pictureTake;
+    take.setCamera(active && sourceMode === 'camera', limb, choices[limb].name, sourceMode !== 'camera');
   }
 
   function stop(message) {
@@ -306,6 +386,8 @@ export function createCameraCapture({ onPose, onArmPose, returnFocus = () => {},
         video.removeEventListener('seeking', session.seek);
         video.removeEventListener('timeupdate', session.timeupdate);
         session.capture?.stop();
+      } else if (session.kind === 'stills') {
+        session.capture?.stop();
       } else {
         session.worker?.terminate();
         session.frameTime = null;
@@ -315,7 +397,8 @@ export function createCameraCapture({ onPose, onArmPose, returnFocus = () => {},
       }
       clearPose();
     }
-    if (panel) show(message ?? (session?.kind === 'clip' ? 'Video stopped.' : 'Camera off.'), false);
+    if (panel) show(message ?? (session?.kind === 'stills' ? 'Picture tracking stopped.' :
+      session?.kind === 'clip' ? 'Video stopped.' : 'Camera off.'), false);
   }
 
   function failed(session, message) {
@@ -566,17 +649,70 @@ export function createCameraCapture({ onPose, onArmPose, returnFocus = () => {},
     });
   }
 
+  function startPictures() {
+    if (disposed || current) return;
+    clearPictureTake();
+    let stills;
+    try {
+      stills = readKeyframes([...pictureFiles.files], pictureTimes.value, {minimum:2});
+    } catch (error) {
+      show(error.message, false);
+      return;
+    }
+    const startTime = stills[0].t;
+    function offsetMs(time) {
+      const offset = (time - startTime) * 1000;
+      // Decimal seconds can land on either side of a whole millisecond.
+      // Correct the rounding error without quantizing fractional times.
+      const roundoff = Math.min(1e-6, Math.max(time, TAKE_LIMIT_MS / 1000) * Number.EPSILON * 1000);
+      const wholeMs = Math.round(offset);
+      return wholeMs > 0 && Math.abs(offset - wholeMs) <= roundoff ? wholeMs : offset;
+    }
+    const duration = offsetMs(stills.at(-1).t);
+    if (duration > TAKE_LIMIT_MS) {
+      show('Use picture times no more than eight seconds apart from first to last.', false);
+      return;
+    }
+    if (!window.Worker || !window.OffscreenCanvas || typeof createImageBitmap !== 'function') {
+      show('Timed pictures need a browser with image decoding and worker support.', false);
+      return;
+    }
+    take.interrupt('Replay stopped.');
+    const session = {kind: 'stills', limb, knees: {}};
+    const timeline = createTakeTimeline(limb, 0, {includeEnd: true});
+    current = session;
+    show('Opening the picture tracker on this device.', true);
+    session.capture = captureSource({
+      kind: 'stills', video, stills, getLimb: () => session.limb, captureWrists: true,
+      onStatus(message) { if (current === session) show(message, true); },
+      onFrame(frame) {
+        if (current !== session) return;
+        const time = offsetMs(frame.t);
+        const pose = calibratedPose(session.knees, session.limb, frame.pose, time);
+        timeline.observe(pose, time, false, frame.wrists, frame.armGeometry);
+        show('Read ' + frame.id + ' of ' + stills.length + ' pictures.', true);
+      },
+      onEnd() {
+        if (current !== session) return;
+        pictureTake = timeline.finish(duration);
+        stop(pictureTake ? pictureTake.count + ' of ' + stills.length + ' pictures had a usable pose. Choose Save picture take.' :
+          'Too few pictures showed the selected limbs. Choose clearer pictures or one limb.');
+      },
+      onError(message) { failed(session, 'Picture tracking stopped. ' + message); },
+    });
+  }
+
   function startSelected() {
+    if (sourceMode === 'stills') return startPictures();
     return sourceMode === 'clip' ? startClip() : start();
   }
 
   function leave() { if (current || take?.playing) stop(); }
-  function hide() { if (document.hidden) { clearVideoTake(); leave(); } }
+  function hide() { if (document.hidden) { clearVideoTake(); clearPictureTake(); leave(); } }
   function forget() {
-    clearVideoTake();
+    if (fileInput) clearFiles();
     leave();
     take?.clear();
-    if (fileInput) fileInput.value = '';
   }
   window.addEventListener('pagehide', forget);
   document.addEventListener('visibilitychange', hide);
@@ -587,7 +723,7 @@ export function createCameraCapture({ onPose, onArmPose, returnFocus = () => {},
       show(beforeStart(), false);
       select.focus({ preventScroll: true });
     },
-    close() { clearVideoTake(); leave(); if (fileInput) fileInput.value = ''; if (panel) panel.hidden = true; },
+    close() { if (fileInput) clearFiles(); leave(); if (panel) panel.hidden = true; },
     toggle() { return current ? stop() : startSelected(); },
     stop, choose, get active() { return !!current || !!take?.playing; },
     get visible() { return panel?.hidden === false; },
@@ -596,7 +732,7 @@ export function createCameraCapture({ onPose, onArmPose, returnFocus = () => {},
     get latestTake() { return take?.latest; },
     replayTake(target, label, interval) {
       if (disposed || document.hidden || !take || current) return;
-      if (sourceMode === 'clip' || panel.hidden) {
+      if (sourceMode !== 'camera' || panel.hidden) {
         sourceMode = 'camera';
         sourceSelect.value = sourceMode;
         show('Camera off.', false);

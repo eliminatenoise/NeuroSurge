@@ -1,6 +1,6 @@
 // Each take lives in this page's memory. The camera passes only its selected
 // rig pose, frame time and projected arm points after side and tracking checks.
-const LIMIT_MS = 8000;
+export const TAKE_LIMIT_MS = 8000;
 const groupedLimbs = {
   bothArms: ['leftArm', 'rightArm'],
   bothKnees: ['leftLeg', 'rightLeg'],
@@ -42,14 +42,14 @@ function copyLimb(result, limb, pose) {
 
 // One timestamp covers both sides of a camera frame. A missing side contributes
 // no channels. On playback the ordinary camera controller releases that side.
-export function createTakeTimeline(limb, start) {
+export function createTakeTimeline(limb, start, {includeEnd = false} = {}) {
   const sides = groupedLimbs[limb] || [limb];
   const counts = sides.map(() => 0);
   const frames = [];
   let count = 0, lastObservation = -Infinity;
   function observe(result, at, expiry = false, wrists, armGeometry) {
     const time = at - start;
-    if (!Number.isFinite(time) || time < 0 || time >= LIMIT_MS) return;
+    if (!Number.isFinite(time) || time < 0 || time > TAKE_LIMIT_MS || (!includeEnd && time === TAKE_LIMIT_MS)) return;
     if (!expiry) {
       if (time <= lastObservation) return;
       lastObservation = time;
@@ -90,7 +90,7 @@ export function createTakeTimeline(limb, start) {
   }
   function finish(at) {
     if (!hasEnoughSamples(limb, counts)) return null;
-    return {limb, frames, count, counts, duration: Math.min(LIMIT_MS, at - start)};
+    return {limb, frames, count, counts, duration: Math.min(TAKE_LIMIT_MS, at - start)};
   }
   return {start, observe, finish};
 }
@@ -103,7 +103,7 @@ export function createVideoTakeWindow(limb, maxGapMs) {
   function advance(at) {
     if (!Number.isFinite(at) || at <= end) return;
     end = at;
-    while (samples.length && samples[0].at <= end - LIMIT_MS) {
+    while (samples.length && samples[0].at <= end - TAKE_LIMIT_MS) {
       const {seen} = samples.shift();
       for (let i = 0; i < counts.length; i++) counts[i] -= Number(seen[i]);
     }
@@ -111,7 +111,7 @@ export function createVideoTakeWindow(limb, maxGapMs) {
   return {
     advance,
     observe(pose, at, wrists, armGeometry) {
-      if (!Number.isFinite(at) || at < 0 || at <= end - LIMIT_MS || at <= (samples.at(-1)?.at ?? -1)) return;
+      if (!Number.isFinite(at) || at < 0 || at <= end - TAKE_LIMIT_MS || at <= (samples.at(-1)?.at ?? -1)) return;
       const seen = sides.map(side => canUseLimb(pose, side));
       samples.push({pose, at, wrists, armGeometry, seen});
       for (let i = 0; i < counts.length; i++) counts[i] += Number(seen[i]);
@@ -137,6 +137,31 @@ export function createVideoTakeWindow(limb, maxGapMs) {
       return timeline.finish(end);
     },
   };
+}
+
+function betweenPictures(from, to, fraction) {
+  const blend = (a, b) => a + (b - a) * fraction;
+  // The left-arm tracker returns directions in the avatar's chest plane.
+  function direction(a, b) {
+    const start = Math.atan2(a[1], a[0]);
+    const delta = Math.atan2(a[0] * b[1] - a[1] * b[0], a[0] * b[0] + a[1] * b[1]);
+    const angle = start + delta * fraction;
+    return [Math.cos(angle), Math.sin(angle), 0];
+  }
+  const result = {};
+  if (from.joints) {
+    result.joints = {};
+    for (const [key, value] of Object.entries(from.joints)) {
+      const next = to.joints?.[key];
+      result.joints[key] = Number.isFinite(next) ? blend(value, next) : value;
+    }
+  }
+  if (from.leftArm) {
+    const a = from.leftArm, b = to.leftArm;
+    result.leftArm = b ? {bearing:direction(a.bearing, b.bearing), upper:direction(a.upper, b.upper),
+      elbowDeg:blend(a.elbowDeg, b.elbowDeg)} : a;
+  }
+  return result;
 }
 
 export function createLimbTake({panel, emit, onFinish, onReplay, returnFocus}) {
@@ -183,10 +208,10 @@ export function createLimbTake({panel, emit, onFinish, onReplay, returnFocus}) {
     if (!live || !valid || recording) return;
     recording = createTakeTimeline(limb, performance.now());
     info.textContent = 'Recording ' + name.toLowerCase() + '. Finish take keeps it and stops the camera. Stop camera cancels it.';
-    const showTime = () => { clock.textContent = seconds(Math.min(LIMIT_MS, performance.now() - recording.start)); };
+    const showTime = () => { clock.textContent = seconds(Math.min(TAKE_LIMIT_MS, performance.now() - recording.start)); };
     showTime();
     progress = setInterval(showTime, 100);
-    deadline = setTimeout(finish, LIMIT_MS);
+    deadline = setTimeout(finish, TAKE_LIMIT_MS);
     refresh();
   }
   function finish() {
@@ -205,7 +230,8 @@ export function createLimbTake({panel, emit, onFinish, onReplay, returnFocus}) {
     onFinish();
   }
   function summary() {
-    const title = saved.source === 'video' ? 'Video take · ' + saved.name : saved.name;
+    const title = saved.source === 'pictures' ? 'Picture take · ' + saved.name :
+      saved.source === 'video' ? 'Video take · ' + saved.name : saved.name;
     if (saved.limb === 'armsAndKnees') {
       const counts = ['left arm', 'right arm', 'left knee', 'right knee'].map((side, i) => saved.counts[i] + ' ' + side);
       return title + ' · ' + seconds(saved.duration) + ' · ' + saved.count + ' pose samples (' + counts.join(', ') + ').';
@@ -219,7 +245,8 @@ export function createLimbTake({panel, emit, onFinish, onReplay, returnFocus}) {
     playing = null;
     stopClock();
     emit(null);
-    info.textContent = label ? 'Replay ended · “' + label + '”.' + (saved ? ' Last take · ' + summary() : '') : summary();
+    const last = saved ? summary() : '';
+    info.textContent = label ? 'Replay ended · “' + label + '”.' + (last ? ' Last take · ' + last : '') : last || 'Replay ended.';
     refresh();
   }
   function play(take = saved, label = '', interval) {
@@ -244,7 +271,13 @@ export function createLimbTake({panel, emit, onFinish, onReplay, returnFocus}) {
       while (playing.next < frames.length && frames[playing.next].time <= elapsed) {
         last = frames[playing.next++];
       }
-      if (last) emit(last.pose, take.limb);
+      // Only the animated body receives in-between poses. The stored samples
+      // used for comparisons and forecasts remain tied to actual pictures.
+      const before = frames[playing.next - 1], after = frames[playing.next];
+      if (take.source === 'pictures' && before?.pose && after?.pose && before.time >= start &&
+          elapsed > before.time && after.time <= end) {
+        emit(betweenPictures(before.pose, after.pose, (elapsed - before.time) / (after.time - before.time)), take.limb);
+      } else if (last) emit(last.pose, take.limb);
       if (elapsed >= take.duration && !last) stopReplay();
       else animation = requestAnimationFrame(tick);
     }
@@ -268,8 +301,8 @@ export function createLimbTake({panel, emit, onFinish, onReplay, returnFocus}) {
   refresh();
   return {
     observe, interrupt, play,
-    saveVideo(take, displayName) {
-      saved = {...take, name: displayName, source: 'video'};
+    save(take, displayName, source) {
+      saved = {...take, name: displayName, source};
       info.textContent = summary();
       refresh();
     },
@@ -278,9 +311,9 @@ export function createLimbTake({panel, emit, onFinish, onReplay, returnFocus}) {
     get latest() { return saved; },
     get savedName() { return saved?.name; },
     setPlayable(value) { playable = value; refresh(); },
-    setCamera(active, side, displayName, recorded = false) {
-      if (active === live && side === limb && box.hidden === recorded) return;
-      box.hidden = recorded;
+    setCamera(active, side, displayName, hideTakeControls = false) {
+      if (active === live && side === limb && box.hidden === hideTakeControls) return;
+      box.hidden = hideTakeControls;
       if (!active || limb !== side) valid = false;
       live = active;
       limb = side;

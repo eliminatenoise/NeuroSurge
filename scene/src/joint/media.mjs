@@ -1,15 +1,15 @@
 // One local tracker and one transferred bitmap per active source.
 export const MAX_LOCAL_VIDEO_BYTES = 512 * 1024 * 1024;
 
-export function readKeyframes(files, times) {
-  if (!files.length || files.length>256) throw Error('Choose 1–256 still images.');
+export function readKeyframes(files, times, {minimum=1} = {}) {
+  if (files.length<minimum || files.length>256) throw Error(`Choose ${minimum}–256 still images.`);
   const supplied=times.trim()?times.trim().split(/[\s,]+/):null;
   if (supplied && supplied.length!==files.length) throw Error('Enter one time in seconds for every file, in the displayed file order.');
   const rows=files.map((file,i)=>{
     const stem=file.name.replace(/\.[^.]+$/,'');
     const token=supplied?.[i]??stem;
     if (!/^(?:\d+(?:\.\d*)?|\.\d+)$/.test(token) || !Number.isFinite(Number(token))) throw Error('Enter capture times in seconds, or name each still with its time (e.g. 1.20.jpg).');
-    if (file.size>32*1024*1024) throw Error('Choose still images smaller than 32 MB.');
+    if (file.size>32*1024*1024) throw Error('Choose images no larger than 32 MiB each.');
     return {t:Number(token),file};
   }).sort((a,b)=>a.t-b.t);
   if (rows.some((r,i)=>i && r.t<=rows[i-1].t)) throw Error('Each still needs a distinct capture time.');

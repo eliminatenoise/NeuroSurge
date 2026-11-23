@@ -6,6 +6,8 @@ The archive keeps the Lite packs, the shared engine, the remaining runtime asset
 
 **Save video take** retains up to eight seconds of pose estimates in tab memory. Press F and enter **replay my take** to replay the retained motion.
 
+**Timed pictures** processes at least two local images at assigned times within an eight-second span. Use **Track pictures** and **Save picture take**. The F replay uses those poses and animates between them.
+
 For forecasts, place the separate NeuroTranslate model beside the game and use a movement mirror launcher with Python 3.10+ and NumPy.
 
 The archive stores the exact source-inventory SHA-256 in `release-manifest.json` and verifies its entries with `SHA256SUMS`. To rebuild from the corresponding source checkout, use Python 3.10 or later. Run `python -m pip install --require-hashes -r tools/lite-build-requirements.txt` in a virtual environment, then run `python tools/build-lite-offline.py NeuroSurge-Lite.zip`. The build dependency renders the browser versions of the player guides. [NeuroSurge source](https://github.com/eliminatenoise/NeuroSurge)
