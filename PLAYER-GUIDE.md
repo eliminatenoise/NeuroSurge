@@ -15,6 +15,8 @@ During play, press **1** for the left arm, **2** for the left leg, **3** for the
 
 From the view out of your body, look a little up or down to raise or lower the selected arm at the shoulder or the selected leg at the hip. You can do this without looking straight up or at the floor. After you select a limb, the aiming mark for this control sits about a quarter of the way down from the top of the screen. The mark stays there. The drawn wrist or ankle follows the joint, so it can move away from the mark when the limb reaches the end of its movement or the camera looks elsewhere.
 
+The tutorial lets you practise this after selecting a limb. Move the mouse or trackpad up or down. To play with a free pointer, press **Escape** twice, then drag on an empty part of the picture to look. Dragging keeps the pointer free. Open the controls and click **Resume** when you want to capture it. The game measures from where the virtual wrist or ankle was just before that look. It advances the step when that point moves at least 2.5 cm relative to the shoulder or hip. It gives the virtual body up to 0.35 seconds of game time after the look to move. If you are looking from outside the body, press **E** to return to the eye view first.
+
 Press and drag on a limb to move the joint you pressed on. Press **Space** to grip. Aim at the brain or mirror body and hold Space to carry it, then release to put it down. You can drag the brain or mirror body to turn it. Hold **Shift** on the initial press to reach the item behind the one you would usually select.
 
 ## Give the body a movement to make

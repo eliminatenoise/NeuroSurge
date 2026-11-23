@@ -10,6 +10,7 @@
 - E switches modes. The eye view rotates about a fixed position. The outside view orbits a fixed point at a constant distance. Each mode has a fixed field of view for the current window size. The camera does not follow the simulated body.
 - R changes the information shown. M toggles the detailed electrical map. The normal view has a separate, lower-opacity electrical effect on the cortex and motor strip, with an off switch in Escape settings.
 - Press Escape and open **View tutorial** to review its steps or resume or restart the sequence. Markers identify game regions or joints in view.
+- After limb selection, a vertical look in the eye view starts a measurement. Within 0.35 seconds of game time after that look, the virtual wrist or ankle must move at least 2.5 cm from its position relative to the shoulder or hip just before the look. Move the pointer in capture mode or press **Escape** twice and drag empty space with a free pointer. Dragging keeps the pointer free. Click **Resume** in the controls to capture it. Press **E** to return from the outside view.
 
 ## Command box and camera
 

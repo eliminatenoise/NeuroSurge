@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-23-shared-inputs",
-  "source": "Full and Lite share movement commands, opt-in video tracking, player-controlled cameras and an optional local model.",
+  "version": "experimental-2026-11-23-joint-practice",
+  "source": "Full and Lite share motion commands, opt-in video tracking, a shoulder and hip tutorial and an optional local model. Escape can resume play with a free pointer.",
   "experimental": true,
   "incomplete_acceptance": true,
   "root_checksum_includes_this_manifest": true,
@@ -54,18 +54,18 @@
     },
     {
       "path": "PLAYER-GUIDE-TECHNICAL.md",
-      "bytes": 3468,
-      "sha256": "b9e8859b4051ea65d7ae0ecd5d945bfe19c94dc837c42112260e5db9e588473a"
+      "bytes": 3948,
+      "sha256": "443c3b0081bf4044babbad2998a205bdf64040df66293f57f1db40e265ad4b73"
     },
     {
       "path": "PLAYER-GUIDE.md",
-      "bytes": 5979,
-      "sha256": "f659a0f500c3047f9bc127e3da651665536e807ed18af85bd8a0d72d3eecbb63"
+      "bytes": 6628,
+      "sha256": "998242473a4e0e9e711432c872c3b2de91644602a1c52d704f84199b8a3b9a7e"
     },
     {
       "path": "PREVIEW-NOTES.html",
-      "bytes": 4997,
-      "sha256": "7e865287b6bb57f6ba8dd4e16c02b2e75daf84d6f632a34934ff27d479585880"
+      "bytes": 5210,
+      "sha256": "ba757d99341951897da15169fdb8cf2b97a0d14ea5ce9c2c18f6b24b1ebcd3c7"
     },
     {
       "path": "PROJECT-CONTEXT.json",
@@ -109,8 +109,8 @@
     },
     {
       "path": "START.html",
-      "bytes": 5407,
-      "sha256": "8517afc33a253201ca0bf900a36a63c2b491d65f192a06b1600e224f44ab406f"
+      "bytes": 5408,
+      "sha256": "79e13a337d8a72724704e06b334977acdbf867774bd0324ffa0858786e8f2cca"
     },
     {
       "path": "assets/hand-search/CDLA-Permissive-2.0.txt",
@@ -174,8 +174,8 @@
     },
     {
       "path": "assets/player-guides/PLAYER-GUIDE.txt",
-      "bytes": 36948,
-      "sha256": "57c486316c70d91f708231909ccc13b318b7e6a5e1f3da89a43e3ece6423956c"
+      "bytes": 37493,
+      "sha256": "831f2c8aa9b9734251b209c2e205ed39c148caed3d73d7f724d7bed4f49dc5d1"
     },
     {
       "path": "assets/spatial-motion/02_06.json",
@@ -199,8 +199,8 @@
     },
     {
       "path": "index.html",
-      "bytes": 3917,
-      "sha256": "d7cd634b64111c85321708d41ea784c03be74fededf6c605cad8cf108557cf18"
+      "bytes": 3918,
+      "sha256": "d143d732b6d1656dd6d8faeffef2066b6bb5f050e67e5a2ada54a3c7059b72c6"
     },
     {
       "path": "inputs/FULLBODY-MESH-MANIFEST.json",
@@ -4939,8 +4939,8 @@
     },
     {
       "path": "scene/src/ns-app.mjs",
-      "bytes": 1134418,
-      "sha256": "7f589942fff37865d36a92a1bea0ba5ff318caf8b902e28a408f2a2fccf3df62"
+      "bytes": 1136687,
+      "sha256": "0e394c32ebf2d44e9964d0ae9aeeaf2dfd7f47e4ce1910fd201920ebfa3a0e1c"
     },
     {
       "path": "scene/src/ns-area-halo.mjs",
@@ -5069,8 +5069,8 @@
     },
     {
       "path": "scene/src/ns-controls.mjs",
-      "bytes": 102391,
-      "sha256": "607fa3a7bdc4056ecd1158eb63f2684e63c3d0e2256726f6375f91be49b6a2f5"
+      "bytes": 102667,
+      "sha256": "1fe20fc695b6060f58694092499c30608c34201fef2d6f741ca48b616dc0d24c"
     },
     {
       "path": "scene/src/ns-dance.mjs",
@@ -5129,13 +5129,13 @@
     },
     {
       "path": "scene/src/ns-guide-cues.mjs",
-      "bytes": 8921,
-      "sha256": "29d9d06d9573531ecb1cf2d1e198da558582a8450666fa35af232e6079f09cfa"
+      "bytes": 8955,
+      "sha256": "5f9b475964fa8fb9ce148d67b5ef4d44a4af8c7c1848c219549d45eee79b15d9"
     },
     {
       "path": "scene/src/ns-guide.mjs",
-      "bytes": 51732,
-      "sha256": "129cbf232921304b4a19aa49a8096c54460fdd841cc009c56719092d0d9a633e"
+      "bytes": 52240,
+      "sha256": "f4bb97d4e3a72a8b6a611a4a7d69f331f69d39c162e63ca054cfbf68e6b134e0"
     },
     {
       "path": "scene/src/ns-input-epoch.mjs",
@@ -5274,8 +5274,8 @@
     },
     {
       "path": "scene/src/ns-text.mjs",
-      "bytes": 154085,
-      "sha256": "48540f8c23cbcc9dfcb0a8d1d69e7b6ae3dc9f796feb3aa2ae03630b962da24f"
+      "bytes": 154806,
+      "sha256": "df4a3fa2620c63ee15dde199036a850eee61a2e79ab50554e790d5706e1e6876"
     },
     {
       "path": "scene/src/ns-vessels.mjs",
@@ -5649,8 +5649,8 @@
     },
     {
       "path": "tests/capture-boundary.test.mjs",
-      "bytes": 25478,
-      "sha256": "8e196cfd013efac7aaac49e51bb136697432dba02a99e749126275aaab52edb0"
+      "bytes": 26181,
+      "sha256": "902081b12c1e94a0760cff00fbfa5911dfbf6f141c9ecbaf2b1d5f10fd10814f"
     },
     {
       "path": "tests/carry-release.test.mjs",
@@ -5769,8 +5769,8 @@
     },
     {
       "path": "tests/guide-order.test.mjs",
-      "bytes": 8343,
-      "sha256": "8b655356181d7914e3db3bd49da05ab789029f5d238305cb6f4bf72db9c56465"
+      "bytes": 9823,
+      "sha256": "0c3adabcce4c29b1c08be742ff1bedb1304a624709402f60bd6c8b0c822b3179"
     },
     {
       "path": "tests/hand-query.test.mjs",
@@ -6114,8 +6114,8 @@
     },
     {
       "path": "tests/tutorial.test.mjs",
-      "bytes": 12245,
-      "sha256": "22581d1a5659b68f0f78bc9a702e3c229aef107d3e8a13189a67b4e1512e2d35"
+      "bytes": 12318,
+      "sha256": "5a4e62e2818edbdf5a274ba387ffacd100368a28a4787e7c9a75b0ca041445c5"
     },
     {
       "path": "tests/ui3.test.mjs",

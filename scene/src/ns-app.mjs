@@ -592,6 +592,7 @@ export function viewFramePoint(pose, place, fovYDeg, aspect) {
 }
 
 const LIMB_AIM_Y_NDC = 0.5;
+const AIM_PRACTICE_RESPONSE_S = 0.35;
 const LIMB_AIM_HALF_SWEEP_RAD = 18 * DEG;
 
 /** Map a small up/down look around the selection point onto the two remaining sides of a joint's range. */
@@ -5142,13 +5143,13 @@ export function shellReduce(s, ev) {
       if (s.mode === 'playing') return { ...s, mode: 'paused', unlockPausedAtMs: null };
       if (s.mode === 'paused') {
         if (s.unlockPausedAtMs !== null && at !== null && at - s.unlockPausedAtMs < ESC_UNLOCK_GUARD_MS) return s;
-        return toPlaying({});
+        return toPlaying({ unlockedPlay: !s.locked });
       }
       return s;
     case 'fatal':
       return { ...s, mode: 'error', error: typeof ev.message === 'string' && ev.message ? ev.message : 'unknown error', errorHint: typeof ev.hint === 'string' ? ev.hint : null, notice: null };
     case 'play':
-      return overlay ? toPlaying({}) : s;
+      return overlay ? toPlaying({ unlockedPlay: false }) : s;
     case 'locked':
       if (s.mode === 'error' || s.mode === 'loading') return s.locked ? s : { ...s, locked: true };
       return toPlaying({ locked: true, lockFailed: false, unlockedPlay: false });
@@ -5191,6 +5192,7 @@ export function instructionsState(s) {
 export function shellToastText(s, { dragLook = true } = {}) {
   if (!s || s.mode !== 'playing' || s.locked) return '';
   if (s.lockFailed) return SHELL_TEXT.lockRefused;
+  if (dragLook && s.unlockedPlay) return SHELL_TEXT.freeLookHint;
   return dragLook ? SHELL_TEXT.captureHint : SHELL_TEXT.lookOff;
 }
 
@@ -6043,7 +6045,7 @@ export function createShell({ doc, root, text = SHELL_TEXT, settings = SETTINGS_
   const guideToggle = button('ns-shell-secondary ns-shell-guide-toggle', guideRow, guideText.hide, 'guide-toggle');
   let guideActions = null;
   if (visualGuide) guideActions = mountGuideActions(grpGuide, { onShow: () => onGuide?.('show'), onRestart: () => onGuide?.('restart'),
-    features: { ...GUIDE_FEATURES, jointAim: true }, installed: guideInputs });
+    features: { ...GUIDE_FEATURES, jointAim: guideInputs.jointAim === true }, installed: guideInputs });
   else button('ns-shell-secondary ns-shell-guide-restart', guideRow, guideText.restart, 'guide-restart');
   el('p', 'ns-shell-guidehelp', grpGuide, guideText.escHelp);
 
@@ -6598,7 +6600,7 @@ export function start(params = {}) {
   } catch { /* unreadable storage: the in-memory settings are already normalised */ }
   // R4-text (D7): the "Try this" guide (pure state machine, ns-guide). Never pauses or blocks play.
   // R5-integrate-core (R5-text W2): only the round-5 goals whose feature is wired in this build (GUIDE_FEATURES).
-  let guideFeatures = { thirdPerson: false, glow: false, mirror: false, moveKeys: false };
+  let guideFeatures = { thirdPerson: false, glow: false, mirror: false, moveKeys: false, jointAim: false };
   let guide = NG.guideFromStorage((() => { try { return storage && typeof storage.getItem === 'function' ? storage.getItem(NG.GUIDE_STORAGE_KEY) : null; } catch { return null; } })(), 0, { features: guideFeatures, tutorial: true });
   // 19 November 2026 (EASE, the playable tutorial): steps done outside the frame loop (R pressed, Enter to skip a
   // step) wait here for the next frame's guideStep.
@@ -7237,6 +7239,7 @@ export function start(params = {}) {
   function refreshGuideFeatures() {
     const next = { thirdPerson: GUIDE_FEATURES.thirdPerson && Boolean(sceneFn('setCameraPose')),
       glow: GUIDE_FEATURES.glow && glowWired, mirror: GUIDE_FEATURES.mirror && mirrorWired && Boolean(bodyRig),
+      jointAim: Boolean(playerCamera && bodyRig),
       // R558 (Messages 55 and 56): the number-key goals need the numbered movement list on screen (only the scene's own
       // information card draws it) and the number keys wired in the controls (the controls arrive after the first
       // body install, so this is asked again on a later refresh).
@@ -7576,7 +7579,8 @@ export function start(params = {}) {
     const locked = lockedNow(), wasLocked = shellState.locked;
     // A canvas request can arrive after focus has moved to an open control surface.
     const lateDialogLock = !wasLocked && (chatDialog?.open || activityDialog?.open);
-    if (locked && (jointView?.visible || motionCamera?.visible || lateDialogLock) && exitLock()) return;
+    const lateFreeLock = !wasLocked && shellState.unlockedPlay;
+    if (locked && (jointView?.visible || motionCamera?.visible || lateDialogLock || lateFreeLock) && exitLock()) return;
     // An unchanged lock notification cannot end a pause while the browser still holds the pointer.
     if (locked && wasLocked && shellState.mode === 'paused') return;
     const openCamera = locked ? null : cameraOpenAfterUnlock;
@@ -7629,9 +7633,8 @@ export function start(params = {}) {
     nativeEscape.releasedBeforeUnlock = false;
     nativeEscape.releasedUnlock = false;
     if (releasedUnlock) {
-      // An actual intervening keyup proves this is a subsequent press. Hide the overlay without requesting capture;
-      // normal click-to-capture/security behavior is unchanged. Never prevent or trap the browser's Escape action.
-      dispatch({ type: 'play' });
+      // The next deliberate Escape resumes with the pointer free. Leave the browser's Escape action available.
+      dispatch({ type: 'playUnlocked' });
     } else onEscape(atMs);
   }
   function nativeEscapeUp(e) {
@@ -7862,6 +7865,7 @@ export function start(params = {}) {
       onResetBrain: resetBrainView,
       visualGuide: Boolean(viewGraph),
       guideInputs: {
+        jointAim: Boolean(viewGraph && !wholeArmOption),
         directions: Boolean(doc.getElementById?.('ns-chat-open')),
         camera: Boolean(doc.getElementById?.('ns-camera-open')),
       },
@@ -8541,7 +8545,9 @@ export function start(params = {}) {
       // A1 wiring: lock refusals switch the toast to the drag-to-look notice; look options go to the reducer.
       // A free-mouse press on either unblocked compass is an arrow press. A mirror arrow behind the glass still
       // belongs to the brain: resolveArrowHit keeps that blocker regardless of visual transparency.
-      const bindOptions = { onLockError: () => dispatch({ type: 'lockError' }), onDetail: () => toggleInfoDetail(), onEmap: () => toggleEmap(), onBeforeSafetyRelease: enforceInputCapacity, arrowAt: (x, y) => shellIsPlaying(shellState) && !lockedNow() && usableArrowHitAt(x, y) !== null,
+      const bindOptions = { onLockError: () => dispatch({ type: 'lockError' }), onDetail: () => toggleInfoDetail(), onEmap: () => toggleEmap(), onBeforeSafetyRelease: enforceInputCapacity,
+        allowPointerCapture: () => shellIsPlaying(shellState) && !shellState.unlockedPlay,
+        arrowAt: (x, y) => shellIsPlaying(shellState) && !lockedNow() && usableArrowHitAt(x, y) !== null,
         // R558 (R31; lead decision for Messages 2 and 12): what a new press would drag, at the pointer (free mouse) or at
         // the crosshair (x, y null: captured). The same pick as the Space grasp (itemAt: what is seen of your own limbs, the
         // brain and the mirror body; an arrow under the point is an arrow press), and while Space holds an item (held, or
@@ -9372,6 +9378,7 @@ export function start(params = {}) {
       const holdMemo = {}; // (the solve's own notes from frame to frame: ns-grasp solveLimb memo)
       const holdDbg = { refused: 0 };
       let jointAim = null;
+      let aimPractice = null;
       let limbControlPicked = false;
       let holdLight = null, holdLightKeys = ''; // (22 November 2026, LIMBS2: ns-limb-pace holdLightStep's last result for the held limb, { acc, lit, limb }, and the keys it was made under)
       const chosenLimb = () => LIMB_KEYS.order[limbChoice - 1];
@@ -9428,6 +9435,11 @@ export function start(params = {}) {
         return Boolean(trackedJoints && NsGrasp.LIMB_CHAIN[limb]?.joints.some(id => Object.hasOwn(trackedJoints, id)));
       }
 
+      function relativeLimbEnd(limb, out) {
+        const points = limbEnds(limb, out);
+        return points ? points.frame.map((value, axis) => value - points.root[axis]) : null;
+      }
+
       function updateJointAim(axes) {
         const limb = chosenLimb();
         if (!playerCamera || !firstPersonNow() || axes.x || axes.z || holdBusy() || cameraControlsLimb(limb)) {
@@ -9469,6 +9481,7 @@ export function start(params = {}) {
             transformDirection(attachment.bodyToCamera, [x, -reach * Math.cos(target), -reach * Math.sin(target)]));
           jointAim.hand = handKeepOut(root.map((v, i) => v + offset[i]));
         }
+        return true;
       }
       /** The posed segments of the drawn body, made once for a pose (the hold asks for them several times a frame). */
       let segsMemo = { posed: null, head: null, segs: null };
@@ -12020,7 +12033,24 @@ export function start(params = {}) {
         // to this frame's head pose as the offset neck_bow; the eye never takes it (headAttachment)
         if (live) neckBowNow = neckBowStep(neckBowNow, headOffs ? headOffs.now.neck_flex : 0, clamp(Number.isFinite(cam.progress) ? cam.progress : 0, 0, 1), timing.dt);
         if (headOffs && neckBowNow !== 0) headOffs = { ...headOffs, now: { ...headOffs.now, neck_bow: neckBowNow } };
-        if (live) updateJointAim(controlsApi.axes(cs));
+        const aimInput = live && updateJointAim(controlsApi.axes(cs));
+        const practisingAim = live && jointAim && guideFeatures.jointAim && !guide.hidden && !guide.paused && NG.currentGoal(guide) === 'aimJoint';
+        const moveSeqBeforeAim = simState.activity?.moveSeq;
+        if (!practisingAim || (aimPractice && (aimPractice.limb !== jointAim.limb ||
+            aimPractice.moveSeq !== moveSeqBeforeAim || (!aimInput && aimPractice.lookMs !== cs.lookMs)))) {
+          aimPractice = null;
+        }
+        if (practisingAim && aimInput) {
+          // Use the pose before this up/down gesture. An earlier sideways look cannot complete the step.
+          if (!aimPractice || simState.t > aimPractice.until) {
+            const start = relativeLimbEnd(jointAim.limb);
+            aimPractice = start ? { limb: jointAim.limb, start, moveSeq: moveSeqBeforeAim } : null;
+          }
+          if (aimPractice) {
+            aimPractice.lookMs = cs.lookMs;
+            aimPractice.until = simState.t + AIM_PRACTICE_RESPONSE_S;
+          }
+        }
         const baseTiming = live && jointAim?.bodyEvent
           ? { ...timing, events: [...timing.events, jointAim.bodyEvent] } : timing;
         // R558: ONE attempt at this frame, from the camera choice to the simulation step. It commits nothing: the caller
@@ -13124,6 +13154,18 @@ export function start(params = {}) {
         if (emapOn || (emapView ? !emapView.built || emapView.amount > 0 : !EMAP_BUILD.onPress)) { if (!emapNote) emapFrame(now, out); }
         if (ambientEmap) ambientEmap.frame({ nowMs: now, enabled: ambientEnabled && !emapOn && !(emapView?.amount > 0), reduced: prefersReducedMotion() });
         frameTimer.mark('glow');
+        if (aimPractice && (simState.activity?.moveSeq !== aimPractice.moveSeq || simState.t > aimPractice.until)) aimPractice = null;
+        // The visible limb can keep moving for several frames after one mouse event.
+        if (aimPractice) {
+          const end = relativeLimbEnd(aimPractice.limb, out);
+          if (end) {
+            const m = Math.hypot(...end.map((value, axis) => value - aimPractice.start[axis]));
+            if (m >= NG.GUIDE_OPTIONS.jointAimMinM) {
+              guideAsyncEvents.push({ type: 'jointAim', m });
+              aimPractice = null;
+            }
+          }
+        }
         refreshGuideFeatures();
         // R558 (hunt 3 check): the sim re-applies the legacy glassHit override to its cached RAW gaze every frame, so in
         // legacy mode the hit is kept while the raw gaze is empty (the glass it made); clearing it there lost the glass
@@ -13421,12 +13463,12 @@ export function start(params = {}) {
               ? sim.guideMotorTarget(camPose, out.brainTransform, camPose.viewFovYDeg || holdFov(), aspect, out.gaze?.regionId) : null;
             const motor = targeted ? guidePoint(targeted.world, targeted.area.label || targeted.area.id,
               mods.colors?.areaColorCss?.(targeted.area.id)) : null;
-            const limbKeysStep = step === 'chooseLimb' || step === 'moveHand' || step === 'dragLimb';
+            const limbKeysStep = step === 'chooseLimb' || step === 'aimJoint' || step === 'moveHand' || step === 'dragLimb';
             const limb = limbKeysStep ? guidePoint(limbEnds(selectedLimb, out)?.frame, NT.GRASP_INFO.chosen[selectedLimb]) : null;
             const brain = step === 'dragBrain' || step === 'orbit' ? guidePoint(out.brainTransform?.pivotWorld, 'Brain') : null;
             guideCues.update({ guide: guideNow, tutorial: guide.tutorial, motor, limb, brain, selectedLimb,
               showJointAim: Boolean(playerCamera && firstPersonNow() && limbHold && !holdBusy() &&
-                (limbControlPicked || step === 'chooseLimb' || step === 'moveHand')),
+                (limbControlPicked || step === 'chooseLimb' || step === 'aimJoint' || step === 'moveHand')),
               jointAimY: (1 - LIMB_AIM_Y_NDC) / 2 });
           }
         }

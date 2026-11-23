@@ -1085,7 +1085,7 @@ function uiCommandOf(el, root) {
  *     into the orbit step / hold); a press anywhere else behaves as before.
  * options: { onLockChange(locked: boolean), onLockError(), onDetail({ timeMs }), onEmap({ timeMs }), onView({ timeMs }), arrowAt(x, y),
  *   dragTargetAt(x, y) returning a target name or a { target, ... } pick, onBeforeSafetyRelease(), sensitivity,
- *   invertY, dragToLook = true, uiRoot }
+ *   invertY, dragToLook = true, uiRoot, allowPointerCapture }
  *   onBeforeSafetyRelease is synchronous and runs before the safety reducer fetches its state; its owner may cancel
  *   an overfull queue. The final safety release still runs if the callback throws. cancelInput does not invoke it.
  *   sensitivity / invertY, when given, are applied to the state with controls.setLookOptions at bind time.
@@ -1107,7 +1107,7 @@ export function bindDom(target, controls, getState, setState, options = {}) {
     if (!controls || typeof controls[name] !== 'function') fail('controls_dom', `controls.${name} must be a function`);
   }
   if (options === null || typeof options !== 'object' || Array.isArray(options)) fail('controls_dom', 'options must be an object');
-  const { onLockChange = null, onLockError = null, onDetail = null, onEmap = null, onView = null, onBeforeSafetyRelease = null, arrowAt = null, dragTargetAt = null, sensitivity, invertY, dragToLook = true, uiRoot = null } = options;
+  const { onLockChange = null, onLockError = null, onDetail = null, onEmap = null, onView = null, onBeforeSafetyRelease = null, arrowAt = null, dragTargetAt = null, sensitivity, invertY, dragToLook = true, uiRoot = null, allowPointerCapture = null } = options;
   if (dragTargetAt !== null && typeof dragTargetAt !== 'function') fail('controls_dom', 'dragTargetAt must be a function that returns a drag target or null');
   const canDrag = dragTargetAt !== null && typeof controls.dragStart === 'function' && typeof controls.dragMove === 'function' && typeof controls.dragEnd === 'function';
   /** R558: the item a new press would drag: asked of the game with the pointer's place, or (null, null) for the
@@ -1132,6 +1132,7 @@ export function bindDom(target, controls, getState, setState, options = {}) {
     if ((s && s.reach === true) !== e.shiftKey) apply(st => controls.setReach(st, e.shiftKey));
   };
   if (onLockChange !== null && typeof onLockChange !== 'function') fail('controls_dom', 'onLockChange must be a function');
+  if (allowPointerCapture !== null && typeof allowPointerCapture !== 'function') fail('controls_dom', 'allowPointerCapture must be a function');
   if (onView !== null && typeof onView !== 'function') fail('controls_dom', 'onView must be a function');
   if (onBeforeSafetyRelease !== null && typeof onBeforeSafetyRelease !== 'function') fail('controls_dom', 'onBeforeSafetyRelease must be a function');
   if (arrowAt !== null && typeof arrowAt !== 'function') fail('controls_dom', 'arrowAt must be a function (xCss, yCss) => truthy on an arrow');
@@ -1241,8 +1242,10 @@ export function bindDom(target, controls, getState, setState, options = {}) {
     call(onLockError);
   };
   let lockAfterArrow = false; // 19 November 2026: a free-pointer arrow press asks for the capture at its release
+  const canRequestLock = () => typeof target.requestPointerLock === 'function' &&
+    (allowPointerCapture === null || allowPointerCapture());
   const requestLock = () => {
-    if (typeof target.requestPointerLock !== 'function') return false;
+    if (!canRequestLock()) return false;
     lockPending = true;
     lockRequestedAt = perf ? perf.now() : NaN;
     try {
@@ -1447,7 +1450,7 @@ export function bindDom(target, controls, getState, setState, options = {}) {
     if (hasButtons) apply(s => controls.buttonDown(s, at, { via: 'pointer', x: local ? local.x : null, y: local ? local.y : null, behind }));
     dragging = dragToLook;
     lastClient = Number.isFinite(e.clientX) && Number.isFinite(e.clientY) ? { x: e.clientX, y: e.clientY } : null;
-    const canLock = typeof target.requestPointerLock === 'function';
+    const canLock = canRequestLock();
     // A request that got neither pointerlockchange nor pointerlockerror counts as refused after LOCK_PENDING_MS.
     if (lockPending && Number.isFinite(lockRequestedAt) && Number.isFinite(at) && at - lockRequestedAt > LOCK_PENDING_MS) lockRefused();
     if (canLock && !lockFallback) {
