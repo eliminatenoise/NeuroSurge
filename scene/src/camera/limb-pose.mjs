@@ -7,6 +7,24 @@ const chains = {
   leftLeg: [24, 23, 25, 27]
 };
 
+export function trackedLimbs(pose) {
+  if (!pose) return [];
+  const joints = pose.joints;
+  return [
+    pose.leftArm && 'leftArm',
+    Number.isFinite(joints?.r_elbow_flex) && 'rightArm',
+    Number.isFinite(joints?.knee_ext_L) && 'leftLeg',
+    Number.isFinite(joints?.knee_ext_R) && 'rightLeg'
+  ].filter(Boolean);
+}
+
+// The preview draws only the three points used for an accepted limb.
+export function observedLimbPaths(points, pose) {
+  return Object.fromEntries(trackedLimbs(pose).map(limb => [
+    limb, chains[limb].slice(1).map(index => [points[index].x, points[index].y])
+  ]));
+}
+
 function between(a, b) { return [b[0] - a[0], b[1] - a[1]]; }
 function dot(a, b) { return a[0] * b[0] + a[1] * b[1]; }
 function visible(p) {

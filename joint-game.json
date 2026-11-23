@@ -876,6 +876,7 @@
     "scene/src/camera/limb-take.mjs",
     "scene/src/camera/named-takes.mjs",
     "scene/src/camera/pose-worker.js",
+    "scene/src/camera/preview.mjs",
     "scene/src/camera/reach-study/match.mjs",
     "scene/src/camera/reach-study/panel.mjs",
     "scene/src/camera/reach-study/recordings.json",

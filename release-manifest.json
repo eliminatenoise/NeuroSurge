@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-23-joint-practice",
-  "source": "Full and Lite share motion commands, opt-in video tracking, a shoulder and hip tutorial and an optional local model. Escape can resume play with a free pointer.",
+  "version": "experimental-2026-11-23-camera-preview",
+  "source": "Full and Lite share motion commands, opt-in video tracking, a shoulder and hip tutorial and an optional local model. Escape can resume play with a free pointer. Green lines in the camera recorder show which limbs it is tracking.",
   "experimental": true,
   "incomplete_acceptance": true,
   "root_checksum_includes_this_manifest": true,
@@ -54,13 +54,13 @@
     },
     {
       "path": "PLAYER-GUIDE-TECHNICAL.md",
-      "bytes": 3948,
-      "sha256": "443c3b0081bf4044babbad2998a205bdf64040df66293f57f1db40e265ad4b73"
+      "bytes": 4264,
+      "sha256": "82a5428f51375a779deca769665fea361d1ddb9873107ffb3eb93a48b630de66"
     },
     {
       "path": "PLAYER-GUIDE.md",
-      "bytes": 6628,
-      "sha256": "998242473a4e0e9e711432c872c3b2de91644602a1c52d704f84199b8a3b9a7e"
+      "bytes": 6859,
+      "sha256": "22b1cd317e0aafa54f3fd75c44532e332f80a613b42d437aa1be08c8b7cbf137"
     },
     {
       "path": "PREVIEW-NOTES.html",
@@ -164,8 +164,8 @@
     },
     {
       "path": "assets/player-guides/CAMERA-GUIDE.txt",
-      "bytes": 15710,
-      "sha256": "87733eb91c6cd22b9bf533189febfe2b6ca2274c5f1d2c002072d6a306d13d8d"
+      "bytes": 15969,
+      "sha256": "cece434024186cfc231ebc5c3931d1df57178d07dc2950e8122a2c4f4d246f0d"
     },
     {
       "path": "assets/player-guides/CREDITS-AND-LICENCES.txt",
@@ -224,8 +224,8 @@
     },
     {
       "path": "joint-game.json",
-      "bytes": 52261,
-      "sha256": "6ebcca630833e128ea11e3c11b8569be9bfe4db18949973437508c58455da672"
+      "bytes": 52297,
+      "sha256": "b55c9527921c18e8e61101dc0e20cb02f102365abd646c3dc311d2300b97cabd"
     },
     {
       "path": "launch.css",
@@ -4649,13 +4649,13 @@
     },
     {
       "path": "scene/src/camera.mjs",
-      "bytes": 16218,
-      "sha256": "e1b01f24b5d1b7f10869045d967a40ace66e339c4816885ef8909685aeabc30f"
+      "bytes": 16228,
+      "sha256": "373b7c1c873a24c22f566df24142ca33de9242df470d91af4625b95708fb8a57"
     },
     {
       "path": "scene/src/camera/README.md",
-      "bytes": 15996,
-      "sha256": "ca09c9d866c69531f0f4d1e08bec0c5508066e792ff1fe0a96ab3ab72c760d18"
+      "bytes": 16105,
+      "sha256": "67b19193c0cd70a13d2257b78990e2d12504cade7b348dcf39d459c0c5597359"
     },
     {
       "path": "scene/src/camera/THIRD-PARTY-SHA256SUMS",
@@ -4669,8 +4669,8 @@
     },
     {
       "path": "scene/src/camera/limb-pose.mjs",
-      "bytes": 6703,
-      "sha256": "b923b39b7b4781c00426bdc203da5662142762a809ecbb3372158e0dfe8b4ec8"
+      "bytes": 7297,
+      "sha256": "c47076db9efc55fdf3b8796bcde541ef811631e29bfa0727b7a3aae149cf0581"
     },
     {
       "path": "scene/src/camera/limb-take.mjs",
@@ -4684,8 +4684,13 @@
     },
     {
       "path": "scene/src/camera/pose-worker.js",
-      "bytes": 3192,
-      "sha256": "cf22459c22fcbfba1cdb7779be508febe8ce95cdf60439705d881639bf9365f5"
+      "bytes": 3332,
+      "sha256": "ef9c8a5387ff7c742e69bd165fdfe83472a3c616c5707d53e5129419621b11c0"
+    },
+    {
+      "path": "scene/src/camera/preview.mjs",
+      "bytes": 2243,
+      "sha256": "531d693e2b6ea1893e3c3ba9f01675284cc6abed7633f37ca460fd5338541cfb"
     },
     {
       "path": "scene/src/camera/reach-study/SOURCES.md",
@@ -4754,8 +4759,8 @@
     },
     {
       "path": "scene/src/camera/tests/rig.test.mjs",
-      "bytes": 7275,
-      "sha256": "b90f5f02e0e46c88a101d488c556c2d697192a325d036106abb7db3dc904e027"
+      "bytes": 7702,
+      "sha256": "a66c9f474df6f73570d81f4141ada9480d270e1732f6fb7e7fa6d151caa6103f"
     },
     {
       "path": "scene/src/camera/tests/selected-limb-browser.mjs",

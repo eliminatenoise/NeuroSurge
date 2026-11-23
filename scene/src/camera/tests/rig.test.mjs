@@ -68,7 +68,7 @@ test('mirrored or reversed landmark ordering, invalid input and foreshortened se
   assert.ok(measure(p));
 });
 
-import {poseForSelection} from '../limb-pose.mjs';
+import {observedLimbPaths, poseForSelection, trackedLimbs} from '../limb-pose.mjs';
 
 test('one packet drives both independent arms and never fills a missing side', () => {
   const p = [];
@@ -143,8 +143,15 @@ test('all four limbs share one frame, including every subset of visible limbs', 
       Object.assign(joints,limb.joints);
     }
     if (Object.keys(joints).length) expected.joints = joints;
-    assert.deepEqual(poseForSelection(points,640,480,'armsAndKnees',side => seen.includes(side)),
-      seen.length ? expected : null);
+    const pose = poseForSelection(points,640,480,'armsAndKnees',side => seen.includes(side));
+    assert.deepEqual(pose, seen.length ? expected : null);
+    assert.deepEqual(trackedLimbs(pose), seen);
+    const actual = observedLimbPaths(points, pose);
+    assert.deepEqual(Object.keys(actual), seen);
+    for (const side of seen) {
+      const ids = {leftArm:[11,13,15], rightArm:[12,14,16], leftLeg:[23,25,27], rightLeg:[24,26,28]}[side];
+      assert.deepEqual(actual[side], ids.map(id => [points[id].x, points[id].y]));
+    }
   }
   points[26] = points[25];
   points[28] = points[27];

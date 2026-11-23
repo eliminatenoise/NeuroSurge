@@ -1,12 +1,12 @@
 // Classic worker because the official WASM loader uses importScripts.
 let detector;
-let poseForSelection, observedWrists, observedArmGeometry, limbVisible;
+let poseForSelection, observedWrists, observedArmGeometry, observedLimbPaths, limbVisible;
 let runningMode = 'VIDEO';
 self.onmessage = async ({ data }) => {
   try {
     if (data.type === 'init') {
       const { FilesetResolver, PoseLandmarker } = await import('./vendor/vision_bundle.mjs');
-      ({ poseForSelection, observedWrists, observedArmGeometry } = await import('./limb-pose.mjs'));
+      ({ poseForSelection, observedWrists, observedArmGeometry, observedLimbPaths } = await import('./limb-pose.mjs'));
       const {createLimbEvidence} = await import('./limb-evidence.mjs');
       limbVisible = createLimbEvidence();
       const asset = path => new URL(path, self.location.href).href;
@@ -33,6 +33,7 @@ self.onmessage = async ({ data }) => {
         const result = poseForSelection(points, frame.width, frame.height, limb,
           side => limbVisible(frame, points, side, checkBothFeet && (side === 'leftLeg' || side === 'rightLeg')));
         const message = {type: 'pose', result, selection, timestamp};
+        if (data.limbPaths === true && result) message.limbPaths = observedLimbPaths(points, result);
         if (data.jointPoints === true) {
           const xy = Array(33).fill(null);
           for (let i = 0; i < xy.length; i++) {

@@ -16,6 +16,7 @@
 
 - **F** opens the Command box. Enter a supported movement or a sequence of up to four movements joined by `then`. Choose **Move** or press **Enter**. Where supported, **Use voice** fills the field through on-device dictation. A new command or a direct movement input ends the queued sequence.
 - **C** opens the recorder in the standalone game and the **Movement mirror** through the local model launcher. **Start camera** requests video only. The local tracker estimates visible arm and knee positions in the image and drives the selected joints while the renderer continues to use the player's camera input. Use **Stop** in the Movement mirror or **Stop camera** in the recorder to release video. **Close** or **Escape** closes the Movement mirror.
+- Green lines on the mirrored recorder preview join the estimated shoulder, elbow and wrist for each tracked arm or the hip, knee and ankle for each tracked leg. The labels refer to the player's own sides. A knee stays unmarked while waiting for a clear starting bend. A line clears when the tracker loses its limb.
 - A take retains time-stamped pose samples in the current tab. Open **Record a limb take** when playing through the local model launcher. Select **Record take** and **Finish take** in the recorder. Use **F** and **replay my take** to replay the saved poses with video off.
 - The local model route accepts point histories and game requests. It returns a forecast separately from the measured pose of the virtual rig. An image-plane estimate does not establish physical joint angle or nerve activity.
 

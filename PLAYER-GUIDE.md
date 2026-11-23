@@ -28,7 +28,7 @@ Press and drag on a limb to move the joint you pressed on. Press **Space** to gr
 ## Follow a movement or save a take
 
 1. Press **C** to open the recorder when you run the game on its own. In the version opened through the local model launcher, **C** opens the **Movement mirror** instead. Select **Start camera**, then allow video if the browser asks. Video stays in the browser. Only point estimates reach the local forecast model.
-2. Keep the joints you want to move in view. The game can follow either arm, either knee, pairs of limbs, or both arms and knees. For a knee, show a clear bend with the knee and ankle visible. If a limb leaves the picture, the tracker waits for a clear view.
+2. Keep the joints you want to move in view. The game can follow either arm, either knee, pairs of limbs, or both arms and knees. Green lines show which limbs the recorder is tracking. An arm line joins the estimated shoulder, elbow and wrist. A leg line joins the estimated hip, knee and ankle. The preview is mirrored. Select your own left or right. If a line disappears, bring that limb back into view. If a knee has no line yet, show a clear bend with your hip, knee and ankle visible.
 3. Choose **Stop** in the Movement mirror or **Stop camera** in the recorder when you finish. Use **Close** or **Escape** to return from the Movement mirror. Your own mouse still controls the view of the game while the body follows the camera.
 4. To replay a movement, use the camera recorder. In the version opened through the local model launcher, choose **Record a limb take** in the game toolbar. Start video, then choose **Record take** and **Finish take**. In the Command box, enter **replay my take** to move the simulated body through the saved poses. Takes stay in the current tab.
 

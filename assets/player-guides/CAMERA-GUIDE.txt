@@ -1,6 +1,6 @@
 # Move your arms and knees with one camera
 
-Press **C** or click **Use camera** in the game. Allow video, then choose which limbs to move under **Follow**. The preview shows a mirror image. Select the side of your own body. If your virtual camera already flips its outgoing video, disable that setting so the tracker receives the original view. If the mouse is captured, the usual limb keys also switch the camera. **1** selects your left arm, **2** your left knee, **3** your right knee and **4** your right arm.
+Press **C** or click **Follow movement** in the game. Select **Start camera**, allow video when asked, then choose which limbs to move under **Follow**. If C opens the Movement mirror in the local model version, choose **Record a limb take** to open this recorder. The preview shows a mirror image. Select the side of your own body. Green lines show which limbs the recorder is tracking. If one disappears, bring that limb back into view. If your virtual camera already flips its outgoing video, disable that setting so the tracker receives the original view. If the mouse is captured, the usual limb keys also switch the camera. **1** selects your left arm, **2** your left knee, **3** your right knee and **4** your right arm.
 
 | Choose | What to show the lens | What moves on the avatar |
 | --- | --- | --- |

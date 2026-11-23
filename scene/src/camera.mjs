@@ -1,5 +1,7 @@
 // Opt-in control. No camera, worker, or model asset is opened during construction.
 import {createLimbTake} from './camera/limb-take.mjs';
+import {createCameraPreview} from './camera/preview.mjs';
+import {trackedLimbs} from './camera/limb-pose.mjs';
 const choices = {
   rightArm: {name: 'Right arm', frame: 'Face the lens. Show both shoulders, your right elbow and wrist.', motion: 'Right shoulder and elbow'},
   leftArm: {name: 'Left arm', frame: 'Face the lens. Show both shoulders, your left elbow and wrist.', motion: 'Left arm reach and elbow'},
@@ -53,21 +55,17 @@ function calibratedPose(stored, selection, result, now) {
 }
 
 export function createCameraCapture({ onPose, onArmPose, returnFocus = () => {}, host = document.body }) {
-  let current = null, panel, video, status, startButton, button, select, disposed = false;
+  let current = null, panel, video, preview, status, startButton, button, select, disposed = false;
   let limb = 'rightArm', selection = 0;
   let take;
   const emit = onPose || (result => onArmPose({joints: result?.joints ?? null}));
-  const clearPose = () => emit(null);
+  const clearPose = () => { preview?.clear(); emit(null); };
   const framing = () => choices[limb].frame + (kneeJoints[limb]?.length === 1 &&
     !current?.knees[kneeJoints[limb][0]]?.ready ? ' First show a clear bend.' : '');
   function trackingMessage(result) {
     if (!result) return framing();
     if (limb === 'armsAndKnees') {
-      const visible = [];
-      if (result.leftArm) visible.push('left arm');
-      if (Number.isFinite(result.joints?.r_shoulder_abd)) visible.push('right arm');
-      if (Number.isFinite(result.joints?.knee_ext_L)) visible.push('left knee');
-      if (Number.isFinite(result.joints?.knee_ext_R)) visible.push('right knee');
+      const visible = trackedLimbs(result).map(side => choices[side].name.toLowerCase());
       if (visible.length < 4) return 'Following ' + visible.join(', ') + '. ' + framing();
     }
     if (limb === 'bothArms' && !result.leftArm) return 'Right arm tracking. Bring your left elbow and wrist into view.';
@@ -109,7 +107,7 @@ export function createCameraCapture({ onPose, onArmPose, returnFocus = () => {},
       video.muted = true;
       video.playsInline = true;
       video.setAttribute('aria-label', 'Mirrored camera preview');
-      Object.assign(video.style, {width: '100%', maxHeight: '18vh', objectFit: 'contain', transform: 'scaleX(-1)'});
+      preview = createCameraPreview(video);
       status = document.createElement('div');
       status.setAttribute('role', 'status');
       startButton = document.createElement('button');
@@ -132,7 +130,7 @@ export function createCameraCapture({ onPose, onArmPose, returnFocus = () => {},
       select.value = limb;
       select.addEventListener('change', () => { choose(select.value); returnFocus(); });
       label.append(select);
-      panel.append(label, video, status, startButton, button);
+      panel.append(label, preview.element, status, startButton, button);
       take = createLimbTake({
         panel, emit, returnFocus,
         onFinish: () => stop(),
@@ -141,7 +139,7 @@ export function createCameraCapture({ onPose, onArmPose, returnFocus = () => {},
       host.appendChild(panel);
     }
     panel.hidden = false;
-    video.hidden = !video.srcObject;
+    preview.element.hidden = !video.srcObject;
     if (status.textContent !== message) status.textContent = message;
     startButton.hidden = active;
     startButton.disabled = active;
@@ -199,7 +197,9 @@ export function createCameraCapture({ onPose, onArmPose, returnFocus = () => {},
       try {
         clearTimeout(session.workerDeadline);
         session.frameTime = frameTime;
-        const message = {type: 'frame', frame, timestamp: frameTime, limb: frameLimb, selection: frameSelection};
+        session.frameSize = [frame.width, frame.height];
+        const message = {type: 'frame', frame, timestamp: frameTime, limb: frameLimb,
+          selection: frameSelection, limbPaths: true};
         if (captureWrists) message.captureWrists = true;
         session.worker.postMessage(message, [frame]);
         session.workerDeadline = setTimeout(() => failed(session, 'Camera off. The local pose tracker stopped responding.'), FRAME_TIMEOUT_MS);
@@ -270,6 +270,7 @@ export function createCameraCapture({ onPose, onArmPose, returnFocus = () => {},
             let result = track.muted || age >= MAX_FRAME_AGE_MS ? null : data.result;
             result = calibratedPose(session.knees, limb, result, now);
             emit(result, limb);
+            preview.draw(data.limbPaths, result, ...session.frameSize);
             if (take.recording && data.wrists) take.observe(result, capturedAt, false, data.wrists, data.armGeometry);
             else take.observe(result, capturedAt);
             show(trackingMessage(result), true);
