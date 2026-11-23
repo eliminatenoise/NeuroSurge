@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-23-camera-preview",
-  "source": "Full and Lite share motion commands, opt-in video tracking, a shoulder and hip tutorial and an optional local model. Escape can resume play with a free pointer. Green lines in the camera recorder show which limbs it is tracking.",
+  "version": "experimental-2026-11-23-camera-guidance",
+  "source": "Full and Lite share motion commands, opt-in video tracking, a shoulder and hip tutorial and an optional local model. Escape can resume play with a free pointer. The recorder lets players choose limbs before starting video and shows which limbs are following, need a knee bend, or need a clearer view.",
   "experimental": true,
   "incomplete_acceptance": true,
   "root_checksum_includes_this_manifest": true,
@@ -54,18 +54,18 @@
     },
     {
       "path": "PLAYER-GUIDE-TECHNICAL.md",
-      "bytes": 4264,
-      "sha256": "82a5428f51375a779deca769665fea361d1ddb9873107ffb3eb93a48b630de66"
+      "bytes": 4539,
+      "sha256": "eccaf383802a0a773c8e8cc579e75d04cf52ce5d0a0837b73bd3d54f3d7a98d3"
     },
     {
       "path": "PLAYER-GUIDE.md",
-      "bytes": 6859,
-      "sha256": "22b1cd317e0aafa54f3fd75c44532e332f80a613b42d437aa1be08c8b7cbf137"
+      "bytes": 7087,
+      "sha256": "66fbe06bd895c0351e5e4a376a183e08b8742a35ae9c4166c5aa20b845e451a4"
     },
     {
       "path": "PREVIEW-NOTES.html",
-      "bytes": 5210,
-      "sha256": "ba757d99341951897da15169fdb8cf2b97a0d14ea5ce9c2c18f6b24b1ebcd3c7"
+      "bytes": 5385,
+      "sha256": "f09c48d890b5bfb2bdcb7c50f0c6bab8a3e52f7f9255fcc28eee75cffd3dcb72"
     },
     {
       "path": "PROJECT-CONTEXT.json",
@@ -164,8 +164,8 @@
     },
     {
       "path": "assets/player-guides/CAMERA-GUIDE.txt",
-      "bytes": 15969,
-      "sha256": "cece434024186cfc231ebc5c3931d1df57178d07dc2950e8122a2c4f4d246f0d"
+      "bytes": 16275,
+      "sha256": "e365348c0e7dd5873f2f189ee089a8f251306c6de6dc71f032aa4cba48093bbc"
     },
     {
       "path": "assets/player-guides/CREDITS-AND-LICENCES.txt",
@@ -174,8 +174,8 @@
     },
     {
       "path": "assets/player-guides/PLAYER-GUIDE.txt",
-      "bytes": 37493,
-      "sha256": "831f2c8aa9b9734251b209c2e205ed39c148caed3d73d7f724d7bed4f49dc5d1"
+      "bytes": 37340,
+      "sha256": "de3131e6daadd223fec7be28a57d2eedf611c6fa042b81ed386f91d067610518"
     },
     {
       "path": "assets/spatial-motion/02_06.json",
@@ -4649,13 +4649,13 @@
     },
     {
       "path": "scene/src/camera.mjs",
-      "bytes": 16228,
-      "sha256": "373b7c1c873a24c22f566df24142ca33de9242df470d91af4625b95708fb8a57"
+      "bytes": 18840,
+      "sha256": "31ac234504b81921bbda93260f4ade99c66d65b34e1b516f9500e291554abed7"
     },
     {
       "path": "scene/src/camera/README.md",
-      "bytes": 16105,
-      "sha256": "67b19193c0cd70a13d2257b78990e2d12504cade7b348dcf39d459c0c5597359"
+      "bytes": 16347,
+      "sha256": "2f8182a785ee301d0cd7a6e604e97e2b9b04de8ccdbb34d8f6391e5dedb02447"
     },
     {
       "path": "scene/src/camera/THIRD-PARTY-SHA256SUMS",

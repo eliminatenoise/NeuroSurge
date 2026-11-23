@@ -3,13 +3,13 @@ import {createLimbTake} from './camera/limb-take.mjs';
 import {createCameraPreview} from './camera/preview.mjs';
 import {trackedLimbs} from './camera/limb-pose.mjs';
 const choices = {
-  rightArm: {name: 'Right arm', frame: 'Face the lens. Show both shoulders, your right elbow and wrist.', motion: 'Right shoulder and elbow'},
-  leftArm: {name: 'Left arm', frame: 'Face the lens. Show both shoulders, your left elbow and wrist.', motion: 'Left arm reach and elbow'},
-  bothArms: {name: 'Both arms', frame: 'Face the lens with both shoulders, elbows and wrists in view.', motion: 'Both arms'},
-  leftLeg: {name: 'Left knee', frame: 'Turn partway sideways. Show shoulders, hips, your left knee and ankle. Bend in the picture plane.', motion: 'Left knee'},
-  rightLeg: {name: 'Right knee', frame: 'Turn partway sideways. Show shoulders, hips, your right knee and ankle. Bend in the picture plane.', motion: 'Right knee'},
-  armsAndKnees: {name: 'Both arms and knees', frame: 'Keep shoulders, elbows, wrists, hips and feet in view. Bend each knee where the lens can see it.', motion: 'Both arms and knees'},
-  bothKnees: {name: 'Both knees', frame: 'Turn partway sideways. Keep your shoulders, hips, knees and feet in view. Show a clear bend on each side.', motion: 'Both knees'}
+  rightArm: {name: 'Right arm', frame: 'Face the lens. Show both shoulders, your right elbow and wrist.', motion: 'Right shoulder and elbow', parts: ['rightArm']},
+  leftArm: {name: 'Left arm', frame: 'Face the lens. Show both shoulders, your left elbow and wrist.', motion: 'Left arm reach and elbow', parts: ['leftArm']},
+  bothArms: {name: 'Both arms', frame: 'Face the lens with both shoulders, elbows and wrists in view.', motion: 'Both arms', parts: ['leftArm', 'rightArm']},
+  leftLeg: {name: 'Left knee', frame: 'Turn partway sideways. Show shoulders, hips, your left knee and ankle.', motion: 'Left knee', parts: ['leftLeg']},
+  rightLeg: {name: 'Right knee', frame: 'Turn partway sideways. Show shoulders, hips, your right knee and ankle.', motion: 'Right knee', parts: ['rightLeg']},
+  armsAndKnees: {name: 'Both arms and knees', frame: 'Keep shoulders, elbows, wrists, hips and feet in view. Bend each knee where the lens can see it.', motion: 'Both arms and knees', parts: ['leftArm', 'rightArm', 'leftLeg', 'rightLeg']},
+  bothKnees: {name: 'Both knees', frame: 'Turn partway sideways. Keep your shoulders, hips, knees and feet in view. Show a clear bend on each side.', motion: 'Both knees', parts: ['leftLeg', 'rightLeg']}
 };
 
 // Preserve the player's view calibration across a momentary low-confidence frame.
@@ -54,14 +54,57 @@ function calibratedPose(stored, selection, result, now) {
   return pose.leftArm || pose.joints ? pose : null;
 }
 
+function createTrackingFeedback(document) {
+  const list = document.createElement('ul');
+  list.setAttribute('role', 'list');
+  list.setAttribute('aria-label', 'Tracking by limb');
+  list.style.cssText = 'margin:6px 0;padding:0;list-style:none';
+  const items = new Map();
+  for (const limb of choices.armsAndKnees.parts) {
+    const row = document.createElement('li');
+    const name = document.createElement('span');
+    const state = document.createElement('strong');
+    name.textContent = choices[limb].name;
+    state.style.textAlign = 'right';
+    row.style.cssText = 'display:none;justify-content:space-between;gap:5px;padding:2px 0;border-bottom:1px solid #40586a';
+    row.append(name, state);
+    list.appendChild(row);
+    items.set(limb, {row, state});
+  }
+  list.hidden = true;
+  return {
+    element: list,
+    clear() { list.hidden = true; },
+    show(parts, observed, accepted) {
+      const followed = trackedLimbs(accepted);
+      const seen = trackedLimbs(observed);
+      for (const [limb, {row, state}] of items) {
+        const selected = parts.includes(limb);
+        const display = selected ? 'flex' : 'none';
+        if (row.style.display !== display) row.style.display = display;
+        if (!selected) continue;
+        const following = followed.includes(limb);
+        const needBend = !following && seen.includes(limb) && kneeJoints[limb];
+        const label = following ? 'Following' : needBend ? 'Show a bend' : 'Bring into view';
+        if (state.textContent !== label) {
+          state.textContent = label;
+          state.style.color = following ? '#a5f3db' : needBend ? '#ffe0a1' : '#d9e6ef';
+        }
+      }
+      list.hidden = false;
+    }
+  };
+}
+
 export function createCameraCapture({ onPose, onArmPose, returnFocus = () => {}, host = document.body }) {
-  let current = null, panel, video, preview, status, startButton, button, select, disposed = false;
+  let current = null, panel, video, preview, feedback, status, startButton, button, select, disposed = false;
   let limb = 'rightArm', selection = 0;
   let take;
   const emit = onPose || (result => onArmPose({joints: result?.joints ?? null}));
-  const clearPose = () => { preview?.clear(); emit(null); };
+  const clearPose = () => { preview?.clear(); feedback?.clear(); emit(null); };
   const framing = () => choices[limb].frame + (kneeJoints[limb]?.length === 1 &&
     !current?.knees[kneeJoints[limb][0]]?.ready ? ' First show a clear bend.' : '');
+  const beforeStart = () => framing() + ' Select Start camera when ready. Video stays on this device.';
   function trackingMessage(result) {
     if (!result) return framing();
     if (limb === 'armsAndKnees') {
@@ -79,15 +122,18 @@ export function createCameraCapture({ onPose, onArmPose, returnFocus = () => {},
     session.knees = {};
     clearPose();
   }
-  function choose(value) {
-    if (Object.hasOwn(choices, value) && value !== limb) take?.interrupt('Take cancelled on limb change.');
-    if (!Object.hasOwn(choices, value) || value === limb || !current) return;
+  function choose(value, fromChooser = false) {
+    if (!Object.hasOwn(choices, value) || value === limb) return;
+    take?.interrupt('Take cancelled on limb change.');
+    if (!current && !fromChooser) return;
     limb = value;
     selection++;
     select.value = value;
-    clearTimeout(current.watchdog);
-    resetTracking(current);
-    show(framing(), true);
+    if (current) {
+      clearTimeout(current.watchdog);
+      resetTracking(current);
+      show(framing(), true);
+    } else show(beforeStart(), false);
   }
 
   function show(message, active) {
@@ -108,6 +154,7 @@ export function createCameraCapture({ onPose, onArmPose, returnFocus = () => {},
       video.playsInline = true;
       video.setAttribute('aria-label', 'Mirrored camera preview');
       preview = createCameraPreview(video);
+      feedback = createTrackingFeedback(document);
       status = document.createElement('div');
       status.setAttribute('role', 'status');
       startButton = document.createElement('button');
@@ -128,9 +175,17 @@ export function createCameraCapture({ onPose, onArmPose, returnFocus = () => {},
       select = document.createElement('select');
       for (const [value, choice] of Object.entries(choices)) select.add(new Option(choice.name, value));
       select.value = limb;
-      select.addEventListener('change', () => { choose(select.value); returnFocus(); });
+      let pointerChoice = false;
+      select.addEventListener('pointerdown', () => { pointerChoice = true; });
+      select.addEventListener('keydown', () => { pointerChoice = false; });
+      select.addEventListener('blur', () => { pointerChoice = false; });
+      select.addEventListener('change', () => {
+        const sendFocusBack = current && (pointerChoice || document.activeElement !== select);
+        choose(select.value, true);
+        if (sendFocusBack) returnFocus();
+      });
       label.append(select);
-      panel.append(label, preview.element, status, startButton, button);
+      panel.append(label, preview.element, status, feedback.element, startButton, button);
       take = createLimbTake({
         panel, emit, returnFocus,
         onFinish: () => stop(),
@@ -144,7 +199,6 @@ export function createCameraCapture({ onPose, onArmPose, returnFocus = () => {},
     startButton.hidden = active;
     startButton.disabled = active;
     button.textContent = active ? 'Stop camera' : 'Dismiss';
-    select.disabled = !active;
     take.setCamera(active, limb, choices[limb].name);
   }
 
@@ -267,13 +321,16 @@ export function createCameraCapture({ onPose, onArmPose, returnFocus = () => {},
           if (data.selection === selection) {
             const now = performance.now();
             const age = now - capturedAt;
-            let result = track.muted || age >= MAX_FRAME_AGE_MS ? null : data.result;
-            result = calibratedPose(session.knees, limb, result, now);
+            const fresh = !track.muted && age < MAX_FRAME_AGE_MS;
+            const observed = fresh ? data.result : null;
+            const result = calibratedPose(session.knees, limb, observed, now);
             emit(result, limb);
             preview.draw(data.limbPaths, result, ...session.frameSize);
+            if (fresh) feedback.show(choices[limb].parts, observed, result);
+            else feedback.clear();
             if (take.recording && data.wrists) take.observe(result, capturedAt, false, data.wrists, data.armGeometry);
             else take.observe(result, capturedAt);
-            show(trackingMessage(result), true);
+            show(fresh ? trackingMessage(result) : 'Camera on. Waiting for video.', true);
             if (result) {
               clearTimeout(session.watchdog);
               session.watchdog = setTimeout(() => {
@@ -308,8 +365,8 @@ export function createCameraCapture({ onPose, onArmPose, returnFocus = () => {},
     open() {
       if (disposed) return;
       if (current) return;
-      show('Start the camera to follow your movement. Video stays on this device.', false);
-      startButton.focus({ preventScroll: true });
+      show(beforeStart(), false);
+      select.focus({ preventScroll: true });
     },
     close() { leave(); if (panel) panel.hidden = true; },
     toggle() { return current ? stop() : start(); },
