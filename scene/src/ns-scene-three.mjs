@@ -9122,7 +9122,7 @@ export function createScene({
         const eyeLook = pose.bodyLook && Number.isFinite(pose.bodyLook.yaw) && Number.isFinite(pose.bodyLook.pitch) ? pose.bodyLook : pose;
         if (lookYaw !== eyeLook.yaw || lookPitch !== eyeLook.pitch) setView(eyeLook.yaw, eyeLook.pitch);
         const roll = Number.isFinite(pose.roll) ? pose.roll : 0;
-        firstPose = { position: Array.from(pose.position), yaw: pose.yaw, pitch: pose.pitch, roll, turned: roll !== 0 || pose.yaw !== eyeLook.yaw || pose.pitch !== eyeLook.pitch, ...lensOf(pose) };
+        firstPose = { position: Array.from(pose.position), yaw: pose.yaw, pitch: pose.pitch, roll, turned: pose.fixedObserver || roll !== 0 || pose.yaw !== eyeLook.yaw || pose.pitch !== eyeLook.pitch, ...lensOf(pose) };
         // R378 opt-in: physical arm-parent frame is separate from the engineering rendering camera.
         const parentPosition = pose.armParentPosition === undefined ? firstPose.position : pose.armParentPosition;
         if (!parentPosition || parentPosition.length !== 3 || !Array.from(parentPosition).every(Number.isFinite)) fail('scene_input', 'arm parent position needs finite world metres');
@@ -9149,8 +9149,8 @@ export function createScene({
       camMul.nearM = Number.isFinite(pose.nearM) && pose.nearM > 0 ? pose.nearM : null;
     }
     // R558 (Message 52): in the outside view the mirror body backs away from your body as far as the camera does.
-    const viewAwayM = camPose ? outsideMirrorAwayM(camPose.position) : 0; // 18 November 2026, late (audit S20)
-    const viewOutside = camPose ? camPose.blend : 0; // 19 November 2026: larger and lower from outside (ns-mirror MIRROR_OUTSIDE magnifyBy / dropM)
+    const viewAwayM = camPose && !pose.fixedObserver ? outsideMirrorAwayM(camPose.position) : 0;
+    const viewOutside = camPose && !pose.fixedObserver ? camPose.blend : 0;
     if (Math.abs(viewAwayM - mirror.viewAwayM) > 1e-4 || Math.abs(viewOutside - (mirror.viewOutside || 0)) > 1e-4) { mirror.viewAwayM = viewAwayM; mirror.viewOutside = viewOutside; if (mirror.transform) applyMirror(); }
     applyCamera();
     updateCameraRange();

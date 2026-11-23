@@ -1,0 +1,103 @@
+:root {
+  color-scheme: dark;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: #0d121a;
+  color: #f0f4fb;
+  --muted: #b0bccd;
+  --line: #354456;
+  --mint: #a8efd5;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; }
+a { color: #d3f9eb; text-underline-offset: .25em; }
+:focus-visible { outline: 3px solid var(--mint); outline-offset: 4px; }
+
+.masthead, .layout {
+  width: min(100% - 3rem, 72rem);
+  margin-inline: auto;
+}
+
+.masthead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 5.25rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.masthead nav { display: flex; gap: clamp(.85rem, 3vw, 2rem); }
+.masthead a { text-decoration: none; }
+.masthead a:hover { text-decoration: underline; }
+.wordmark { font-weight: 750; letter-spacing: -.035em; }
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr);
+  align-items: center;
+  gap: 2.5rem clamp(2rem, 5vw, 5rem);
+  padding-block: clamp(2.25rem, 7vw, 6rem) 3rem;
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(2.65rem, 7vw, 5.6rem);
+  line-height: .98;
+  letter-spacing: -.077em;
+}
+
+.description {
+  margin: 1.4rem 0 1.8rem;
+  max-width: 28rem;
+  font-size: clamp(1rem, 2.1vw, 1.2rem);
+  line-height: 1.6;
+  color: #dbe4ef;
+}
+
+.play-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-width: 29rem;
+  gap: .8rem;
+}
+
+.play {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .5em;
+  min-height: 3rem;
+  padding: .7rem .95rem;
+  border: 1px solid var(--mint);
+  border-radius: .55rem;
+  font-weight: 730;
+  text-decoration: none;
+}
+
+.play-full { background: var(--mint); color: #102a22; }
+.play-lite { background: #152820; color: #dcfff2; }
+.play-full:hover { background: #d2ffef; }
+.play-lite:hover { background: #214033; }
+.edition p, .requirements, figcaption { color: var(--muted); font-size: .875rem; line-height: 1.55; }
+.requirements { margin-top: .8rem; }
+.game-view { margin: 0; min-width: 0; }
+.game-view img { display: block; width: 100%; height: auto; border-radius: .85rem; border: 1px solid var(--line); background: #080b11; }
+figcaption { margin-top: .55rem; }
+
+.help { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-column: 1 / -1; gap: .8rem; align-items: start; }
+.help details { border: 1px solid var(--line); border-radius: .6rem; background: #131c27; }
+.help summary { padding: .9rem 1.05rem; cursor: pointer; font-weight: 680; }
+.help summary:hover { color: var(--mint); }
+.help p { padding: 0 1.05rem; margin-block: .4rem .95rem; color: #dbe4ef; line-height: 1.62; }
+.help ol { padding: 0 1.05rem 0 2.2rem; color: #dbe4ef; line-height: 1.62; }
+.help li + li { margin-top: .65rem; }
+kbd { font: inherit; color: #eefaf5; padding: .04em .26em; border: 1px solid #657489; border-radius: .24em; white-space: nowrap; }
+.resource-links { display: grid; gap: .55rem; padding: 0 1.05rem 1rem; }
+
+@media (max-width: 48rem) {
+  .masthead, .layout { width: min(100% - 2rem, 39rem); }
+  .masthead { min-height: 3.75rem; }
+  .layout, .help { grid-template-columns: minmax(0, 1fr); }
+  .layout { gap: 1.5rem; }
+}

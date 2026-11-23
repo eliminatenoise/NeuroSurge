@@ -77,7 +77,7 @@ export async function readAll(response, { onBytes, stallMs, setTimer, clearTimer
  * { type: 'again', what, error } (a first request failed and is made once more) | { type: 'done' }.
  * Never throws.
  */
-export async function runPackJob({ indexUrl = PACK_DEFAULTS.indexUrl, base = PACK_DEFAULTS.base, expectedIndexSha256 = PACK_INDEX_SHA256, io, emit, stallMs = PACK_STALL_MS, answerMs = Math.min(PACK_ANSWER_MS, stallMs), parallel = PACK_PARALLEL, quietMs = PACK_QUIET_MS }) {
+export async function runPackJob({ indexUrl = PACK_DEFAULTS.indexUrl, base = PACK_DEFAULTS.base, expectedIndexSha256 = PACK_INDEX_SHA256, codec = 'gzip', io, emit, stallMs = PACK_STALL_MS, answerMs = Math.min(PACK_ANSWER_MS, stallMs), parallel = PACK_PARALLEL, quietMs = PACK_QUIET_MS }) {
   let packs, rigFile = null;
   // One request, whole and checked: the answer must begin within waitMs, no pause between bytes may last stallMs, and
   // the bytes must have the expected length and SHA-256 (where given). Throws otherwise.
@@ -108,13 +108,19 @@ export async function runPackJob({ indexUrl = PACK_DEFAULTS.indexUrl, base = PAC
       return whole(url, { ...opts, waitMs: answerMs, cache: 'reload' });
     }
   };
+  let rawSizes, decode;
   try {
-    if (typeof io.DecompressionStream !== 'function' || !io.subtle) throw new Error('this browser cannot inflate packs');
+    if (!io.subtle || (codec === 'gzip' && typeof io.DecompressionStream !== 'function')) throw new Error('this browser cannot inflate packs');
+    if (codec === 'brotli') {
+      try { new io.DecompressionStream('brotli'); }
+      catch { decode = (await import('../../lite/brotli.mjs')).decodeLiteBrotli; }
+    }
     let bytes;
     try { bytes = await twice('index', indexUrl, { sha256: expectedIndexSha256 }); }
     catch (err) { throw new Error(/sha256/.test(text(err)) ? 'the pack index is not the pinned one' : `${text(err)} for the pack index`); }
     const index = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
     packs = validatePackIndex(index);
+    rawSizes = new Map(index.packs.map(pack => [pack.name, pack.rawBytes]));
     rigFile = packIndexRig(index);
   } catch (err) { emit({ type: 'index-failed', error: text(err) }); emit({ type: 'done' }); return; }
   const startBytes = packs.filter(p => p.stage === 'start').reduce((a, p) => a + p.bytes, 0);
@@ -123,16 +129,20 @@ export async function runPackJob({ indexUrl = PACK_DEFAULTS.indexUrl, base = PAC
   const one = async (p, { onByte = null, onWhole = null } = {}) => {
     let got = 0, lastSent = 0;
     try {
-      let gz;
+      let compressed;
       try {
-        gz = await twice(p.name, base + p.file, { bytes: p.bytes, sha256: p.sha256, onAgain: () => { got = 0; lastSent = 0; },
+        compressed = await twice(p.name, base + p.file, { bytes: p.bytes, sha256: p.sha256, onAgain: () => { got = 0; lastSent = 0; },
           onBytes: n => {
             got += n;
             if (onByte) onByte(got, p.bytes);
             if (got - lastSent > 65536 || got >= p.bytes) { lastSent = got; emit({ type: 'bytes', name: p.name, got }); }
           } });
       } finally { if (onWhole) onWhole(); }
-      const raw = new Uint8Array(await new io.Response(new io.Blob([gz]).stream().pipeThrough(new io.DecompressionStream('gzip'))).arrayBuffer());
+      const rawBytes = rawSizes.get(p.name);
+      if (codec === 'brotli' && !(Number.isSafeInteger(rawBytes) && rawBytes > 0)) throw new Error('missing uncompressed pack size');
+      const raw = decode ? decode(compressed, rawBytes)
+        : new Uint8Array(await new io.Response(new io.Blob([compressed]).stream().pipeThrough(new io.DecompressionStream(codec))).arrayBuffer());
+      if (codec === 'brotli' && raw.byteLength !== rawBytes) throw new Error('uncompressed pack size mismatch');
       const decoded = decodePack(raw);
       const meshes = [], transfer = [];
       for (const key of p.keys) {
@@ -201,6 +211,7 @@ export async function runPackJob({ indexUrl = PACK_DEFAULTS.indexUrl, base = PAC
  * packs that came before fn was set). fn must not change the meshes: they are the game's (the picture copies them).
  */
 export function startPackLoader({ win = globalThis.window, indexUrl = PACK_DEFAULTS.indexUrl, base = PACK_DEFAULTS.base, moduleUrl = import.meta.url,
+  expectedIndexSha256 = PACK_INDEX_SHA256, codec = 'gzip',
   workerUrl = new URL('./ns-pack-worker.mjs', import.meta.url), onProgress = null, onSettled = null, useWorker = true, helloMs = PACK_WORKER_HELLO_MS } = {}) {
   const packWatchers = [], arrived = []; // onPack listeners; the packs that came so far, [name, records] (for a late listener)
   const tellPack = (name, records, fns = packWatchers) => { for (const fn of fns) { try { fn(name, records); } catch { /* the picture only */ } } };
@@ -268,9 +279,10 @@ export function startPackLoader({ win = globalThis.window, indexUrl = PACK_DEFAU
     }
   };
   const fallBack = why => { if (st.index === 'pending') onMessage({ type: 'index-failed', error: why }); else st.errors.push(why); onMessage({ type: 'done' }); };
+  const source = { indexUrl: abs(indexUrl), base: abs(base), expectedIndexSha256, codec };
   const onPage = () => {
     st.mode = 'page';
-    runPackJob({ indexUrl: abs(indexUrl), base: abs(base), emit: m => onMessage(m),
+    runPackJob({ ...source, emit: m => onMessage(m),
       io: { fetch: win.fetch.bind(win), subtle: win.crypto && win.crypto.subtle, DecompressionStream: win.DecompressionStream, Response: win.Response, Blob: win.Blob,
         AbortController: win.AbortController, setTimeout: win.setTimeout.bind(win), clearTimeout: win.clearTimeout.bind(win) } });
   };
@@ -288,7 +300,7 @@ export function startPackLoader({ win = globalThis.window, indexUrl = PACK_DEFAU
       }, helloMs);
       worker.onmessage = ev => { if (!hello) { hello = true; try { win.clearTimeout(noHello); } catch { /* gone */ } } onMessage(ev.data); };
       worker.onerror = ev => { hello = true; try { win.clearTimeout(noHello); } catch { /* gone */ } fallBack(`worker: ${text(ev && ev.message || 'error')}`); };
-      worker.postMessage({ type: 'start', indexUrl: abs(indexUrl), base: abs(base) });
+      worker.postMessage({ type: 'start', ...source });
     } else onPage();
   } catch (err) { st.mode = 'off'; fallBack(text(err)); }
   return {

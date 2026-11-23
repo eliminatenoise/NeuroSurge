@@ -1689,15 +1689,21 @@ export const GUIDE = deepFreeze({
     mirror: 'Click a green arrow by the mirror body to turn it. Press Esc twice for a free pointer.',
     // 19 November 2026 (the tutorial, ns-guide TUTORIAL_GOAL_IDS): the steps the older guide did not have. A look only
     // arms an area; a click or its number presses it; a number key held runs the movement for as long as it is held.
-    lookStrip: 'Look at a coloured area on the brain: the part it names moves at once, on your body and on the mirror body.',
-    pressArea: 'Click the area. The part contracts again and comes back: each click repeats it.',
+    lookStrip: "Aim at a coloured motor area on the brain until its body part moves.",
+    pressArea: "Click or tap that motor area to repeat the movement.",
     holdPart: 'Hold down 1 or 2. The part moves while you hold; let go and it stops there.',
     // (21 November 2026, evening, FIX63, review of update 63, U6: since the right wrist has its drag, section 183, a drag
     // on the right hand bends the wrist, also sideways; the line said every drag sideways turns the limb)
-    dragLimb: 'Press on an arm or a leg and drag: sideways turns it, up and down bends and straightens it. On your right hand the drag bends the wrist.',
+    dragLimb: "Drag a visible arm or leg to move it. Drag the right hand to bend the wrist.",
     // 19 November 2026 (the owner's limb keys): the step that teaches the choice of the limb
-    chooseLimb: 'Press 2, 3 or 4 to choose another limb, or double click to step to the next one. It lights up and then goes with your view. 1 is your left arm.',
-    readInfo: 'Press R to step the reading: the full cards, nothing, then the short card again.'
+    chooseLimb: "Press 2, 3 or 4 to select another limb, or double click to cycle through the limbs.",
+    readInfo: "Press R to change how much information is shown."
+  },
+  tutorialGoals: {
+    moveHand: "Press W or S to reach, then A or D to swing the chosen limb sideways.",
+    dragBrain: "Hold Space over the brain, move your view to carry it, then release Space.",
+    orbit: "Drag the brain to turn it.",
+    thirdPerson: "Press E to look at your body from behind, then press E again to return.",
   },
   partial: {
     // (21 November 2026, hunt H22: W and S move along the limb, A and D swing it)
@@ -1738,17 +1744,21 @@ export const GUIDE = deepFreeze({
     thirdPerson: 'Press E: the view from outside',
     mirror: 'Click a green arrow by the mirror body',
     // 19 November (the tutorial): one short line per step, each ONE action
-    lookStrip: 'Look at a colour on the brain: a part moves',
-    pressArea: 'Click it: it moves again',
+    lookStrip: "Aim at a coloured area until its body part moves",
+    pressArea: "Click or tap the same area to move it again",
     holdPart: 'Hold down 1 or 2. Let go to stop',
-    dragLimb: 'Press on an arm or leg and drag it',
-    chooseLimb: 'Press 2, 3 or 4: choose another limb',
-    readInfo: 'Press R for more to read',
+    dragLimb: "Drag a visible arm or leg to change its pose",
+    chooseLimb: "Press 2, 3 or 4 to select another limb",
+    readInfo: "Press R to change the information shown",
     nice: 'Nice!',
     finished: 'All done. Esc shows the controls.',
     // 19 November (the tutorial): how to pass a step, shown small beside the line (the key ns-app listens for)
     skip: 'Enter: skip',
     byText: {
+      "Press W or S to reach, then A or D to swing the chosen limb sideways.": "Press W or S to reach, then A or D to swing",
+      "Hold Space over the brain, move your view to carry it, then release Space.": "Hold Space on the brain, carry it, then release",
+      "Drag the brain to turn it.": "Drag the brain to turn it",
+      "Press E to look at your body from behind, then press E again to return.": "Press E to see your body from behind",
       'Good! Now try A or D to swing it left or right.': 'Now A or D',
       'Good! Now try W or S to reach it out or draw it in.': 'Now W or S',
       'That movement is already there. Press another number from the card.': 'Already there: press another number',
@@ -1763,6 +1773,23 @@ export const GUIDE = deepFreeze({
   nice: 'Nice!',
   finished: 'All done! Press Esc any time to see all the controls.',
   // Esc page: a small "Try this guide" row in Settings (ns-guide wiring, round4/R4-text-NOTES.md).
+  cue: {
+    simpleHeading: "Simple instructions",
+    technicalHeading: "Technical notes",
+    progress: "Follow the current instruction as you play. Enter skips that step. Resume keeps your progress, and Restart takes you to step one.",
+    technical: "Progress uses game events. The movement step needs input on both axes. A limb drag must reach 12 degrees. A brain carry counts on release after a turn of at least 0.12 radians or a key-driven carry of at least 0.2 game metres. Completed steps are saved on this device when local storage is available. The visual cues do not activate the areas they mark.",
+    motor: "Motor area",
+    limb: "Body part",
+    shoulder: "Shoulder aim",
+    hip: "Hip aim",
+    guide: "View tutorial",
+    resume: "Resume tutorial",
+    restart: "Restart tutorial",
+    limits: "The colours link motor areas to movements in this game. On the simplified map, a ring marks a motor area and a small square marks its related body part when both are visible.",
+    jointHelp: "The shoulder or hip guide marks a fixed height one quarter of the way down the view. It is a screen reference for the wrist or ankle.",
+    directions: "F opens the movement directions.",
+    camera: "C opens the camera controls.",
+  },
   escTitle: 'Tutorial',
   escHelp: 'The tutorial asks for one action at a time, at the top of the screen. It never stops the game. Enter skips a step.',
   hide: 'Hide',

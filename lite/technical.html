@@ -1,29 +1,24 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; base-uri 'none'; form-action 'none'">
-  <title>NeuroSurge Lite Technical guide</title>
-  <link rel="stylesheet" href="lite.css">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="lite.css">
+<title>NeuroSurge Lite · Technical guide</title>
 </head>
-<body><main><article class="guide">
-  <nav aria-label="Guide navigation">
-    <a href="index.html">Play NeuroSurge Lite</a>
-    <a href="simple.html">Simple guide</a>
-    <a href="https://eliminatenoise.github.io/NeuroSurge/">Original game</a>
-  </nav>
-<h1>NeuroSurge Lite Technical guide</h1>
-<h2>Motor strip and controls</h2>
-<p>Select one of 19 motor areas to apply its first movement. The two hemisphere columns map to opposite sides of the body. Trunk, head and jaw use shared controls. The order is a simplified movement map from foot toward hand and face. The divisions are game controls. Primary motor cortex has overlapping representations and areas involved in coordinating movement.</p>
-<p>Use the two movement buttons or keys <strong>1</strong> and <strong>2</strong> to apply either movement for the selected area. With a motor area focused, the arrow keys change the selection. Select or tap a visible body part to use its first movement. Joint positions persist while other parts move. <strong>Neutral pose</strong> brings all joints back to their starting positions.</p>
-<h2>Body and mirror</h2>
-<p>Both views consume the same joint values. Linked segments produce the movement by rotating at their joints. Forearm rotation is defined independently of shoulder rotation. Approximate segment lengths come from the BodyParts3D atlas and its joint landmarks. The body surfaces are shaded, tapered 3D shapes. The selected control highlights the corresponding part in both figures.</p>
-<p>The mirror reflects body coordinates through a vertical plane at the same scale. Each image uses the perspective of its facing side. Drag either figure or use <strong>Turn left</strong> and <strong>Turn right</strong> to rotate the view. <strong>Restore view</strong> returns both figures to their starting angle.</p>
-<h2>Runtime and files</h2>
-<p>The game renders with browser Canvas 2D and a three-dimensional geometric model. It redraws during changes of pose, view or viewport size and stops drawing at rest. With reduced motion enabled, the joint reaches its new pose without interpolation. Positions and highlights are simulated. Muscle forces and physical contact require a dynamics model such as MyoSuite.</p>
-<p>Extract the ZIP and keep its files together. Open <code>index.html</code>, <code>Linux.sh</code>, <code>macOS.command</code> or <code>Windows.cmd</code>. <strong>Original game</strong> opens the existing NeuroSurge release.</p>
-<h2>References and license</h2>
-<p>Approximate joint and segment dimensions use BodyParts3D 4.0, © The Database Center for Life Science, licensed CC BY 4.0. Both arms use rounded proportions from the atlas right arm. The thigh and shin lengths are left-right averages. The surface geometry and joint motions are project illustrations. Project code uses CC0 1.0. <a href="https://doi.org/10.1093/nar/gkn613">BodyParts3D</a> · <a href="https://dbarchive.biosciencedbc.jp/en/bodyparts3d/download.html">Source archive</a> · <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a> · <a href="https://doi.org/10.1038/s41586-023-05964-2">Motor cortex study</a> · <a href="https://myosuite.readthedocs.io/en/stable/">MyoSuite documentation</a></p>
-</article></main></body>
+<body>
+<main>
+<nav aria-label="Game and guides"><a href="./">NeuroSurge Lite</a> <a href="../">NeuroSurge Full</a> <a href="simple.html">Simple guide</a></nav>
+<h1>NeuroSurge Lite · Technical guide</h1>
+<p><a class="play" href="../scene/example/preview.html?edition=lite">Play NeuroSurge Lite</a></p>
+<p>Use the same mouse, keyboard and movement controls as Full. Read the <a href="../PLAYER-GUIDE.md">player guide</a> for the shared controls. Both editions draw and move the same simulated anatomy.</p>
+<h2>Mesh assets</h2>
+<p>A mesh describes a surface with vertex positions and triangles. Lite uses Brotli, a lossless compression format, to download the five mesh packs. Unpacking them gives the same 611 mesh records and 1,048,620 triangles. The reference coordinates, material inputs and body rig, which sets how the joints move, are the same. The packs, index and rig occupy 5,995,969 bytes in Full and 4,999,707 bytes in Lite. When the browser cannot unpack Brotli itself, Lite loads a 142,385-byte local decoder. That brings the total to 5,142,092 bytes for those assets and the decoder.</p>
+<h2 id="local">Play from a local copy</h2>
+<p><a href="https://github.com/eliminatenoise/NeuroSurge/archive/refs/heads/main.zip">Download the repository ZIP</a> and extract it as a complete folder. With Node.js 18 or later installed, open the launcher for your system in <code>lite</code>. Use <code>Play NeuroSurge Lite on Windows.cmd</code>, <code>Play NeuroSurge Lite on macOS.command</code>, or <code>sh "Play NeuroSurge Lite on Linux.sh"</code> from that directory.</p>
+<p>Alternatively, from the extracted repository root run <code>node lite/launch.mjs</code>. If the browser stays closed, paste the printed local address into a browser with WebGL. Choose <strong>Play NeuroSurge Lite</strong> and leave the terminal open during play. Press <strong>Ctrl+C</strong> there to stop the server.</p>
+<p>The <a href="../CREDITS-AND-LICENCES.md">credits and licences</a> and <a href="../ASSET-ATTRIBUTION-INDEX.md">asset attribution index</a> identify the anatomy sources and their terms. See also the <a href="BROTLI-THIRD-PARTY.txt">decoder credits and licences</a>.</p>
+</main>
+</body>
 </html>

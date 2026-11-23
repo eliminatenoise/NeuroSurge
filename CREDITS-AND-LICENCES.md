@@ -446,3 +446,9 @@ are typical and simplified, laid by rule over this atlas. They are not traced fr
 - The reference images used by independent reviewers (section 1.1) are not included.
 - Files rejected during acquisition (section 1.3) are not included and are never loaded.
 - Development tests, test harnesses and acquisition evidence are not part of the player distribution.
+
+## Lite mesh decoder and game image
+
+NeuroSurge Lite may load Brotli.js and base64-js to open compressed mesh packs. The bundled decoder retains its original copyright and licence notices. [Decoder notices](lite/BROTLI-THIRD-PARTY.txt)
+
+The game image in the README and on the launch page shows BodyParts3D and Z-Anatomy geometry drawn in NeuroSurge. The image is available under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/), with the anatomy credits above.

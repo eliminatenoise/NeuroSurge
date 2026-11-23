@@ -1,0 +1,23 @@
+/* This layer is a visual annotation. All pointer, touch and keyboard actions go to the game. */
+.ns-guide-cues{position:absolute;inset:0;overflow:hidden;z-index:2}
+.ns-guide-cues,.ns-guide-cues *,.ns-guide-sr{pointer-events:none;user-select:none}
+.ns-guide-cues[hidden],.ns-guide-mark[hidden]{display:none!important}
+.ns-guide-mark{position:absolute;display:block;box-sizing:border-box;transform:translate(-50%,-50%);width:26px;height:26px;border:2px solid var(--ns-guide-mark-color,#fff0a1);border-radius:50%;box-shadow:0 0 0 1px #111,inset 0 0 0 1px #111;background:transparent}
+.ns-guide-mark-motor{width:30px;height:30px;box-shadow:0 0 0 1px #14191d,0 0 0 2px #fdfdfd,inset 0 0 0 1px #14191d}
+.ns-guide-mark-limb{width:15px;height:15px;border-radius:3px;border-color:var(--ns-guide-mark-color,#c1eeff)}
+.ns-guide-mark-brain{border-style:dashed}
+.ns-guide-mark-joint{width:28px;height:8px;border-radius:1px;border-width:0 2px;border-color:#fff;box-shadow:none;filter:drop-shadow(0 1px 1px #101010)}
+.ns-guide-mark-name{position:absolute;display:block;bottom:calc(100% + 5px);left:50%;transform:translateX(-50%);width:max-content;max-width:min(13rem,34vw);padding:2px 5px;border-radius:3px;background:#141a20;color:#fff;font:600 12px/1.2 system-ui,sans-serif;overflow-wrap:anywhere}
+.ns-guide-mark[data-vertical="below"] .ns-guide-mark-name{top:calc(100% + 5px);bottom:auto}
+.ns-guide-mark[data-anchor="right"] .ns-guide-mark-name{left:50%;transform:none}
+.ns-guide-mark[data-anchor="left"] .ns-guide-mark-name{left:auto;right:50%;transform:none}
+.ns-guide-key{display:inline;color:inherit;background:#26323f;border:1px solid #a5bac9;border-radius:3px;padding:0 .15em;font:inherit;font-size:.94em;white-space:nowrap}
+.ns-guide-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.ns-guide-actions{max-width:40rem;color:inherit;font:inherit}
+.ns-guide-summary{cursor:pointer;font-weight:700}
+.ns-guide-steps{padding-inline-start:1.6rem;margin:.6rem 0}
+.ns-guide-steps li,.ns-guide-note{margin:.35rem 0}
+.ns-guide-action{margin:.3rem .5rem .2rem 0;min-height:2.75rem;padding:.3rem .65rem;font:inherit;cursor:pointer}
+.ns-guide-actions :focus-visible{outline:3px solid #58afff;outline-offset:2px}
+@media(prefers-reduced-motion:reduce){.ns-guide-cues,.ns-guide-cues *{animation:none!important;transition:none!important}}
+@media(forced-colors:active){.ns-guide-mark,.ns-guide-key{border-color:Highlight}.ns-guide-mark-name{color:CanvasText;background:Canvas}}

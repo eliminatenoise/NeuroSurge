@@ -1,2 +1,65 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>NeuroSurge — Experimental preview</title><meta name="neurosurge-version" content="experimental-2026-11-22-body-update-69"><meta name="description" content="A client-side 3D brain and body game. Experimental preview with simulated activity."><style>body{font:18px/1.6 system-ui,-apple-system,"Segoe UI",Arial,sans-serif;background:#080d13;color:#eef5ff;max-width:44rem;margin:12vh auto;padding:24px}a{color:#b8e5ff}</style></head><body><main><h1>NeuroSurge</h1><p>Opening the experimental preview. <a href="scene/example/preview.html">Start the game</a>.</p><p>Brain and muscle colours show simulated activity. <a href="PREVIEW-NOTES.html">Read the known limitations and credits</a>.</p><noscript>JavaScript and WebGL are needed to play.</noscript></main><script>if(location.protocol!=='file:')location.replace('scene/example/preview.html');</script></body></html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Play NeuroSurge Full or Lite, a 3D browser game about how the brain moves the body.">
+  <meta name="neurosurge-version" content="experimental-2026-11-23-shared-editions">
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="launch.css">
+  <title>NeuroSurge</title>
+</head>
+<body>
+  <header class="masthead">
+    <a class="wordmark" href="./">NeuroSurge</a>
+    <nav aria-label="Project links">
+      <a href="START.html">Download</a>
+      <a href="https://github.com/eliminatenoise/NeuroSurge">GitHub</a>
+    </nav>
+  </header>
+  <main id="main" class="layout">
+    <section class="intro" aria-labelledby="page-title">
+      <h1 id="page-title">NeuroSurge</h1>
+      <p class="description">Move a virtual body by aiming at the motor strip, the part of the brain that helps control movement. Watch a second body mirror each move.</p>
+      <div class="play-options" aria-label="Choose an edition">
+        <div class="edition">
+          <a class="play play-full" href="scene/example/preview.html">Play Full <span aria-hidden="true">→</span></a>
+          <p>Standard download.</p>
+        </div>
+        <div class="edition">
+          <a class="play play-lite" href="scene/example/preview.html?edition=lite">Play Lite <span aria-hidden="true">→</span></a>
+          <p>Same game with a smaller anatomy download.</p>
+        </div>
+      </div>
+      <p class="requirements">Use a desktop browser with WebGL, a keyboard and a mouse or trackpad.</p>
+    </section>
+    <figure class="game-view">
+      <img src="media/game-view.webp" width="1200" height="750" alt="The NeuroSurge game showing the coloured motor strip above the player and mirror bodies.">
+      <figcaption>Brain and muscle activity are simulated.</figcaption>
+    </figure>
+    <section class="help" aria-label="Controls and downloads">
+      <details>
+        <summary>First moves</summary>
+        <ol>
+          <li>Move the mouse to look around when the game has captured the pointer. With a free pointer, drag on empty space. Aim at a coloured area of the brain to move the named body part. Click to repeat the movement.</li>
+          <li>Press <kbd>1</kbd>, <kbd>2</kbd>, <kbd>3</kbd> or <kbd>4</kbd> to select a limb. Use <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> to move it. In the eye view, a small look up or down raises or lowers it at the shoulder or hip.</li>
+          <li>Press <kbd>E</kbd> to change view, <kbd>M</kbd> to see the electrical map and <kbd>Esc</kbd> to pause or open the tutorial.</li>
+        </ol>
+        <div class="resource-links">
+          <a href="https://github.com/eliminatenoise/NeuroSurge/blob/main/PLAYER-GUIDE.md">Simple player guide</a>
+          <a href="https://github.com/eliminatenoise/NeuroSurge/blob/main/PLAYER-GUIDE-TECHNICAL.md">Technical player guide</a>
+        </div>
+      </details>
+      <details>
+        <summary>Full and Lite downloads</summary>
+        <p>The controls, movements and 3D anatomy are the same. Lite’s anatomy files need about 1 MB less transfer. A small decoder file is added when the browser needs it.</p>
+        <div class="resource-links">
+          <a href="START.html">Desktop launchers and local play</a>
+          <a href="lite/technical.html">Lite file sizes and format</a>
+          <a href="PREVIEW-NOTES.html">Preview notes and credits</a>
+        </div>
+      </details>
+    </section>
+  </main>
+</body>
+</html>

@@ -378,7 +378,7 @@ export function guideView(state, now = 0, opts = GUIDE_OPTIONS) {
     const shown = isNum(s.finishedAt) && nowOf(now) - s.finishedAt < o.finishS;
     return { ...base, visible: shown, text: shown ? GUIDE.finished : '', line: shown ? GUIDE.finished : '' };
   }
-  let text = GUIDE.goals[id];
+  let text = s.tutorial ? (GUIDE.tutorialGoals[id] ?? GUIDE.goals[id]) : GUIDE.goals[id];
   if (id === 'moveHand' && s.axes.x !== s.axes.z) text = s.axes.z ? GUIDE.partial.moveHandNeedX : GUIDE.partial.moveHandNeedZ;
   // 21 November 2026 (hunt H18): the area just switched on moved nothing: ask for another colour.
   if (id === 'lookStrip' && s.lookStill === true) text = GUIDE.partial.lookStripStill;

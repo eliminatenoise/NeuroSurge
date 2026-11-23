@@ -1,72 +1,23 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="description" content="Move a virtual body with a motor strip and see its movement reflected on a second body.">
-  <meta name="neurosurge-version" content="lite-2026-11-23">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'">
-  <title>NeuroSurge Lite</title>
-  <link rel="stylesheet" href="lite.css">
-  <script defer src="body.js"></script>
-  <script defer src="game.js"></script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="lite.css">
+<title>NeuroSurge Lite</title>
 </head>
 <body>
-  <header class="top">
-    <h1>NeuroSurge <span>Lite</span></h1>
-    <nav aria-label="Game links">
-      <a href="simple.html">Simple guide</a>
-      <a href="technical.html">Technical guide</a>
-      <a id="offline-download" href="NeuroSurge-Lite.zip" download>Offline download</a>
-      <a href="https://eliminatenoise.github.io/NeuroSurge/">Original game</a>
-    </nav>
-  </header>
-  <main id="game">
-    <div class="board">
-      <section class="panel motor" aria-labelledby="strip-title">
-        <h2 id="strip-title">Motor strip</h2>
-        <p class="lead">Choose a motor area or tap a body part to move it on both figures.</p>
-        <div class="hemispheres">
-          <div class="hemisphere" data-half="right">
-            <h3>Right hemisphere</h3>
-            <p>Left body</p>
-            <div id="left-areas" class="areas" role="group" aria-label="Left body areas"></div>
-          </div>
-          <div class="hemisphere" data-half="left">
-            <h3>Left hemisphere</h3>
-            <p>Right body</p>
-            <div id="right-areas" class="areas" role="group" aria-label="Right body areas"></div>
-          </div>
-        </div>
-        <div id="shared-areas" class="shared-areas" role="group" aria-label="Trunk, head and jaw"></div>
-        <div class="movement">
-          <h3 id="active-label">Left elbow</h3>
-          <div id="actions" class="actions" role="group" aria-label="Moves for the selected area"></div>
-          <p id="movement-status" role="status" aria-live="polite">Both bodies are in their neutral pose.</p>
-        </div>
-      </section>
-      <div class="view" aria-label="Player and mirror">
-        <div class="bodies">
-          <section class="panel figure player" aria-labelledby="player-title">
-            <h2 id="player-title">Your body</h2>
-            <canvas id="player" aria-label="Three-dimensional player body">The player pose follows the motor controls.</canvas>
-          </section>
-          <section class="panel figure mirror" aria-labelledby="mirror-title">
-            <h2 id="mirror-title">Mirror body</h2>
-            <canvas id="mirror" aria-label="Three-dimensional mirror of the player body">The mirror repeats each player movement.</canvas>
-          </section>
-        </div>
-        <div class="view-controls" role="group" aria-label="Pose and view controls">
-          <button id="turn-left" type="button">Turn left</button>
-          <button id="turn-right" type="button">Turn right</button>
-          <button id="front-view" type="button">Restore view</button>
-          <button id="neutral" type="button">Neutral pose</button>
-        </div>
-        <p class="hint">Drag either figure to turn the views. Press <kbd>1</kbd> or <kbd>2</kbd> to choose a move.</p>
-      </div>
-    </div>
-    <noscript><p>Enable JavaScript to use the motor strip and move the bodies.</p></noscript>
-    <p class="scope">The game shows simulated joint positions and a simplified map of the brain’s movement area.</p>
-  </main>
+<main>
+<h1>NeuroSurge Lite</h1>
+<p>Play NeuroSurge with a smaller download for its 3D anatomy. Both editions use the same game, body, brain and controls.</p>
+<p><a class="play" href="../scene/example/preview.html?edition=lite">Play NeuroSurge Lite</a></p>
+<nav aria-label="Game and guides">
+<a href="../">NeuroSurge Full</a>
+<a href="technical.html">Technical guide</a>
+<a href="simple.html">Simple guide</a>
+<a href="simple.html#local">Play a local copy</a>
+</nav>
+</main>
 </body>
 </html>
