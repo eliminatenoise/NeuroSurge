@@ -1,16 +1,18 @@
 # NeuroSurge
 
-**[Play Full](https://eliminatenoise.github.io/NeuroSurge/scene/example/preview.html) · [Play Lite](https://eliminatenoise.github.io/NeuroSurge/scene/example/preview.html?edition=lite) · [Download Lite offline preview](https://github.com/eliminatenoise/NeuroSurge/releases/download/lite-browser-forecast-2026-11-24/NeuroSurge-Lite.zip) · [Open the game menu](https://eliminatenoise.github.io/NeuroSurge/) · [Download launchers](https://eliminatenoise.github.io/NeuroSurge/START.html)**
+**[Play Full](https://eliminatenoise.github.io/NeuroSurge/scene/example/preview.html) · [Play Lite](https://eliminatenoise.github.io/NeuroSurge/scene/example/preview.html?edition=lite) · [Play the Movement mirror preview](https://eliminatenoise.github.io/NeuroTranslation/previews/neurosurge/)**
 
-**[Play the Movement mirror preview](https://eliminatenoise.github.io/NeuroTranslation/previews/neurosurge/)** · [Full preview](https://eliminatenoise.github.io/NeuroTranslation/previews/neurosurge/scene/example/preview.html) · [Lite preview](https://eliminatenoise.github.io/NeuroTranslation/previews/neurosurge/scene/example/preview.html?edition=lite)
+[Download Lite for offline play](https://github.com/eliminatenoise/NeuroSurge/releases/download/lite-browser-forecast-2026-11-24/NeuroSurge-Lite.zip) · [Desktop launchers](https://eliminatenoise.github.io/NeuroSurge/START.html) · [Game menu](https://eliminatenoise.github.io/NeuroSurge/)
 
-**[Open the interactive project browser](https://eliminatenoise.github.io/NeuroTranslation/projects/?project=neurosurge)** · [Technical index](https://eliminatenoise.github.io/NeuroTranslation/projects/technical.html?project=neurosurge)
+**[Open the NeuroSurge dashboard](https://eliminatenoise.github.io/NeuroTranslation/projects/?project=neurosurge)** · [Technical index](https://eliminatenoise.github.io/NeuroTranslation/projects/technical.html?project=neurosurge)
 
 [Simple player guide](PLAYER-GUIDE.md) · [Technical player guide](PLAYER-GUIDE-TECHNICAL.md) · [Credits and licences](CREDITS-AND-LICENCES.md)
 
 NeuroSurge is a 3D browser game. Aim at a coloured area of the motor strip, the part of the brain that helps control movement. A body part moves, and a mirror body repeats the movement so you can see it from another angle.
 
-[![Open the game menu. The NeuroSurge motor strip, player and mirror body.](media/game-view.webp)](https://eliminatenoise.github.io/NeuroSurge/)
+[![Open the NeuroSurge dashboard. The motor strip sits above the player and mirror bodies.](media/game-view.webp)](https://eliminatenoise.github.io/NeuroTranslation/projects/?project=neurosurge)
+
+The Movement mirror preview can track a point on the body from a camera or video. Open [Movement mirror Full](https://eliminatenoise.github.io/NeuroTranslation/previews/neurosurge/scene/example/preview.html) or [Movement mirror Lite](https://eliminatenoise.github.io/NeuroTranslation/previews/neurosurge/scene/example/preview.html?edition=lite).
 
 ## Choose an edition
 
