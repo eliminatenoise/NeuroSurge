@@ -102,7 +102,7 @@ try {
   };
   async function record(name, longer) {
     await canvas.press('c');
-    await panel.getByRole('combobox').selectOption('bothArms');
+    await panel.getByRole('combobox', {name: 'Follow'}).selectOption('bothArms');
     await page.waitForFunction(() => document.querySelector('#ns-motion-camera video')?.srcObject);
     await frame(longer ? 'arm-up' : 'elbow-bent');
     await waitReadings(2,'both');

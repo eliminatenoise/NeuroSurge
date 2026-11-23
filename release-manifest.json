@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-24-lite-offline",
-  "source": "Full and Lite share motion commands, opt-in video tracking, a shoulder and hip tutorial and an optional local model. Escape can resume play with a free pointer. The recorder lets players choose limbs before starting video and shows which limbs are following, need a knee bend, or need a clearer view. The recorder follows new camera frames and releases tracking on a stall in browsers that report when a frame is displayed. The Lite download assembles the same game from this inventory with one set of packs and the assets it uses.",
+  "version": "experimental-2026-11-24-recorded-video",
+  "source": "Full and Lite share motion commands, opt-in video tracking, a shoulder and hip tutorial and an optional local model. Escape can resume play with a free pointer. The recorder lets players choose limbs before starting video and shows which limbs are following, need a knee bend, or need a clearer view. The recorder follows new camera frames and releases tracking on a stall in browsers that report when a frame is displayed. The Lite download assembles the same game from this inventory with one set of packs and the assets it uses. The standalone recorder follows supported movement in a local video and releases tracking during pause or seek.",
   "experimental": true,
   "incomplete_acceptance": true,
   "root_checksum_includes_this_manifest": true,
@@ -54,18 +54,18 @@
     },
     {
       "path": "PLAYER-GUIDE-TECHNICAL.md",
-      "bytes": 5135,
-      "sha256": "41d8265886cd16e85529ee8021d6a8fdd41da36e3e4d14499b28654cba56a0dd"
+      "bytes": 6385,
+      "sha256": "a13ea109ca66a284bfae39e04d535c7bd8747f8c6d955f4fe19fc4050961f418"
     },
     {
       "path": "PLAYER-GUIDE.md",
-      "bytes": 7991,
-      "sha256": "bddbddda77ed02c3aecd07feb966495da235994e8bed9efe455648c58fc3223a"
+      "bytes": 9617,
+      "sha256": "08f1e362a4bfa97625c5cf17497d8d2e634bf3abeecbe2e5bec1908127c1396c"
     },
     {
       "path": "PREVIEW-NOTES.html",
-      "bytes": 5385,
-      "sha256": "f09c48d890b5bfb2bdcb7c50f0c6bab8a3e52f7f9255fcc28eee75cffd3dcb72"
+      "bytes": 5767,
+      "sha256": "f698d02b7b4372f1af8b5753f79f775baf22198af22449474ac77948da0fcb6b"
     },
     {
       "path": "PROJECT-CONTEXT.json",
@@ -104,8 +104,8 @@
     },
     {
       "path": "README.md",
-      "bytes": 3328,
-      "sha256": "394b64ae767b70d26e40d7bb8623d24ca0d99a693a3f4097d60a0003ee4b02eb"
+      "bytes": 3407,
+      "sha256": "02039313a4c9de20420ff619d3c0ba8d07b1f2f7b2df9c7eafa2f38349a8e106"
     },
     {
       "path": "START.html",
@@ -284,13 +284,13 @@
     },
     {
       "path": "lite/OFFLINE-TECHNICAL.md",
-      "bytes": 1625,
-      "sha256": "cb919323cd6fedc0d6a0c7fcaca0d825ab8cc3f1a446160c0c2d568fa92cf4c4"
+      "bytes": 1676,
+      "sha256": "e0fdc41cd67b7574bc779123ae817986c3605d16221e1fcd3236101d9406f187"
     },
     {
       "path": "lite/OFFLINE.md",
-      "bytes": 2196,
-      "sha256": "047032ee27cc075cb6580b17b10f6636fdae064774a74d62696d8740beeffbca"
+      "bytes": 2260,
+      "sha256": "887df30c17fbefae92737984ab590f051d0f218201404a8ed535c9ff75b0b07a"
     },
     {
       "path": "lite/Play NeuroSurge Lite on Linux.sh",
@@ -309,8 +309,8 @@
     },
     {
       "path": "lite/README.md",
-      "bytes": 1752,
-      "sha256": "686e25ad20eb65a55e856e0dce754d5040e55d826f21fb1eda068e68fa1fe94f"
+      "bytes": 1759,
+      "sha256": "7c862e7ff3cd791f24d4ab820af1e80ee577191e8b96a07da9891c2f113a6488"
     },
     {
       "path": "lite/asset-pin.mjs",
@@ -379,13 +379,13 @@
     },
     {
       "path": "lite/simple.html",
-      "bytes": 3391,
-      "sha256": "0944d118e9dba5e42779700a12f61cf17ce893568b220ff1a510310c0bac0c6f"
+      "bytes": 3398,
+      "sha256": "0375ef2f704786582f55cae4e325421744c72717cdd2bf08f7f556097f312ac8"
     },
     {
       "path": "lite/technical.html",
-      "bytes": 2522,
-      "sha256": "e754e3c18f7de2e751a3e6b59a42c2f999af805fae4432bde27feeb8666cf72e"
+      "bytes": 2529,
+      "sha256": "32c517ce6c6ae2f1828efc17ce43873093564ad325406b7747e1fdb2a6f10a03"
     },
     {
       "path": "media/game-view.webp",
@@ -4139,8 +4139,8 @@
     },
     {
       "path": "scene/example/preview.html",
-      "bytes": 73076,
-      "sha256": "c4055ba4ab7716228a3f4fbe9560cf1a2d6d682d62ec578d98ea99133e2160de"
+      "bytes": 73147,
+      "sha256": "ffca67657e949ae0d8d84d56029975fa6cb1bdfe69865a34a2f14665a51e98ce"
     },
     {
       "path": "scene/example/quiet.css",
@@ -4664,13 +4664,13 @@
     },
     {
       "path": "scene/src/camera.mjs",
-      "bytes": 21401,
-      "sha256": "c53409dd3302dcd4649fdfaf83d59d441cf98ccd292f9937c0d22167a7a57ff1"
+      "bytes": 26503,
+      "sha256": "841dc86e6fe122ee83d16f58775ab33b97e532c0d32178f36173835e1ef5ccc5"
     },
     {
       "path": "scene/src/camera/README.md",
-      "bytes": 17093,
-      "sha256": "1530058050fbe7856036812eb718ff6c46b9c17bf36dbdbc5481028324b70b9a"
+      "bytes": 17554,
+      "sha256": "3025dd06f0e1d35275239c1542153e1e8288373fe796ac6857c4344313d4182c"
     },
     {
       "path": "scene/src/camera/THIRD-PARTY-SHA256SUMS",
@@ -4689,8 +4689,8 @@
     },
     {
       "path": "scene/src/camera/limb-take.mjs",
-      "bytes": 10236,
-      "sha256": "bf3d5d60074d6b6567117a40db72bf7c8c7514344572dd0535174cc51720b7a3"
+      "bytes": 10324,
+      "sha256": "95a1192d4c5801d987c8a2bbd1dc5f8efac6d66454b22683e50bc0033df44dbe"
     },
     {
       "path": "scene/src/camera/named-takes.mjs",
@@ -4704,8 +4704,8 @@
     },
     {
       "path": "scene/src/camera/preview.mjs",
-      "bytes": 2243,
-      "sha256": "531d693e2b6ea1893e3c3ba9f01675284cc6abed7633f37ca460fd5338541cfb"
+      "bytes": 2383,
+      "sha256": "206c385ffe2af4a8fa663a2a4612d055fa7ff6e9a62e9e9e1d9a9a807bcfb806"
     },
     {
       "path": "scene/src/camera/reach-study/SOURCES.md",
@@ -4754,8 +4754,8 @@
     },
     {
       "path": "scene/src/camera/tests/comparison-browser.mjs",
-      "bytes": 14818,
-      "sha256": "382a151474c8e36d1a0685ff79d3845d414e1da20a7b2ce27fefcf591e7b004a"
+      "bytes": 14836,
+      "sha256": "6834b6256f199cf315dc7465c659887295173e89f3db36db00d46e165d48e42e"
     },
     {
       "path": "scene/src/camera/tests/elbow-bent.jpg",
@@ -4769,8 +4769,8 @@
     },
     {
       "path": "scene/src/camera/tests/paired-routing-browser.mjs",
-      "bytes": 17113,
-      "sha256": "4d6dab09d2b4ee25cb29ac0b375a1a5d27ceaa5c0d507cbb8675a3fa770a3289"
+      "bytes": 17131,
+      "sha256": "5b07e51f1641e106dd5c22bdd1442f1f2c5788050f68fc43cd6b0f9e66650686"
     },
     {
       "path": "scene/src/camera/tests/rig.test.mjs",
@@ -4779,13 +4779,13 @@
     },
     {
       "path": "scene/src/camera/tests/selected-limb-browser.mjs",
-      "bytes": 32597,
-      "sha256": "6de77d85f9b1d2dca0c22784b2ba6e0e0af4e9db0fd83949062eb5fa3780cb29"
+      "bytes": 32615,
+      "sha256": "e1b9fc96fb2bba452e5de17f7a3bdc5e21dac2b4c6e0553e29e8fd0cb77a0c17"
     },
     {
       "path": "scene/src/camera/tests/take-browser.mjs",
-      "bytes": 22480,
-      "sha256": "e1ee4d3a3c2d219f7fd77ff7170de53a3510e55b09c65ba45eaeaa0b424ef622"
+      "bytes": 22498,
+      "sha256": "e88661e0b0cf3e1a71b57a07c330b7b5ce5d6e9bc3ebc4b8b4b168e60c94e91e"
     },
     {
       "path": "scene/src/camera/tests/take-comparison.test.mjs",
@@ -4924,8 +4924,8 @@
     },
     {
       "path": "scene/src/joint/media.mjs",
-      "bytes": 6954,
-      "sha256": "9d481abaac9b29d85b8cf5c27c3c025ac130a67563193faa4e7091db8581f6ba"
+      "bytes": 7368,
+      "sha256": "cf672f7cd5e98d5ad1692799dca0637e96ba02ee71d13f3bdea75f4bd4b30868"
     },
     {
       "path": "scene/src/joint/route.mjs",
@@ -5354,8 +5354,8 @@
     },
     {
       "path": "serve-local.mjs",
-      "bytes": 15747,
-      "sha256": "ad9f0915395b1be18abeacb40b2113147e0f27f89b7763088866c7a2693dfed4"
+      "bytes": 15850,
+      "sha256": "0b5549a02912b6ee64743fa4da84d4859080660e6683816d77e75ff18e6fcae4"
     },
     {
       "path": "tests/abyss.test.mjs",
@@ -6069,8 +6069,8 @@
     },
     {
       "path": "tests/serve-local.test.mjs",
-      "bytes": 3381,
-      "sha256": "d1334538976022f68ec896df6b23301d258577572b7433b251ea00303cfad7bf"
+      "bytes": 4219,
+      "sha256": "c1ecb044160a1afe633ae6985ebfdb3ddb8944d251f2a65b5684ac57558a33ca"
     },
     {
       "path": "tests/shader-safe.test.mjs",

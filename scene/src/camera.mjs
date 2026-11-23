@@ -2,6 +2,7 @@
 import {createLimbTake} from './camera/limb-take.mjs';
 import {createCameraPreview} from './camera/preview.mjs';
 import {trackedLimbs} from './camera/limb-pose.mjs';
+import {captureSource, MAX_LOCAL_VIDEO_BYTES} from './joint/media.mjs';
 const choices = {
   rightArm: {name: 'Right arm', frame: 'Face the lens. Show both shoulders, your right elbow and wrist.', motion: 'Right shoulder and elbow', parts: ['rightArm']},
   leftArm: {name: 'Left arm', frame: 'Face the lens. Show both shoulders, your left elbow and wrist.', motion: 'Left arm reach and elbow', parts: ['leftArm']},
@@ -20,6 +21,7 @@ const FRAME_TIMEOUT_MS = 15000;
 const POLL_INTERVAL_MS = 90;
 const MIN_FRAME_INTERVAL_MS = 50;
 const WAITING_FOR_VIDEO = 'Camera on. Waiting for video.';
+const WAITING_FOR_CLIP_FRAME = 'Waiting for a current video frame.';
 const kneeJoints = {leftLeg: ['knee_ext_L'], rightLeg: ['knee_ext_R'], bothKnees: ['knee_ext_L', 'knee_ext_R'], armsAndKnees: ['knee_ext_L', 'knee_ext_R']};
 
 // Each knee must show two consecutive bends in the picture before its straight
@@ -78,7 +80,7 @@ function createTrackingFeedback(document) {
   return {
     element: list,
     clear() { list.hidden = true; },
-    show(parts, observed, accepted) {
+    show(parts, observed, accepted, recorded = false) {
       const followed = trackedLimbs(accepted);
       const seen = trackedLimbs(observed);
       for (const [limb, {row, state}] of items) {
@@ -88,7 +90,11 @@ function createTrackingFeedback(document) {
         if (!selected) continue;
         const following = followed.includes(limb);
         const needBend = !following && seen.includes(limb) && kneeJoints[limb];
-        const label = following ? 'Following' : needBend ? 'Show a bend' : 'Bring into view';
+        let label = 'Following';
+        if (!following) {
+          if (needBend) label = recorded ? 'Waiting for a bend' : 'Show a bend';
+          else label = recorded ? 'No usable pose' : 'Bring into view';
+        }
         if (state.textContent !== label) {
           state.textContent = label;
           state.style.color = following ? '#a5f3db' : needBend ? '#ffe0a1' : '#d9e6ef';
@@ -101,13 +107,16 @@ function createTrackingFeedback(document) {
 
 export function createCameraCapture({ onPose, onArmPose, returnFocus = () => {}, host = document.body }) {
   let current = null, panel, video, preview, feedback, status, startButton, button, select, disposed = false;
+  let sourceMode = 'camera', sourceSelect, fileWrap, fileInput;
   let limb = 'rightArm', selection = 0;
   let take;
   const emit = onPose || (result => onArmPose({joints: result?.joints ?? null}));
   const clearPose = () => { preview?.clear(); feedback?.clear(); emit(null); };
   const framing = () => choices[limb].frame + (kneeJoints[limb]?.length === 1 &&
     !current?.knees[kneeJoints[limb][0]]?.ready ? ' First show a clear bend.' : '');
-  const beforeStart = () => framing() + ' Select Start camera when ready. Video stays on this device.';
+  const beforeStart = () => sourceMode === 'clip'
+    ? 'Choose a video file, then select Play video. The file stays on this device.'
+    : framing() + ' Select Start camera when ready. Video stays on this device.';
   function trackingMessage(result) {
     if (!result) return framing();
     if (limb === 'armsAndKnees') {
@@ -132,7 +141,8 @@ export function createCameraCapture({ onPose, onArmPose, returnFocus = () => {},
       if (current !== session) return;
       const waiting = session.lastFrameAt === capturedAt;
       resetTracking(session, expiresAt);
-      show(waiting ? WAITING_FOR_VIDEO : framing(), true);
+      if (session.kind === 'clip') show(WAITING_FOR_CLIP_FRAME, true);
+      else show(waiting ? WAITING_FOR_VIDEO : framing(), true);
     }, Math.max(0, expiresAt - performance.now()));
   }
   function choose(value, fromChooser = false) {
@@ -143,6 +153,10 @@ export function createCameraCapture({ onPose, onArmPose, returnFocus = () => {},
     selection++;
     select.value = value;
     if (current) {
+      if (current.kind === 'clip') {
+        current.capture?.reset('Limb changed.');
+        return;
+      }
       resetTracking(current);
       const waiting = current.stream?.getVideoTracks()[0]?.muted ||
         performance.now() - current.lastFrameAt >= MAX_FRAME_AGE_MS;
@@ -154,7 +168,7 @@ export function createCameraCapture({ onPose, onArmPose, returnFocus = () => {},
     if (!panel) {
       panel = document.createElement('section');
       panel.id = 'ns-motion-camera';
-      panel.setAttribute('aria-label', 'Camera motion control');
+      panel.setAttribute('aria-label', 'Motion recorder');
       Object.assign(panel.style, {
         position: 'fixed', right: '12px', top: '12px', zIndex: '20000', width: 'min(230px, 84vw)',
         padding: '10px', borderRadius: '6px', border: '1px solid #8296aa', background: '#152430',
@@ -173,17 +187,39 @@ export function createCameraCapture({ onPose, onArmPose, returnFocus = () => {},
       status.setAttribute('role', 'status');
       startButton = document.createElement('button');
       startButton.type = 'button';
-      startButton.textContent = 'Start camera';
-      startButton.addEventListener('click', start);
+      startButton.addEventListener('click', startSelected);
       button = document.createElement('button');
       button.type = 'button';
       button.style.marginTop = '6px';
       button.addEventListener('click', () => {
-        if (!current) take.clear();
+        if (!current && sourceMode === 'camera') take.clear();
         if (current) stop();
-        else panel.hidden = true;
+        else {
+          fileInput.value = '';
+          panel.hidden = true;
+        }
         returnFocus();
       });
+      const sourceLabel = document.createElement('label');
+      sourceLabel.style.display = 'block';
+      sourceLabel.append('Source ');
+      sourceSelect = document.createElement('select');
+      sourceSelect.add(new Option('Live camera', 'camera'));
+      sourceSelect.add(new Option('Recorded video', 'clip'));
+      sourceSelect.addEventListener('change', () => {
+        if (current || take?.playing) stop();
+        sourceMode = sourceSelect.value;
+        show(beforeStart(), false);
+      });
+      sourceLabel.append(sourceSelect);
+      fileWrap = document.createElement('label');
+      fileWrap.append('Local video ');
+      fileInput = document.createElement('input');
+      fileInput.type = 'file';
+      fileInput.accept = 'video/*';
+      fileInput.style.maxWidth = '100%';
+      fileInput.addEventListener('change', () => show(beforeStart(), false));
+      fileWrap.append(fileInput);
       const label = document.createElement('label');
       label.append('Follow ');
       select = document.createElement('select');
@@ -199,7 +235,7 @@ export function createCameraCapture({ onPose, onArmPose, returnFocus = () => {},
         if (sendFocusBack) returnFocus();
       });
       label.append(select);
-      panel.append(label, preview.element, status, feedback.element, startButton, button);
+      panel.append(sourceLabel, label, fileWrap, preview.element, status, feedback.element, startButton, button);
       take = createLimbTake({
         panel, emit, returnFocus,
         onFinish: () => stop(),
@@ -208,15 +244,19 @@ export function createCameraCapture({ onPose, onArmPose, returnFocus = () => {},
       host.appendChild(panel);
     }
     panel.hidden = false;
-    preview.element.hidden = !video.srcObject;
+    const recorded = sourceMode === 'clip';
+    preview.element.hidden = !video.srcObject && !video.getAttribute('src');
+    fileWrap.hidden = !recorded;
+    fileInput.disabled = active;
     if (status.textContent !== message) status.textContent = message;
+    startButton.textContent = recorded ? 'Play video' : 'Start camera';
     startButton.hidden = active;
     startButton.disabled = active;
-    button.textContent = active ? 'Stop camera' : 'Dismiss';
-    take.setCamera(active, limb, choices[limb].name);
+    button.textContent = active ? (recorded ? 'Stop video' : 'Stop camera') : 'Dismiss';
+    take.setCamera(active && !recorded, limb, choices[limb].name, recorded);
   }
 
-  function stop(message = 'Camera off.') {
+  function stop(message) {
     take?.interrupt('Take cancelled.');
     const session = current;
     current = null;
@@ -225,14 +265,20 @@ export function createCameraCapture({ onPose, onArmPose, returnFocus = () => {},
       if (session.frameCallback !== undefined) video.cancelVideoFrameCallback(session.frameCallback);
       clearTimeout(session.watchdog);
       clearTimeout(session.workerDeadline);
-      session.worker?.terminate();
-      session.frameTime = null;
-      for (const track of session.stream?.getTracks() || []) track.stop();
-      video.pause();
-      video.srcObject = null;
+      if (session.kind === 'clip') {
+        video.removeEventListener('pause', session.pause);
+        video.removeEventListener('play', session.play);
+        session.capture?.stop();
+      } else {
+        session.worker?.terminate();
+        session.frameTime = null;
+        for (const track of session.stream?.getTracks() || []) track.stop();
+        video.pause();
+        video.srcObject = null;
+      }
       clearPose();
     }
-    if (panel) show(message, false);
+    if (panel) show(message ?? (session?.kind === 'clip' ? 'Video stopped.' : 'Camera off.'), false);
   }
 
   function failed(session, message) {
@@ -333,9 +379,13 @@ export function createCameraCapture({ onPose, onArmPose, returnFocus = () => {},
       show('Camera unavailable. This browser lacks the local pose tracker’s video or worker support.', false);
       return;
     }
-    const session = {lastPolledFrame: -1, knees: {},
+    const session = {kind: 'camera', lastPolledFrame: -1, knees: {},
       usesPresentedFrames: typeof video.requestVideoFrameCallback === 'function' &&
         typeof video.cancelVideoFrameCallback === 'function'};
+    video.controls = false;
+    video.autoplay = true;
+    video.setAttribute('aria-label', 'Mirrored camera preview');
+    preview.setMirrored(true);
     current = session;
     show('Allow video to move the avatar. Video stays on this device.', true);
     try {
@@ -414,11 +464,70 @@ export function createCameraCapture({ onPose, onArmPose, returnFocus = () => {},
     }
   }
 
+  function startClip() {
+    if (disposed || current) return;
+    const file = fileInput.files?.[0];
+    if (!file) { show(beforeStart(), false); fileInput.focus(); return; }
+    if (file.size > MAX_LOCAL_VIDEO_BYTES) {
+      show('Choose a video no larger than 512 MiB.', false);
+      return;
+    }
+    if (!window.Worker || !window.OffscreenCanvas || typeof createImageBitmap !== 'function' ||
+        typeof video.requestVideoFrameCallback !== 'function') {
+      show('Recorded video needs a browser with video frame and worker support.', false);
+      return;
+    }
+    take?.interrupt('Replay stopped.');
+    video.controls = true;
+    video.autoplay = false;
+    video.setAttribute('aria-label', 'Recorded video preview');
+    preview.setMirrored(false);
+    const session = {kind: 'clip', knees: {}};
+    current = session;
+    show('Opening the video on this device.', true);
+    session.pause = () => session.capture?.reset('Video paused.');
+    session.play = () => { if (current === session) show(WAITING_FOR_CLIP_FRAME, true); };
+    video.addEventListener('pause', session.pause);
+    video.addEventListener('play', session.play);
+    session.capture = captureSource({
+      kind: 'clip', video, clip: file, getLimb: () => limb,
+      onStatus() { if (current === session && !video.paused) show(WAITING_FOR_CLIP_FRAME, true); },
+      onReset() {
+        if (current !== session) return;
+        clearTimeout(session.watchdog);
+        resetTracking(session);
+        show(video.paused ? 'Video paused. Press Play to continue.' : WAITING_FOR_CLIP_FRAME, true);
+      },
+      onFrame(frame) {
+        if (current !== session || video.paused || video.seeking) return;
+        if ((video.currentTime - frame.t) * 1000 >= MAX_FRAME_AGE_MS) {
+          resetTracking(session);
+          show(WAITING_FOR_CLIP_FRAME, true);
+          return;
+        }
+        const result = calibratedPose(session.knees, limb, frame.pose, frame.t * 1000);
+        emit(result, limb);
+        preview.draw(frame.limbPaths, result, frame.w, frame.h);
+        feedback.show(choices[limb].parts, frame.pose, result, true);
+        show(result ? 'Following the selected limb in the video.' : 'No usable pose in this frame.', true);
+        session.lastFrameAt = performance.now();
+        watchFrame(session, session.lastFrameAt);
+      },
+      onEnd() { failed(session, 'Video ended. Select Play video to replay it.'); },
+      onError(message) { failed(session, 'Video stopped. ' + message); },
+    });
+  }
+
+  function startSelected() {
+    return sourceMode === 'clip' ? startClip() : start();
+  }
+
   function leave() { if (current || take?.playing) stop(); }
   function hide() { if (document.hidden) leave(); }
   function forget() {
     leave();
     take?.clear();
+    if (fileInput) fileInput.value = '';
   }
   window.addEventListener('pagehide', forget);
   document.addEventListener('visibilitychange', hide);
@@ -429,8 +538,8 @@ export function createCameraCapture({ onPose, onArmPose, returnFocus = () => {},
       show(beforeStart(), false);
       select.focus({ preventScroll: true });
     },
-    close() { leave(); if (panel) panel.hidden = true; },
-    toggle() { return current ? stop() : start(); },
+    close() { leave(); if (fileInput) fileInput.value = ''; if (panel) panel.hidden = true; },
+    toggle() { return current ? stop() : startSelected(); },
     stop, choose, get active() { return !!current || !!take?.playing; },
     get visible() { return panel?.hidden === false; },
     get hasTake() { return !!take?.hasTake; },
@@ -438,7 +547,11 @@ export function createCameraCapture({ onPose, onArmPose, returnFocus = () => {},
     get latestTake() { return take?.latest; },
     replayTake(target, label, interval) {
       if (disposed || document.hidden || !take || current) return;
-      if (panel.hidden) show('Camera off.', false);
+      if (sourceMode === 'clip' || panel.hidden) {
+        sourceMode = 'camera';
+        sourceSelect.value = sourceMode;
+        show('Camera off.', false);
+      }
       take.play(target, label, interval);
     },
     setPlayable(value) { take?.setPlayable(value); },

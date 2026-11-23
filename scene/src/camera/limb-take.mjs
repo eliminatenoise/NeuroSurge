@@ -118,7 +118,7 @@ export function createLimbTake({panel, emit, onFinish, onReplay, returnFocus}) {
     record.textContent = recording ? 'Finish take' : 'Record take';
     record.disabled = !recording && (!live || !valid);
     replay.textContent = playing ? 'Stop replay' : 'Replay take';
-    replay.disabled = !playable || live || (!saved && !playing);
+    replay.disabled = box.hidden || !playable || live || (!saved && !playing);
     clock.hidden = !recording && !playing;
   }
   function stopClock() {
@@ -219,8 +219,9 @@ export function createLimbTake({panel, emit, onFinish, onReplay, returnFocus}) {
     get latest() { return saved; },
     get savedName() { return saved?.name; },
     setPlayable(value) { playable = value; refresh(); },
-    setCamera(active, side, displayName) {
-      if (active === live && side === limb) return;
+    setCamera(active, side, displayName, recorded = false) {
+      if (active === live && side === limb && box.hidden === recorded) return;
+      box.hidden = recorded;
       if (!active || limb !== side) valid = false;
       live = active;
       limb = side;

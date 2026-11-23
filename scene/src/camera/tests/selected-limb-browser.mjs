@@ -160,7 +160,7 @@ try {
   assert.equal(await page.evaluate(() => window.captureCalls.length), 0);
   await page.getByRole('button', {name: /Use camera/}).click();
   await page.waitForFunction(() => window.virtualTrack && document.querySelector('#ns-motion-camera video').srcObject);
-  const panel = page.locator('#ns-motion-camera'), select = panel.getByRole('combobox');
+  const panel = page.locator('#ns-motion-camera'), select = panel.getByRole('combobox', {name: 'Follow'});
   async function choose(limb) {
     await select.selectOption(limb);
     assert.equal(await page.evaluate(() => document.activeElement.id), 'ns-canvas');

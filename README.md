@@ -1,6 +1,6 @@
 # NeuroSurge
 
-**[Play Full](https://eliminatenoise.github.io/NeuroSurge/scene/example/preview.html) · [Play Lite](https://eliminatenoise.github.io/NeuroSurge/scene/example/preview.html?edition=lite) · [Download Lite offline preview](https://github.com/eliminatenoise/NeuroSurge/releases/download/lite-offline-2026-11-24/NeuroSurge-Lite.zip) · [Open the game menu](https://eliminatenoise.github.io/NeuroSurge/) · [Download launchers](https://eliminatenoise.github.io/NeuroSurge/START.html)**
+**[Play Full](https://eliminatenoise.github.io/NeuroSurge/scene/example/preview.html) · [Play Lite](https://eliminatenoise.github.io/NeuroSurge/scene/example/preview.html?edition=lite) · [Download Lite offline preview](https://github.com/eliminatenoise/NeuroSurge/releases/download/lite-recorded-video-2026-11-24/NeuroSurge-Lite.zip) · [Open the game menu](https://eliminatenoise.github.io/NeuroSurge/) · [Download launchers](https://eliminatenoise.github.io/NeuroSurge/START.html)**
 
 [Project browser](https://eliminatenoise.github.io/NeuroTranslation/projects/?project=neurosurge) · [Technical index](https://eliminatenoise.github.io/NeuroTranslation/projects/technical.html#neurosurge)
 
@@ -14,7 +14,7 @@ NeuroSurge is a 3D browser game. Aim at a coloured area of the motor strip, the 
 
 **F** opens the Command box. Type **bend my right elbow** and choose **Move**. Where your browser supports on-device dictation, **Use voice** fills in the words for you to review.
 
-**C** opens camera controls. Choose **Start camera** to let the virtual body follow visible arms and knees. Video stays in your browser. You can record a short take of the estimated poses and play it back with the camera off.
+**C** opens camera controls. Choose **Start camera** to let the virtual body follow visible arms and knees. Video stays in your browser. Choose **Recorded video** to follow a file instead. From **Live camera**, you can save a short take of the estimated poses and play it back with the camera off.
 
 Open `START.html` in the locally running game and follow **Open the local NeuroTranslate model** for movement goals and forecasts.
 

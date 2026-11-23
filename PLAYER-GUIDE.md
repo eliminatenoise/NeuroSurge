@@ -39,6 +39,16 @@ When the browser can tell the game that new pictures have stopped arriving, the 
 
 A local model can also forecast a tracked point or answer a supported movement goal. It receives point histories or game inputs from the interface. The movement shown on screen, the points estimated from video, and the model's forecast are three distinct readings.
 
+## Follow a video file
+
+1. In the standalone game, press **C** and choose **Recorded video** under **Source**. Under **Follow**, select the visible arm or knee you want the virtual body to follow. You can also select both arms, both knees, or both pairs.
+2. Choose a file under **Local video**, then select **Play video**. Use a file up to about 537 MB. Your browser must be able to play it and tell the game when each new picture appears. The file stays on this device. The game shows the picture as it was saved, so a mirrored recording can reverse left and right.
+3. **Following** and a green line show which limbs the game can use. **Waiting for a bend** means the game can see the knee and needs a clearer starting bend. **No usable pose** means the joints in that picture could not be used. Try a part of the video where you can see more of the limb.
+4. Pause or move to another time with the video controls. The previous tracking clears. The game also clears a result that falls 1.2 seconds or more behind playback. Choose **Stop video** to stop early or press **F** to stop and open the Command box. You can play the selected file again after it ends or you choose Stop video.
+5. To save a take for the Command box, switch to **Live camera** and select **Start camera**. The recorder keeps any earlier live take while you play a file and shows the take controls again when you switch back. The local model launcher also offers saved video and timed pictures in the Movement mirror.
+
+The tracker estimates joints in the picture. The virtual body moves from those estimates. The game simulates its electrical activity.
+
 ## See what moved
 
 Press **R** to show more information about the area you are looking at. Press it again to hide the cards, then once more to return to the short cards.

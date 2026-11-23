@@ -65,7 +65,7 @@ try {
   await page.goto(origin + '/');
   await page.waitForFunction(() => window.__nsQA?.inspect()?.features?.bodyRig &&
     document.querySelector('#ns-app').dataset.nsPhase === 'playing', null, {timeout:120000});
-  const panel = page.locator('#ns-motion-camera'), select = panel.getByRole('combobox');
+  const panel = page.locator('#ns-motion-camera'), select = panel.getByRole('combobox', {name: 'Follow'});
   const canvas = page.locator('#ns-canvas');
   const up = {leftArm: {bearing:[0,1,0], upper:[0,1,0], elbowDeg: 15}, joints:{r_shoulder_abd:155,r_shoulder_flex:0,r_elbow_flex:35}};
   const down = {leftArm: {bearing:[0,-1,0], upper:[0,-1,0], elbowDeg: 30}, joints:{r_shoulder_abd:20,r_shoulder_flex:0,r_elbow_flex:60}};

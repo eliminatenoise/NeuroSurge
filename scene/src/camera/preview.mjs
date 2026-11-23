@@ -21,6 +21,9 @@ export function createCameraPreview(video) {
     ctx?.clearRect(0, 0, overlay.width, overlay.height);
     overlay.hidden = true;
   }
+  function setMirrored(mirrored) {
+    video.style.transform = overlay.style.transform = mirrored ? 'scaleX(-1)' : 'none';
+  }
   function draw(paths, pose, width, height) {
     const limbs = trackedLimbs(pose).filter(limb => paths?.[limb]);
     if (!ctx || limbs.length === 0 || !width || !height) { clear(); return; }
@@ -58,5 +61,5 @@ export function createCameraPreview(video) {
     overlay.hidden = false;
   }
 
-  return {element, clear, draw};
+  return {element, clear, draw, setMirrored};
 }

@@ -21,6 +21,13 @@
 - A take retains time-stamped pose samples in the current tab. Open **Record a limb take** when playing through the local model launcher. Select **Record take** and choose **Finish take** before changing limbs to keep the take. A limb change cancels an unfinished recording. Use **F** and **replay my take** to replay the saved poses with video off.
 - The local model route accepts point histories and game requests. It returns a forecast separately from the measured pose of the virtual rig. An image-plane estimate does not establish physical joint angle or nerve activity.
 
+## Follow recorded video
+
+- In the standalone game, press **C**, set **Source** to **Recorded video**, choose limbs under **Follow**, select **Local video**, then choose **Play video**. The browser must decode the file and provide video-frame callbacks. The file limit is 512 MiB (536,870,912 bytes). Tracking runs locally.
+- Playback uses each presented image's time from the decoder and processes one image at a time. The recorder displays the stored orientation and estimates two-dimensional joint positions. **Following** and a green line mark an accepted limb. **Waiting for a bend** marks a visible knee awaiting a clear starting bend. **No usable pose** means the image yielded no accepted estimate for that limb.
+- A result 1.2 seconds or more behind playback is discarded. Pause, seek, end or changing the selected limbs clears tracking. **Stop video** closes playback and retains the selected file for a new start. **F** stops playback and opens the Command box.
+- **Live camera** provides the take controls. A previously saved take stays in memory during file playback. Select **Start camera** to grant video access. The local model launcher also accepts video and timed pictures in the Movement mirror. Electrical activity is simulated.
+
 ## Shared engine and assets
 
 Both editions use the same simulation, region picking, body rig, materials, tutorial and camera. Lite’s compressed files reduce transfer by 996,262 bytes across the five mesh packs, index and rig. The separate decoder adds 142,385 bytes when the browser lacks built-in support. The decoded bytes are identical. [Pack checks and local launchers](lite/README.md).

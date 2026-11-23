@@ -9,6 +9,23 @@ import { createHandler, etagFor, notModified } from '../serve-local.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
+test('local video blobs are allowed only on the playable page', async () => {
+  const server = http.createServer(createHandler({root}));
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  try {
+    const game = await fetch(origin + '/scene/example/preview.html', {method: 'HEAD'});
+    const menu = await fetch(origin + '/', {method: 'HEAD'});
+    assert.equal(game.status, 200);
+    assert.equal(menu.status, 200);
+    assert.match(game.headers.get('content-security-policy'), /media-src 'self' blob:/);
+    assert.doesNotMatch(menu.headers.get('content-security-policy'), /media-src/);
+    assert.match(game.headers.get('content-security-policy'), /connect-src 'self'/);
+  } finally {
+    await new Promise(resolve => server.close(resolve));
+  }
+});
+
 test('ETag and Last-Modified are sent, and an unchanged file is answered with 304', async () => {
   const server = http.createServer(createHandler({ root }));
   await new Promise(r => server.listen(0, '127.0.0.1', r));

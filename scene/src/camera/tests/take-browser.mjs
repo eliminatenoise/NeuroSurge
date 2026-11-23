@@ -97,7 +97,7 @@ try {
   const panel = page.locator('#ns-motion-camera');
   const button = name => panel.getByRole('button', {name, exact: true});
   const record = button('Record take'), replay = button('Replay take');
-  const select = panel.getByRole('combobox');
+  const select = panel.getByRole('combobox', {name: 'Follow'});
   const angle = n => page.evaluate(n => { window.testTake.angle = n; }, n);
   const phase = side => page.evaluate(s => window.__nsQA.inspect().bodyDrawnJoints['knee_ext_' + s], side);
   async function waitAngle(target, side = 'L') {

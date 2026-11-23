@@ -68,6 +68,7 @@ export const SECURITY_HEADERS = Object.freeze({
 // the browser on the user's device. The pose worker compiles its local WASM.
 const PLAYABLE_HEADERS = Object.freeze({
   ...SECURITY_HEADERS,
+  'Content-Security-Policy': `${SECURITY_HEADERS['Content-Security-Policy']}; media-src 'self' blob:`,
   'Permissions-Policy': 'camera=(self), microphone=(self), geolocation=(), usb=(), serial=()'
 });
 const POSE_WORKER_HEADERS = Object.freeze({

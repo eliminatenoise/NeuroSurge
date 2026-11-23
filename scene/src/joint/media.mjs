@@ -1,4 +1,6 @@
 // One local tracker and one transferred bitmap per active source.
+export const MAX_LOCAL_VIDEO_BYTES = 512 * 1024 * 1024;
+
 export function readKeyframes(files, times) {
   if (!files.length || files.length>256) throw Error('Choose 1–256 still images.');
   const supplied=times.trim()?times.trim().split(/[\s,]+/):null;
@@ -13,11 +15,11 @@ export function readKeyframes(files, times) {
   if (rows.some((r,i)=>i && r.t<=rows[i-1].t)) throw Error('Each still needs a distinct capture time.');
   return rows;
 }
-export function captureSource({kind,video,clip,stills,followKnees=false,onFrame,onReset,onStatus,onError,onEnd}) {
+export function captureSource({kind,video,clip,stills,followKnees=false,getLimb,onFrame,onReset,onStatus,onError,onEnd}) {
   let closed=false, epoch=0, id=0, busy=false, clock=0, callback, stream, objectURL, worker, timer, silence, finish;
   const buffer=document.createElement('canvas'), ctx=buffer.getContext('2d',{alpha:false});
   const cancel=()=>new DOMException('Stopped','AbortError');
-  function reset(reason) { epoch++; onReset(reason); }
+  function reset(reason) { if (!closed) { epoch++; onReset(reason); } }
   function stop() {
     if (closed) return;
     closed=true; epoch++;
@@ -50,13 +52,15 @@ export function captureSource({kind,video,clip,stills,followKnees=false,onFrame,
   async function track(source,w,h,t,sequence) {
     if (!w || !h || !Number.isFinite(t) || busy || closed) return;
     const gen=epoch, grabbed=performance.now(), scale=Math.min(1,640/Math.max(w,h));
+    const limb = getLimb ? getLimb() : followKnees ? 'armsAndKnees' : 'bothArms';
     busy=true;
     try {
       buffer.width=Math.max(1,Math.round(w*scale)); buffer.height=Math.max(1,Math.round(h*scale));
       ctx.drawImage(source,0,0,buffer.width,buffer.height);
       const frame=await createImageBitmap(buffer);
       if(closed || gen!==epoch) {frame.close();return;}
-      const result=await callWorker({type:'frame',frame,timestamp:++clock,limb:followKnees?'armsAndKnees':'bothArms',selection:gen,jointPoints:true,independent:true},[frame]);
+      const result=await callWorker({type:'frame',frame,timestamp:++clock,limb,selection:gen,
+        jointPoints:!getLimb,limbPaths:!!getLimb,independent:true},[frame]);
       if (closed || gen!==epoch) return;
       if (kind==='camera' && performance.now()-grabbed>350) {
         reset('Camera processing lag. Waiting for a current frame.');return;
@@ -65,7 +69,8 @@ export function captureSource({kind,video,clip,stills,followKnees=false,onFrame,
         clearTimeout(silence);
         silence=setTimeout(()=>{if(!closed)reset('Camera frame gap. Waiting for fresh observations.');},400);
       }
-      onFrame({id:sequence,t,xy:result.xy,pose:result.result,w:buffer.width,h:buffer.height,bitmap:buffer});
+      onFrame({id:sequence,t,xy:result.xy,pose:result.result,w:buffer.width,h:buffer.height,bitmap:buffer,
+        ...(getLimb ? {limbPaths:result.limbPaths} : {})});
     } finally {busy=false;}
   }
   function schedule() {
@@ -73,13 +78,16 @@ export function captureSource({kind,video,clip,stills,followKnees=false,onFrame,
     callback=video.requestVideoFrameCallback((now,meta)=>{
       if(closed) return;
       schedule();
-      if (!busy && !video.seeking && !stream?.getVideoTracks()[0]?.muted) {
+      if (!busy && !video.seeking && !(getLimb && video.paused) && !stream?.getVideoTracks()[0]?.muted) {
         // mediaTime is the presentation timestamp of this decoded image.
         track(video,video.videoWidth,video.videoHeight,meta.mediaTime,meta.presentedFrames).catch(fail);
       }
     });
   }
   async function start() {
+    if (kind === 'clip' && (!clip || clip.size > MAX_LOCAL_VIDEO_BYTES)) {
+      throw Error('Choose a local video no larger than 512 MiB.');
+    }
     if (kind==='camera') {
       if(!navigator.mediaDevices?.getUserMedia) throw Error('This browser cannot open a camera. Use localhost or choose a local file.');
       stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{width:{ideal:640},height:{ideal:480},frameRate:{ideal:15,max:30},facingMode:{ideal:'user'}}});
@@ -107,11 +115,12 @@ export function captureSource({kind,video,clip,stills,followKnees=false,onFrame,
     }
     video.addEventListener('seeking',seeking); video.addEventListener('ended',ended); video.addEventListener('error',mediaError);
     if(kind==='clip') {
-      if(!clip || clip.size>512*1024*1024) throw Error('Choose a local video smaller than 512 MB.');
       objectURL=URL.createObjectURL(clip); video.src=objectURL;
+      timer=setTimeout(()=>fail(Error('This browser did not start the video.')),15000);
     }
     video.muted=true; video.playsInline=true;
     await video.play();
+    clearTimeout(timer);
     if(!closed) {
       onStatus(followKnees && kind==='camera'
         ? 'Tracking the camera image. Keep your arms and feet in view.'
@@ -120,5 +129,5 @@ export function captureSource({kind,video,clip,stills,followKnees=false,onFrame,
     }
   }
   start().catch(fail);
-  return {stop};
+  return {stop, reset};
 }

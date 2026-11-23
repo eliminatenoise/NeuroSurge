@@ -1,5 +1,7 @@
 # Move your arms and knees with one camera
 
+The standalone recorder also accepts saved footage. Open it with **C**, set **Source** to **Recorded video**, choose limbs and a local file, and select **Play video**. The recorder uses presentation times for pose playback and clears the earlier input after pause, seek, limb changes and stop. Follow the [Simple player guide](../../../PLAYER-GUIDE.md#follow-a-video-file) or [Technical player guide](../../../PLAYER-GUIDE-TECHNICAL.md#follow-recorded-video).
+
 Press **C** or select **Follow movement** in the game toolbar. In the local model version, **C** opens the Movement mirror. Choose **Record a limb take** from the toolbar to open this recorder. Under **Follow**, choose your own left or right side before or during capture. The arrow keys can move through multiple choices while **Follow** has focus. Select **Start camera** to request video. The preview shows a mirror image. If the device already flips its outgoing video, disable that setting so the tracker receives the original view. If the mouse is captured, the usual limb keys also switch the camera. **1** selects your left arm, **2** your left knee, **3** your right knee and **4** your right arm.
 
 **Following** appears with a green line for each limb that meets the tracking checks. **Show a bend** means a knee is visible and still needs its starting bend. **Bring into view** means the tracker could not use that limb in the current image. Each status describes a single selected limb.
