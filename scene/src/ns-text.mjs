@@ -528,7 +528,7 @@ export const SHELL = deepFreeze({
   // The information key (R) works in captured play, so the toast names it.
   // 17 November 2026 (far less text): three short parts; the Esc page has the rest.
   // (21 November 2026, EMAP: the map key is named beside Esc)
-  freeLookHint: 'Point at a coloured area · Drag empty space to look around · M: electrical map · Esc: controls', // (24 November 2026, FREE_AIM)
+  freeLookHint: 'Drag empty space to look around · M: electrical map · Esc: controls',
   lockRefused: 'Mouse capture unavailable. Drag empty space to look · Esc: controls',
   lookOff: 'Use W/A/S/D, Space and clicks · Esc: controls',
   contextLost: 'The graphics stopped (WebGL context lost). The game waits until the browser brings them back.',

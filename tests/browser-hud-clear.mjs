@@ -97,6 +97,18 @@ try {
       assert.equal(area(start.cue.words, l.box), 0, `${tag}: the cue's words leave the label "${l.text}" clear`);
       assert.equal(area(start.cue.ring, l.box), 0, `${tag}: the cue's ring ${JSON.stringify(start.cue.ring.map(Math.round))} lies under no label ("${l.text}" ${JSON.stringify(l.box.map(Math.round))})`);
     }
+    // 24 November 2026 (HINT_ROW, DESIGN-DECISIONS section 207): with the pointer free the hint under the picture shows
+    // all the time; the limb buttons' bar stands clear of it (on main its box lay 5 px into the bar, and at 800x600,
+    // on two lines, over the buttons' words).
+    const rows = await page.evaluate(() => {
+      const B = e => { if (!e || e.hidden || !e.getClientRects().length) return null; const r = e.getBoundingClientRect(); return [r.left, r.top, r.right, r.bottom]; };
+      return { hint: B(document.querySelector('.ns-shell-toast')), bar: B(document.querySelector('.ns-limbs')), chips: [...document.querySelectorAll('.ns-limbs-chip')].map(B) };
+    });
+    one.start.hint = rows.hint && rows.hint.map(Math.round); one.start.limbBar = rows.bar && rows.bar.map(Math.round);
+    assert.ok(rows.hint && rows.bar && rows.chips.length === 4, `${tag}: the hint and the four limb buttons show at the start`);
+    assert.equal(area(rows.hint, rows.bar), 0, `${tag}: the hint ${JSON.stringify(one.start.hint)} leaves the limb buttons' bar ${JSON.stringify(one.start.limbBar)} clear`);
+    assert.ok(rows.hint[1] - rows.bar[3] >= 4 || rows.hint[3] <= rows.bar[1] || rows.hint[0] >= rows.bar[2] || rows.hint[2] <= rows.bar[0], `${tag}: with a gap between them`);
+    assert.ok(rows.bar[1] > height * 0.75 && rows.hint[3] <= height, `${tag}: both stay in the bottom of the picture`);
     for (const t of start.tips) for (const c of start.cards) {
       assert.equal(area(t.box, c.box), 0, `${tag}: the ${t.id} tip ${JSON.stringify(t.box.map(Math.round))} lies under no HUD card (${c.name} ${JSON.stringify(c.box.map(Math.round))})`);
     }
@@ -127,6 +139,12 @@ try {
     // pointer is taken with "Capture mouse" on the pause page, and the look is checked to have turned.
     await captureMouse(page, width / 2, height / 2);
     await page.waitForTimeout(500);
+    {
+      // (HINT_ROW: with the pointer captured there is no hint, and the bar stands at its own place)
+      const captured = await page.evaluate(() => { const t = document.querySelector('.ns-shell-toast'), b = document.querySelector('.ns-limbs'); return { hint: Boolean(t && !t.hidden && t.getClientRects().length), bottom: b ? b.style.bottom : null }; });
+      assert.equal(captured.hint, false, `${tag}: no hint while the pointer is captured`);
+      assert.equal(captured.bottom, '', `${tag}: the limb buttons' bar is back at its own place`);
+    }
     const lookBefore = await page.evaluate(() => { const c = window.__nsQA.inspect().controls; return [c.yaw, c.pitch]; });
     const startRec = () => page.evaluate(() => {
       window.__cueRec = []; window.__cueRecOn = true;
@@ -203,6 +221,28 @@ try {
       assert.equal(L.quickReturns, 0, `${tag}: during the ${name} the words never go straight back to the side they left`);
       assert.ok(L.wordsOnLabelFrames <= 3, `${tag}: during the ${name} the words lie on a shown label in at most 3 frames (${L.wordsOnLabelFrames})`);
     }
+    // 24 November 2026 (DESIGN-DECISIONS section 207): with the pointer free again, the tip beside the pointer keeps off
+    // the tutorial's card (ns-quiet tipSides `card`): on main, at 800x600, 24 of 228 pointer places near the top left
+    // put the tip partly under that card. A grid of pointer places round the card's right and lower edges; every tip
+    // shown is clear of the card and inside the picture.
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.pointerLockElement && window.__nsQA.inspect().shell.mode === 'paused');
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => window.__nsQA.inspect().shell.mode === 'playing');
+    const cardBox = await page.evaluate(() => { const e = document.querySelector('.ns-prompt'); if (!e || e.hidden || !e.getClientRects().length) return null; const r = e.getBoundingClientRect(); return [r.left, r.top, r.right, r.bottom]; });
+    let tipsSeen = 0;
+    if (cardBox) {
+      for (let y = Math.max(20, cardBox[1] + 10); y <= cardBox[3] + 60; y += 22) for (let x = Math.max(20, cardBox[2] - 120); x <= Math.min(width - 20, cardBox[2] + 120); x += 30) {
+        await page.mouse.move(x, y);
+        await advance(3);
+        const t = await page.evaluate(() => { const e = document.querySelector('.ns-tip'), c = document.querySelector('.ns-prompt'); const B = q => { if (!q || q.hidden || !q.getClientRects().length) return null; const r = q.getBoundingClientRect(); return [r.left, r.top, r.right, r.bottom]; }; return { tip: B(e), card: B(c), text: e ? e.innerText.replace(/\n/g, ' | ') : '' }; });
+        if (!t.tip || !t.card) continue;
+        tipsSeen++;
+        assert.equal(area(t.tip, t.card), 0, `${tag}: the tip "${t.text}" ${JSON.stringify(t.tip.map(Math.round))} with the pointer at ${x},${y} keeps off the tutorial card ${JSON.stringify(t.card.map(Math.round))}`);
+        assert.ok(t.tip[0] >= 0 && t.tip[1] >= 0 && t.tip[2] <= width && t.tip[3] <= height, `${tag}: and stays in the picture`);
+      }
+    }
+    one.tipsNearCard = tipsSeen;
     await page.close();
   }
   assert.deepEqual(report.errors, []);

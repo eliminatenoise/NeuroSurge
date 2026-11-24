@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-24-body-update-71",
+  "version": "experimental-2026-11-24-body-update-72",
   "experimental": true,
-  "source": "Body update 71. With the pointer free, as the game starts, the pointer is the aim: a motor area it rests on is named and moves its body part, and a click presses it. Full and Lite share the game; drag on empty space to look or choose Capture mouse from the Escape menu.",
+  "source": "Body update 72. The limb buttons stand clear of the hint under the picture, and the tip beside the pointer keeps off the tutorial card. With the pointer free the pointer is the aim. Full and Lite share the game; drag on empty space to look or choose Capture mouse from the Escape menu.",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -32,8 +32,8 @@
     },
     {
       "path": "DESIGN-DECISIONS.md",
-      "bytes": 1028708,
-      "sha256": "0e2a94809248cd9c7975d79f9a27603e1d88aa982951d0223180d0ca4c4bfbc3"
+      "bytes": 1032235,
+      "sha256": "d07a81d3acf02950b3a1e3edc14f62042caff3cad333b933f2b03ce2b325f261"
     },
     {
       "path": "LAUNCHERS.md",
@@ -62,8 +62,8 @@
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 64456,
-      "sha256": "f3c0b4f1928c8f4d052dfd3a22ef37ac7d749081c1daf765ea5b5475b260395a"
+      "bytes": 65014,
+      "sha256": "a4fa42081ef8218beaeb62c05bad0806eb6e72410c49b25599d68462c6b4350a"
     },
     {
       "path": "README.md",
@@ -73,12 +73,12 @@
     {
       "path": "START.html",
       "bytes": 4507,
-      "sha256": "48950c3f0b06d21815ac04198931af955b437396894139ec9342b46f6be469a8"
+      "sha256": "a3f12f29d64da46b55995cdb8bb237445f677e128a3b1f86a849db24fe1d938a"
     },
     {
       "path": "index.html",
       "bytes": 3909,
-      "sha256": "39a931c752806f99f7496ed0eec66c1bc158920c2a0fbe4083b4a47101aab66e"
+      "sha256": "0cabcd5242fc754b2b06da19cc95c2c78fb4b156c7133ae62e9e2e39f90713fa"
     },
     {
       "path": "inputs/FULLBODY-MESH-MANIFEST.json",
@@ -3987,8 +3987,8 @@
     },
     {
       "path": "scene/src/ns-app.mjs",
-      "bytes": 1182390,
-      "sha256": "1da1cd9723562853d7ea67a96c633f3e003a50efc0c930287c575998ddf838af"
+      "bytes": 1185445,
+      "sha256": "def273278d955eb5c3df17229d750a8044b6aa180cd1944e597df49e359a7a23"
     },
     {
       "path": "scene/src/ns-area-halo.mjs",
@@ -4282,8 +4282,8 @@
     },
     {
       "path": "scene/src/ns-quiet.mjs",
-      "bytes": 16254,
-      "sha256": "280952cf12d60c9537f863306df0b0f2c2a10c0678b7267c43ae618908d6afb2"
+      "bytes": 19003,
+      "sha256": "9e705ba8244945f97ae0c9e441a642c97fec9b3f49602b9710a8940f5b30e88c"
     },
     {
       "path": "scene/src/ns-raw-look.mjs",
@@ -4327,8 +4327,8 @@
     },
     {
       "path": "scene/src/ns-text.mjs",
-      "bytes": 154381,
-      "sha256": "04d59e9051c312e03aea0e2b1eb2e09c33e9383dac5660c85d187f3a9376e4dd"
+      "bytes": 154321,
+      "sha256": "c11cc5d2d9b1876d163515b0f6279ae242c82a9429fc81f0d65d4bffde56d947"
     },
     {
       "path": "scene/src/ns-vessels.mjs",
@@ -4472,13 +4472,13 @@
     },
     {
       "path": "tests/browser-free-aim.mjs",
-      "bytes": 10409,
-      "sha256": "2f1807067e9076b340c2fc905a9668b47773278c1b8a8c6b46c4e3b0102032d0"
+      "bytes": 10416,
+      "sha256": "144a7d13852d63a0cb8ef367ddf279e18bcdc2e2a9ffa4c562fce7741beec030"
     },
     {
       "path": "tests/browser-hud-clear.mjs",
-      "bytes": 16043,
-      "sha256": "7b709b9d8f1700bf8a3d37477ddde02a62af09bd580fc236f2b2a87f0dce00c5"
+      "bytes": 20080,
+      "sha256": "b1d229067b67b610b4968da1097ecbd73b73a494ff8a060220f5292f53922d7f"
     },
     {
       "path": "tests/browser-keyboard-aim.mjs",
@@ -4647,8 +4647,8 @@
     },
     {
       "path": "tests/free-aim.test.mjs",
-      "bytes": 11230,
-      "sha256": "10939eac559524fc0899ec5806c46409fd0bd68af27f535e6335d58e3ade43fe"
+      "bytes": 14826,
+      "sha256": "ce3fac6e387fec1d3e5804a9fdf02b0e757a3e9053c11157d10f989a21f2f4f0"
     },
     {
       "path": "tests/guide-order.test.mjs",

@@ -8504,6 +8504,47 @@ arrow key or during a drag).
   on what is under it.
 - The outside view uses the same rule; it was played only briefly.
 
+## 207. The limb buttons stand clear of the hint under the picture, and the tip beside the pointer keeps off the tutorial card (24 November)
+
+Two things a new player sees in the game as it starts since the drag-to-look change, found by playing the tutorial
+through with the free pointer at 1600x900 and 800x600 (`lead/s-tut72.mjs`: all nine steps can be done; pictures of
+each step looked at) and by measuring boxes on GitHub main before update 71 and on this branch.
+
+**The hint lay on the limb buttons (`HINT_ROW`, `hintLift`, the shell's `clearHint` in `ns-app.mjs`).** The hint
+"Drag empty space to look around · M: electrical map · Esc: controls" used to show only when the browser refused to
+capture the pointer. Since the drag-to-look start it shows all the time the pointer is free, at the bottom middle,
+where the buttons 1 to 4 are. Measured on main: its box reached 5 px into the buttons' bar at 1280x720 and 1024x768
+(bar 644..686 px, hint 681..706), and at 800x600, where the hint takes two lines, it covered the lower half of the
+buttons' words (bar 524..566, hint 546..586). While the hint's box reaches into the bar's column, the bar now stands
+6 px above the hint (800x600: bar 498..540; 1280x720: 633..675; 1024x768: 681..723; 1600x900: 813..855); with the
+pointer captured there is no hint and the bar stands where the style sheet puts it. The raise is measured only when
+the hint's words, its place or the window's size change.
+
+Update 71's first draft had lengthened the hint ("Point at a coloured area · ..."): at 1024x768 that took a second
+line. The hint is main's again; the tutorial's first step and the pause page say "point".
+
+**The tip lay partly under the tutorial card (`tipSides` `card`, `TIP_SLIDE_GAP` 6, `TIP_SLIDE_MAX` 64 in
+`ns-quiet.mjs`).** With the pointer as the aim (206) the tip opens wherever the pointer is. At 800x600 the strip's left
+end lies beside and under the tutorial card in the top left corner, and the tip of an area there opened partly under
+the card: 24 of 228 pointer places of a 20 px grid on main (where the tip read "Space holds the brain"), the worst
+with 5544 px2 under the card. The tip now takes a side clear of both your left hand's box and the card; else a side
+clear of the card (the card is drawn over the tip, the hand under it); else the usual box is slid down, or up, just
+past the card, by at most 64 px. The same grid: 0 of 234. The hand's box never slides the tip: it can be large, and a
+first version that slid off it put a tip 213 px from its point.
+
+**Tests.** `tests/free-aim.test.mjs`: `hintLift` on the measured boxes; `tipSides` with the card (another side, the
+slide, no slide past 64 px, the hand alone never slides). `tests/browser-hud-clear.mjs`, at its four window sizes: the
+hint and the bar do not touch at the start and both stay in the bottom of the picture; with the pointer captured the
+bar is back at its own place; with the pointer free again a grid of pointer places round the card's right and lower
+edges shows no tip on the card or outside the picture.
+
+**Not done, or not right.**
+- At 800x600 the tutorial card itself still covers the top of the strip's left end; the areas under it can be pointed
+  at only where they show beside it. Turning the brain or a larger window shows them.
+- After a quick sweep that rested nowhere, the information card in the corner can name the first area the pointer
+  crossed although nothing was switched on.
+- The bar steps up or down by 11 to 26 px when the pointer is captured or freed.
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**

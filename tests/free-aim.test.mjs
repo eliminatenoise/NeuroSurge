@@ -2,8 +2,8 @@
 // thing the player moved wins (ns-app aimStep), and the tip keeps an area's or a muscle's own words under the pointer.
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { FREE_AIM, aimStep } from '../scene/src/ns-app.mjs';
-import { quietTipModel } from '../scene/src/ns-quiet.mjs';
+import { FREE_AIM, aimStep, HINT_ROW, hintLift } from '../scene/src/ns-app.mjs';
+import { quietTipModel, tipSides, TIP_SLIDE_GAP, TIP_SLIDE_MAX } from '../scene/src/ns-quiet.mjs';
 
 const W = 1600, H = 900;
 const at = (x, y, timeMs) => ({ x, y, timeMs });
@@ -168,4 +168,48 @@ test('the tip: a named part can carry the Space line as its second line', () => 
   const area = quietTipModel({ area: { id: 'rh_elbow', plainLabel: 'Left elbow', actions: [] }, moves: [], hint: 'Bend left elbow' });
   assert.equal(area.kind, 'area');
   assert.equal(area.hint, 'Bend left elbow');
+});
+
+// 24 November 2026 (HINT_ROW, DESIGN-DECISIONS section 207): the limb buttons' bar stands clear of the hint under the picture
+test('the limb bar is raised by exactly what the hint reaches into its space, plus the gap', () => {
+  const box = (left, top, right, bottom) => ({ left, top, right, bottom });
+  assert.equal(HINT_ROW.on, true);
+  // the measured boxes on main: 1280x720 (5 px into the bar), 800x600 (two lines over the buttons), 1600x900
+  assert.equal(hintLift(box(434, 681, 846, 706), box(437, 644, 843, 686)), 686 + HINT_ROW.gapPx - 681);
+  assert.equal(hintLift(box(200, 546, 600, 586), box(197, 524, 603, 566)), 566 + HINT_ROW.gapPx - 546);
+  assert.equal(hintLift(box(594, 861, 1006, 886), box(597, 824, 1003, 866)), 866 + HINT_ROW.gapPx - 861);
+  // a hint already well under the bar, beside it, or above it raises nothing
+  assert.equal(hintLift(box(434, 700, 846, 725), box(437, 644, 843, 686)), 0);
+  assert.equal(hintLift(box(900, 681, 1200, 706), box(437, 644, 843, 686)), 0);
+  assert.equal(hintLift(box(434, 600, 846, 625), box(437, 644, 843, 686)), 0);
+  // no hint, no bar, the rule off
+  assert.equal(hintLift(null, box(437, 644, 843, 686)), 0);
+  assert.equal(hintLift(box(0, 0, 0, 0), box(437, 644, 843, 686)), 0);
+  assert.equal(hintLift(box(434, 681, 846, 706), box(437, 644, 843, 686), { on: false, gapPx: 6 }), 0);
+});
+
+// 24 November 2026 (DESIGN-DECISIONS section 207): the tip beside the pointer keeps off the tutorial's card
+test('the tip keeps off the tutorial card: another side where one is clear, else a short slide past it', () => {
+  const card = { x0: 16, y0: 14, x1: 308, y1: 94 }, P = { width: 800, height: 600, tipW: 158, tipH: 68, card };
+  // measured at 800x600: the pointer at (260, 70) on the ring finger's area, the tip opening to its left, 6 px under the card
+  const slid = tipSides({ ...P, x: 260, y: 70, side: 'left' });
+  assert.deepEqual(slid, { right: true, low: false, dy: 94 + TIP_SLIDE_GAP - (70 + 18) });
+  // the slid box is clear of the card and inside the picture
+  assert.ok(70 + 18 + slid.dy >= card.y1 + TIP_SLIDE_GAP);
+  // a tip that clears the card anyway is left alone, with no dy
+  assert.deepEqual(tipSides({ ...P, x: 500, y: 200 }), { right: false, low: false });
+  assert.deepEqual(tipSides({ ...P, x: 260, y: 90, side: 'left' }), { right: true, low: false });
+  // right of the card with room: the other side is taken before any slide
+  assert.deepEqual(tipSides({ ...P, x: 300, y: 40, side: 'left' }), { right: false, low: false });
+  // a card so tall that a slide would carry the tip far from its point: the usual place, no slide
+  const tall = { x0: 16, y0: 14, x1: 308, y1: 400 };
+  assert.deepEqual(tipSides({ ...P, card: tall, x: 200, y: 60 }), { right: false, low: false });
+  assert.ok(400 + TIP_SLIDE_GAP - (60 + 18) > TIP_SLIDE_MAX);
+  // the hand's box alone never slides the tip (it can be large): as before, the usual side when no side is clear
+  const hand = { x0: 0, y0: 0, x1: 800, y1: 600 };
+  assert.deepEqual(tipSides({ ...P, card: null, avoid: hand, x: 260, y: 70, side: 'left' }), { right: true, low: false });
+  // both in the way: clear of the card first (the card is drawn over the tip; the hand is under it)
+  assert.deepEqual(tipSides({ ...P, avoid: { x0: 60, y0: 96, x1: 400, y1: 300 }, x: 260, y: 70, side: 'left' }), { right: true, low: false, dy: 12 });
+  // without the tip's size nothing can be judged
+  assert.deepEqual(tipSides({ ...P, tipW: 0, tipH: 0, x: 260, y: 70, side: 'left' }), { right: true, low: false });
 });

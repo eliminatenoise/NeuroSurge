@@ -1869,6 +1869,24 @@ export const PORTRAIT_CARD_RESERVE = Object.freeze({ gapAbovePx: 12, gapBelowPx:
  * arrow reaches into the bottom rowPx of the view; gapPx from the arrow (and from a card); at least minWidthPx wide
  * (else the other side, else above the arrow); bottomPx: the style sheet's own bottom offset. Display choices. */
 export const TOAST_BESIDE = Object.freeze({ rowPx: 64, gapPx: 10, minWidthPx: 200, bottomPx: 14 });
+/** 24 November 2026 (HINT_ROW, DESIGN-DECISIONS section 207). Since the drag-to-look start the hint under the picture
+ * ("Drag empty space to look around · M: electrical map · Esc: controls") shows all the time the pointer is free, at
+ * the bottom middle, where the limb buttons (1 to 4) are: its box lay 5 px into the buttons' bar at 1280x720 and
+ * 1024x768, and at 800x600, where it takes two lines, it covered the buttons' words. While the hint's box would reach
+ * into the bar's column, the bar stands gapPx above the hint (hintLift); with the pointer captured (no hint) it stands
+ * where it stood. */
+export const HINT_ROW = Object.freeze({ on: true, gapPx: 6 });
+/** HINT_ROW's rule (pure): how far the limb bar is raised, in CSS px, for the hint's box and the bar's box at its own
+ * place ({ left, right, top, bottom } each; null or an empty box: 0). 0 when they are not in the same column or the hint
+ * is not under the bar's bottom edge plus the gap. */
+export function hintLift(hint, bar, o = HINT_ROW) {
+  const ok = r => r && [r.left, r.right, r.top, r.bottom].every(Number.isFinite) && r.right > r.left && r.bottom > r.top;
+  if (!o || o.on !== true || !ok(hint) || !ok(bar)) return 0;
+  if (!(hint.left < bar.right && hint.right > bar.left)) return 0;
+  if (hint.bottom <= bar.top) return 0; // the hint is above the bar: nothing to clear
+  const lift = bar.bottom + o.gapPx - hint.top;
+  return lift > 0 ? Math.ceil(lift) : 0;
+}
 export function brainUsableNdc(size, brainModule = NsBrain) {
   if (!size || !(size.width > 0 && size.height > 0) || typeof brainModule.usableNdcFromLayout !== 'function') return null;
   const r = infoPanelRect(size);
@@ -6315,6 +6333,7 @@ export function createShell({ doc, root, text = SHELL_TEXT, settings = SETTINGS_
   toast.setAttribute('role', 'status');
   toast.hidden = true;
   let toastSpotKey = ''; // R558: placeToast
+  let hintClearKey = '', hintClearPx = 0; // HINT_ROW: clearHint
   const live = el('div', 'ns-sr-only', root);
   live.setAttribute('role', 'status');
   live.setAttribute('aria-live', 'polite');
@@ -6553,6 +6572,29 @@ export function createShell({ doc, root, text = SHELL_TEXT, settings = SETTINGS_
       st.maxWidth = Number.isFinite(spot.maxWidth) ? px(spot.maxWidth) : '';
       st.textAlign = spot.align || '';
       st.setProperty('text-wrap', 'balance'); // two even lines rather than one long and one short
+    },
+    /** 24 November 2026 (HINT_ROW): keeps the limb buttons' bar clear of the hint: `bar` is raised by hintLift over its
+     * own place (the style sheet's) while the hint's box reaches into its column. Measured only when the hint's words,
+     * its place or `key` (the window's size) change. Returns the raise in px. */
+    clearHint: (bar, key = '') => {
+      const k = `${key}|${toast.hidden ? '' : toast.textContent}|${toastSpotKey}|${bar ? 1 : 0}`;
+      if (k === hintClearKey) return hintClearPx;
+      hintClearKey = k;
+      let lift = 0;
+      try {
+        if (bar && bar.style && typeof bar.getBoundingClientRect === 'function') {
+          bar.style.bottom = ''; // its own place first
+          if (!toast.hidden && typeof toast.getBoundingClientRect === 'function') {
+            lift = hintLift(toast.getBoundingClientRect(), bar.getBoundingClientRect());
+            if (lift > 0) {
+              const view = doc && doc.defaultView, base = view && typeof view.getComputedStyle === 'function' ? parseFloat(view.getComputedStyle(bar).bottom) : NaN;
+              if (Number.isFinite(base)) bar.style.bottom = `${Math.round(base + lift)}px`; else lift = 0;
+            }
+          }
+        }
+      } catch { lift = 0; }
+      hintClearPx = lift;
+      return lift;
     },
     get element() { return overlay; },
     get infoElement() { return info ? info.aside : null; }
@@ -13779,6 +13821,8 @@ export function start(params = {}) {
           }
         }
         if (shell && typeof shell.placeToast === 'function') shell.placeToast(toastSpotFor(size));
+        // (24 November 2026, HINT_ROW: the limb buttons stand clear of the hint while it shows)
+        if (shell && typeof shell.clearHint === 'function' && limbHud && limbHud.box) shell.clearHint(limbHud.box, `${size.width}x${size.height}`);
         updateInfo(inputs.binding, out);
         frameTimer.mark('hud');
         if (shell) {

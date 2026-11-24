@@ -55,7 +55,7 @@ try {
   assert.equal(start.lock, null, 'the game starts with the pointer free');
   assert.equal(start.input.at, 'crosshair', 'before the pointer has moved over the picture the crosshair is the aim');
   assert.equal(start.trigger.seq, 0);
-  assert.match(start.toast, /Point at a coloured area/);
+  assert.match(start.toast, /Drag empty space to look around/);
   assert.equal(start.guide, '1/9');
   assert.doesNotMatch(start.cross, /ns-crosshair-away/);
 

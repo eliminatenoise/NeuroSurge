@@ -147,15 +147,33 @@ export function quietPromptCount(guide) {
  * the first that stays clear of the box and inside the picture; when none does, the usual one. Offsets as drawn (22 px
  * across, 18 px down). Pure.
  */
-export function tipSides({ x = 0, y = 0, width = 0, height = 0, side = null, tipW = 0, tipH = 0, avoid = null } = {}) {
+export function tipSides({ x = 0, y = 0, width = 0, height = 0, side = null, tipW = 0, tipH = 0, avoid = null, card = null } = {}) {
   const right = x > width * 0.72 || (side === 'left' && x > width * 0.3), low = y > height * 0.7;
   const box = (r, l) => ({ x0: r ? x - 22 - tipW : x + 22, y0: l ? y - 18 - tipH : y + 18, x1: r ? x - 22 : x + 22 + tipW, y1: l ? y - 18 : y + 18 + tipH });
-  const ok = b => !(avoid && b.x0 < avoid.x1 && b.x1 > avoid.x0 && b.y0 < avoid.y1 && b.y1 > avoid.y0);
+  // 24 November 2026 (FREE_AIM, DESIGN-DECISIONS section 207): `card` is a box drawn OVER the tip (the tutorial's card:
+  // with the pointer as the aim the tip can open anywhere, and at 800x600 the tip of an area near the top left corner
+  // lay partly under that card, 24 of 228 pointer places). A side clear of both boxes is taken first, as before for
+  // the hand alone; else a side clear of the card; else the usual box is slid down, or up, just past the card (`dy`, CSS
+  // px, at most TIP_SLIDE_MAX; left out when 0). The hand's box never slides the tip: it can be large, and a tip far
+  // from its point names nothing.
+  const good = a => a && [a.x0, a.y0, a.x1, a.y1].every(Number.isFinite) && a.x1 > a.x0 && a.y1 > a.y0;
+  const soft = good(avoid) ? avoid : null, hard = good(card) ? card : null;
+  const hits = (b, a) => Boolean(a) && b.x0 < a.x1 && b.x1 > a.x0 && b.y0 < a.y1 && b.y1 > a.y0;
   const inside = b => b.x0 >= 0 && b.y0 >= 0 && b.x1 <= width && b.y1 <= height;
-  if (!avoid || !(tipW > 0 && tipH > 0) || ok(box(right, low))) return { right, low };
-  for (const [r, l] of [[right, !low], [!right, low], [!right, !low]]) { const b = box(r, l); if (ok(b) && inside(b)) return { right: r, low: l }; }
+  const b0 = box(right, low);
+  if ((!soft && !hard) || !(tipW > 0 && tipH > 0) || (!hits(b0, soft) && !hits(b0, hard))) return { right, low };
+  const others = [[right, !low], [!right, low], [!right, !low]];
+  for (const [r, l] of others) { const b = box(r, l); if (!hits(b, soft) && !hits(b, hard) && inside(b)) return { right: r, low: l }; }
+  if (!hard || !hits(b0, hard)) return { right, low }; // only the hand is in the way and no side is clear of it: the usual one
+  for (const [r, l] of others) { const b = box(r, l); if (!hits(b, hard) && inside(b)) return { right: r, low: l }; }
+  for (const dy of [hard.y1 + TIP_SLIDE_GAP - b0.y0, hard.y0 - TIP_SLIDE_GAP - b0.y1]) {
+    const b = { x0: b0.x0, x1: b0.x1, y0: b0.y0 + dy, y1: b0.y1 + dy };
+    if (Math.abs(dy) <= TIP_SLIDE_MAX && inside(b)) return { right, low, dy: Math.round(dy) };
+  }
   return { right, low };
 }
+/** The gap, in CSS px, between a slid tip and the card it was slid off, and the farthest a tip is slid (tipSides). */
+export const TIP_SLIDE_GAP = 6, TIP_SLIDE_MAX = 64;
 
 export function createQuietUi({ doc, root }) {
   const el = (tag, cls, parent) => { const e = doc.createElement(tag); e.className = cls; parent.appendChild(e); return e; };
@@ -185,6 +203,19 @@ export function createQuietUi({ doc, root }) {
   // while it avoids your hand forced a style and layout pass each frame, about 0.8 ms): the tip's size is measured once
   // per content (tipKey) and per window size, and kept
   let tipSize = null;
+  // 24 November 2026 (section 207): the tutorial card's box in the layer's own CSS px, for the tip to keep off it
+  let promptRect = null, promptRectKey = '';
+  function promptBox(width, height) {
+    const k = prompt.hidden ? '' : `${promptText}|${countText}|${skipText}|${Math.round(width)}x${Math.round(height)}`;
+    if (k === promptRectKey) return promptRect;
+    promptRectKey = k; promptRect = null;
+    if (k === '' || typeof prompt.getBoundingClientRect !== 'function' || typeof layer.getBoundingClientRect !== 'function') return null;
+    try {
+      const r = prompt.getBoundingClientRect(), o = layer.getBoundingClientRect();
+      if (r && o && r.width > 0 && r.height > 0) promptRect = { x0: r.left - o.left, y0: r.top - o.top, x1: r.right - o.left, y1: r.bottom - o.top };
+    } catch { promptRect = null; }
+    return promptRect;
+  }
   function update({ tip: model = null, prompt: words = '', count = '', skip = '', x = 0, y = 0, width = 0, height = 0, show = true, side = null, avoid = null } = {}) {
     if (show !== shown) { shown = show; layer.hidden = !show; }
     if (!show) return;
@@ -229,17 +260,20 @@ export function createQuietUi({ doc, root }) {
       // was turned half a turn the left half of the picture is the brain's right half; the caller says which.)
       // (22 November 2026: and off your own left hand's box, tipSides)
       let tipW = 0, tipH = 0;
-      if (avoid) {
+      // (24 November 2026, section 207: the tip also keeps off the tutorial's card, whose box is measured once per its
+      // words and window size)
+      const card = promptBox(width, height);
+      if (avoid || card) {
         const sk = `${tipKey}|${Math.round(width)}x${Math.round(height)}`;
         if (!tipSize || tipSize.key !== sk) { const w0 = tip.offsetWidth, h0 = tip.offsetHeight; tipSize = { key: sk, w: Number.isFinite(w0) ? w0 : 0, h: Number.isFinite(h0) ? h0 : 0 }; }
         tipW = tipSize.w; tipH = tipSize.h;
       }
-      const { right, low } = tipSides({ x, y, width, height, side, tipW, tipH, avoid });
-      const pk = `${Math.round(x)}|${Math.round(y)}|${right ? 1 : 0}${low ? 1 : 0}`;
+      const { right, low, dy = 0 } = tipSides({ x, y, width, height, side, tipW, tipH, avoid, card });
+      const pk = `${Math.round(x)}|${Math.round(y)}|${right ? 1 : 0}${low ? 1 : 0}|${dy}`; // (dy follows the card's box: a card that grows moves the tip)
       if (pk !== placeKey) {
         placeKey = pk;
         tip.style.left = `${Math.round(x)}px`;
-        tip.style.top = `${Math.round(y)}px`;
+        tip.style.top = `${Math.round(y + dy)}px`;
         tip.style.transform = `translate(${right ? 'calc(-100% - 22px)' : '22px'}, ${low ? 'calc(-100% - 18px)' : '18px'})`;
       }
     }
