@@ -4,7 +4,7 @@
 
 [Download Lite for offline play](https://github.com/eliminatenoise/NeuroSurge/releases/download/lite-take-sequences-2026-11-24/NeuroSurge-Lite.zip) · [Desktop launchers](https://eliminatenoise.github.io/NeuroSurge/START.html) · [Game menu](https://eliminatenoise.github.io/NeuroSurge/)
 
-**[Open the NeuroSurge dashboard](https://eliminatenoise.github.io/NeuroTranslation/projects/?project=neurosurge)** · [Technical index](https://eliminatenoise.github.io/NeuroTranslation/projects/technical.html?project=neurosurge)
+**[Open the NeuroSurge dashboard](https://eliminatenoise.github.io/NeuroTranslation/projects/?project=neurosurge)** · [Technical index](https://eliminatenoise.github.io/NeuroTranslation/projects/technical.html?project=neurosurge) · [Camera forecast study](https://eliminatenoise.github.io/NeuroTranslation/previews/camera-forecast-study/)
 
 [Simple player guide](PLAYER-GUIDE.md) · [Technical player guide](PLAYER-GUIDE-TECHNICAL.md) · [Credits and licences](CREDITS-AND-LICENCES.md)
 
