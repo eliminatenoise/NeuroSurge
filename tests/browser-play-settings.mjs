@@ -193,6 +193,39 @@ try {
   assert.match(report.settingsFocus.focusOutline, /solid 3px/);
   await screenshot('settings');
 
+  // 24 November 2026 (the hunt of update 73, finding 11): under "View tutorial" the two buttons, "Resume tutorial" and
+  // "Restart tutorial", were the browser's own light grey buttons on the dark page (background rgb(239, 239, 239),
+  // black words). They have the page's secondary look (a pale line round clear glass, pale words) and its focus mark,
+  // and both stand whole inside the page. Neither is pressed here.
+  const tutorial = shell.locator('.ns-guide-actions');
+  const tutorialSummary = tutorial.locator('> summary');
+  await tabTo(tutorialSummary);
+  await page.keyboard.press('Enter');
+  assert.equal(await tutorial.evaluate(node => node.open), true, 'Enter opens "View tutorial"');
+  const resumeTutorial = shell.getByRole('button', { name: 'Resume tutorial' }), restartTutorial = shell.getByRole('button', { name: 'Restart tutorial' });
+  await tabTo(resumeTutorial);
+  const look = node => {
+    const cs = getComputedStyle(node), r = node.getBoundingClientRect(), clip = node.closest('[role="dialog"]').getBoundingClientRect();
+    const pageButton = getComputedStyle(document.querySelector('.ns-shell-secondary:not(.ns-shell-reset)'));
+    return { background: cs.backgroundColor, color: cs.color, border: `${cs.borderTopWidth} ${cs.borderTopStyle} ${cs.borderTopColor}`, radius: cs.borderTopLeftRadius, outline: cs.outline, height: r.height,
+      page: { background: pageButton.backgroundColor, color: pageButton.color, border: `${pageButton.borderTopWidth} ${pageButton.borderTopStyle} ${pageButton.borderTopColor}`, radius: pageButton.borderTopLeftRadius },
+      inView: r.left >= clip.left && r.right <= clip.right && r.top >= clip.top && r.bottom <= clip.bottom, focused: document.activeElement === node };
+  };
+  report.tutorialButtons = { resume: await resumeTutorial.evaluate(look) };
+  await tabTo(restartTutorial);
+  report.tutorialButtons.restart = await restartTutorial.evaluate(look);
+  for (const [name, b] of Object.entries(report.tutorialButtons)) {
+    assert.ok(b.focused && b.inView, `"${name} tutorial" takes the focus and stands whole in the page`);
+    assert.deepEqual({ background: b.background, color: b.color, border: b.border, radius: b.radius }, b.page, `"${name} tutorial" looks like the page's secondary buttons, not the browser's own`);
+    assert.notEqual(b.background, 'rgb(239, 239, 239)');
+    assert.match(b.outline, /solid 3px/, `"${name} tutorial" shows the page's focus mark`);
+    assert.ok(b.height >= 44, 'and is at least 44 px tall');
+  }
+  await screenshot('tutorial-buttons');
+  await tabTo(tutorialSummary, 'Shift+Tab');
+  await page.keyboard.press('Enter');
+  assert.equal(await tutorial.evaluate(node => node.open), false);
+
   const details = shell.getByRole('button', { name: 'Show the full instructions' });
   await tabTo(details);
   await page.keyboard.press('Space');

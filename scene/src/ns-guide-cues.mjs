@@ -97,11 +97,20 @@ function wordsSize(doc, text, viewWidth) {
 // pass 2: a hit place slides along its side first and otherwise goes to the nearest clear place (ns-cue-place slide,
 // nearFirst); the side just left is passed back as `avoid` for CUE_WORDS.backFrames placements; a new caption keeps
 // the place, its near edge where it was (CUE_WORDS.keepAcross; pass 2 chose it afresh on every caption).)
+// 24 November 2026 (HUD74; the hunt of update 73, finding 3: in step 6 the word "Brain" lay on the words "Shoulder aim",
+// 40 x 16 px at 1280x720, and at 1024x768 on that mark itself and its ring under the words): the marks' half sizes as
+// guide-cues.css draws them (a mark that is not shown has no size on the page), and how much one mark's ring and words
+// weigh for another mark's words (ns-cue-place keep-outs: a label weighs 1, an arrow 2, a card 8).
+export const CUE_RINGS = Object.freeze({ motor: Object.freeze([15, 15]), limb: Object.freeze([7.5, 7.5]), brain: Object.freeze([13, 13]), joint: Object.freeze([14, 4]) });
+export const CUE_APART = Object.freeze({ on: true, ringWeight: 4, wordsWeight: 8 });
+
 function marker(layer, name) {
   const node = element(layer, 'span', 'ns-guide-mark ns-guide-mark-' + name);
   node.hidden = true;
   const label = element(node, 'span', 'ns-guide-mark-name');
   let lastX, lastY, lastColor, wordsW = 0, wordsH = 0, ringHalf = 0, ringHalfY = 0, ringEdge = 0, ringEdgeY = 0;
+  // (HUD74) this mark's ring and its words as last placed, CSS px of the host, for the other marks' words
+  const ringBox = { x0: 0, y0: 0, x1: 0, y1: 0, weight: CUE_APART.ringWeight, on: false }, wordsBox = { x0: 0, y0: 0, x1: 0, y1: 0, weight: CUE_APART.wordsWeight, on: false };
   // what the words' size was worked out for (separate fields, pass 3: no key string a frame)
   let sCaption = null, sWidth = NaN, sHeight = NaN, sStep = null;
   // the last inputs placed for (numbers: no key string a frame), the words' kept offset and the last values written
@@ -120,6 +129,7 @@ function marker(layer, name) {
     cssX = ''; cssY = '';
   }
   function placeWords(point, caption, place) {
+    wordsBox.on = false;
     if (!(CUE_WORDS.on && place && place.width > 0 && place.height > 0 && place.keepOut && Array.isArray(place.keepOut.boxes))) { unplace(); return; }
     const step = place.step || '';
     if (caption !== sCaption || place.width !== sWidth || place.height !== sHeight || step !== sStep) {
@@ -146,7 +156,7 @@ function marker(layer, name) {
     const half = place.keepOut.half || null;
     const lagDx = Number.isFinite(prevX) ? x - prevX : 0, lagDy = Number.isFinite(prevY) ? y - prevY : 0;
     prevX = x; prevY = y;
-    if (rx === kx && ry === ky && place.keepOut.key === kKeep && half === kHalf && wordsW === kW && wordsH === kH) return;
+    if (rx === kx && ry === ky && place.keepOut.key === kKeep && half === kHalf && wordsW === kW && wordsH === kH) { wordsBox.on = wordsBox.x1 > wordsBox.x0; return; }
     kx = rx; ky = ry; kKeep = place.keepOut.key; kHalf = half; kW = wordsW; kH = wordsH;
     keep.dx = keepDx; keep.dy = keepDy;
     placements++;
@@ -154,6 +164,7 @@ function marker(layer, name) {
       keepOut: place.keepOut.boxes, keep: Number.isFinite(keepDx) ? keep : null, half, out: placed, lagDx, lagDy,
       avoid: leftSide && placements <= avoidUntil ? leftSide : null });
     if (!b) { unplace(); return; }
+    wordsBox.x0 = b.x0; wordsBox.y0 = b.y0; wordsBox.x1 = b.x1; wordsBox.y1 = b.y1; wordsBox.on = true;
     keepDx = b.dx; keepDy = b.dy; // (the place is remembered, clear or not: ns-cue-place keepBonus, keepBadFrac)
     if (side && b.side !== side) { leftSide = side; avoidUntil = placements + (CUE_WORDS.backFrames || 0); }
     side = b.side;
@@ -168,10 +179,21 @@ function marker(layer, name) {
     if (node.dataset.placeKept !== kp) node.dataset.placeKept = kp; // (readback: the place was kept, or slid (pass 3), not chosen afresh)
   }
   return {
+    ringBox, wordsBox,
+    /** (HUD74) Where this mark's ring will be for `point` in a host `width` x `height`: fills ringBox (on false: no mark). */
+    ring(point, width, height) {
+      const half = CUE_RINGS[name];
+      ringBox.on = Boolean(half) && validPoint(point) && width > 0 && height > 0;
+      if (!ringBox.on) { wordsBox.on = false; return ringBox; }
+      const x = point.x * width, y = point.y * height;
+      ringBox.x0 = x - half[0]; ringBox.x1 = x + half[0]; ringBox.y0 = y - half[1]; ringBox.y1 = y + half[1];
+      return ringBox;
+    },
     move(point, prefix = '', place = null) {
       if (!validPoint(point)) {
         if (!node.hidden) node.hidden = true;
         forget(); // (pass 2: shown again, the words' place is chosen afresh)
+        wordsBox.on = false;
         return;
       }
       node.hidden = false;
@@ -220,6 +242,29 @@ export function createGuideCues(host, { prompt: givenPrompt = null } = {}) {
   let prompt = givenPrompt;
   let lastStep = null, lastChild = null, disposed = false;
   const place = { width: 0, height: 0, keepOut: null, step: '' };
+  // (HUD74, CUE_APART) a mark's own list of keep-outs: the game's, then `others`: the other marks' rings and the words
+  // of the marks placed before it (the marks' own boxes, filled in place). The lists and the place objects are made
+  // once and refilled: nothing is made per frame.
+  const apart = others => ({ others, keepOut: { key: 0, boxes: [], half: null }, place: { width: 0, height: 0, keepOut: null, step: '' } });
+  const apartLimb = apart([motorMark.ringBox, jointMark.ringBox, brainMark.ringBox, motorMark.wordsBox]);
+  const apartJoint = apart([motorMark.ringBox, limbMark.ringBox, brainMark.ringBox, motorMark.wordsBox, limbMark.wordsBox]);
+  const apartBrain = apart([motorMark.ringBox, limbMark.ringBox, jointMark.ringBox, motorMark.wordsBox, limbMark.wordsBox, jointMark.wordsBox]);
+  function placeFor(own, base) {
+    if (!base || !CUE_APART.on) return base;
+    const B = own.keepOut.boxes, src = base.keepOut.boxes, O = own.others;
+    let n = 0, h = base.keepOut.key % 2147483629;
+    for (let i = 0; i < src.length; i++) B[n++] = src[i];
+    for (let i = 0; i < O.length; i++) {
+      const b = O[i];
+      if (!b.on) continue;
+      B[n++] = b;
+      h = (h * 31 + Math.round(b.x0) * 7 + Math.round(b.y0) * 13 + Math.round(b.x1) * 17 + Math.round(b.y1) * 19 + b.weight) % 2147483629;
+    }
+    B.length = n;
+    own.keepOut.key = h * 64 + n; own.keepOut.half = base.keepOut.half || null;
+    own.place.width = base.width; own.place.height = base.height; own.place.step = base.step; own.place.keepOut = own.keepOut;
+    return own.place;
+  }
   const scope = host.closest('.ns-app') || host;
   function clearPrompt() {
     if (prompt && prompt.querySelector('.ns-guide-key')) prompt.textContent = prompt.textContent;
@@ -260,12 +305,18 @@ export function createGuideCues(host, { prompt: givenPrompt = null } = {}) {
     if (input.keepOut && Number.isFinite(input.width) && Number.isFinite(input.height)) { place.width = input.width; place.height = input.height; place.keepOut = input.keepOut; place.step = step || ''; }
     else place.keepOut = null;
     const at = place.keepOut ? place : null;
-    motorMark.move(motor, GUIDE.cue.motor, at);
     // Two targets at the same place should leave the primary motor marker legible.
     const tooClose = limb && motor && Math.abs(limb.x - motor.x) < .10 && Math.abs(limb.y - motor.y) < .055;
-    limbMark.move(tooClose ? null : limb, motor ? GUIDE.cue.limb : '', at);
-    brainMark.move(brain, '', at);
-    jointMark.move(joint ? { x: .5, y: input.jointAimY ?? .25, label: joint } : null, '', at);
+    const limbPoint = tooClose ? null : limb, jointPoint = joint ? { x: .5, y: input.jointAimY ?? .25, label: joint } : null;
+    // (HUD74, CUE_APART: the words of the limb's, the joint's and the brain's mark keep clear of every other mark's ring
+    // and of the words placed before theirs: the limb's, then the joint's, then the brain's. In steps 1 and 2, where
+    // the motor area's mark shows with its body part's, both are placed as they were: section 205 measured them.)
+    const w = at ? at.width : 0, hh = at ? at.height : 0;
+    motorMark.ring(motor, w, hh); limbMark.ring(limbPoint, w, hh); jointMark.ring(jointPoint, w, hh); brainMark.ring(brain, w, hh);
+    motorMark.move(motor, GUIDE.cue.motor, at);
+    limbMark.move(limbPoint, motor ? GUIDE.cue.limb : '', motor ? at : placeFor(apartLimb, at));
+    jointMark.move(jointPoint, '', placeFor(apartJoint, at));
+    brainMark.move(brain, '', placeFor(apartBrain, at));
     const words = [];
     if (motor) words.push(GUIDE.cue.motor + ': ' + motor.label);
     if (limb) words.push(GUIDE.cue.limb + ': ' + limb.label);

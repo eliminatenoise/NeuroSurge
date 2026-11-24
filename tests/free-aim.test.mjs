@@ -249,3 +249,33 @@ test('the tip keeps off the tutorial card: another side where one is clear, else
   // without the tip's size nothing can be judged
   assert.deepEqual(tipSides({ ...P, tipW: 0, tipH: 0, x: 260, y: 70, side: 'left' }), { right: true, low: false });
 });
+
+// 25 November 2026 (DESIGN-DECISIONS section 209; a hunt of update 73)
+test('the tip opens the other way when it would run past the right or bottom edge, and keeps off several cards', () => {
+  // finding 9, measured at 800x600: the pointer at x 544 to 576 with a 230 px tip ran up to 22 px past the right edge
+  assert.deepEqual(tipSides({ x: 560, y: 136, width: 800, height: 600, tipW: 230, tipH: 44 }), { right: true, low: false });
+  assert.deepEqual(tipSides({ x: 540, y: 136, width: 800, height: 600, tipW: 230, tipH: 44 }), { right: false, low: false }, 'it fits: as before');
+  assert.deepEqual(tipSides({ x: 300, y: 395, width: 800, height: 600, tipW: 150, tipH: 200 }), { right: false, low: true }, 'a tall tip near the bottom opens upward');
+  assert.deepEqual(tipSides({ x: 100, y: 136, width: 800, height: 600, tipW: 900, tipH: 44 }), { right: false, low: false }, 'a tip wider than the room on either side stays as it was');
+  // finding 5: the information card in the corner and the tutorial card are both kept off
+  const prompt = { x0: 16, y0: 14, x1: 308, y1: 94 }, info = { x0: 638, y0: 373, x1: 788, y1: 584 };
+  const P = { width: 800, height: 600, tipW: 158, tipH: 68, card: [prompt, info] };
+  const nearInfo = tipSides({ ...P, x: 500, y: 400 });
+  const boxOf = (x, y, r) => ({ x0: r.right ? x - 22 - 158 : x + 22, y0: (r.low ? y - 18 - 68 : y + 18) + (r.dy || 0), x1: r.right ? x - 22 : x + 22 + 158, y1: (r.low ? y - 18 : y + 18 + 68) + (r.dy || 0) });
+  const hit = (b, a) => b.x0 < a.x1 && b.x1 > a.x0 && b.y0 < a.y1 && b.y1 > a.y0;
+  assert.equal(hit(boxOf(500, 400, nearInfo), info), false, `clear of the information card: ${JSON.stringify(nearInfo)}`);
+  assert.deepEqual(tipSides({ ...P, x: 260, y: 70, side: 'left' }), { right: true, low: false, dy: 12 }, 'the tutorial card still slides the tip');
+  assert.deepEqual(tipSides({ ...P, card: [null, undefined], x: 500, y: 400 }), { right: false, low: false }, 'no boxes: as before');
+});
+
+test('the aim says while the pointer travels (the Space line alone waits for a rest)', () => {
+  let seen = null, t = 0; const out = [];
+  const step = more => { t += 16; const r = aimStep(seen, { free: true, width: W, height: H, lookMs: null, yaw: 0, pitch: 0, nowMs: t, ...more }); seen = r.seen; out.push(r); };
+  step({ pointer: null });
+  for (let i = 0; i < 5; i++) step({ pointer: at(400 + i * 20, 150, 100 + i * 16) });
+  const p = at(480, 150, 200);
+  for (let i = 0; i < 10; i++) step({ pointer: p });
+  assert.ok(out.slice(1, 6).every(f => f.pointer && f.travelling === true));
+  assert.equal(out.at(-1).travelling, false, 'rested');
+  assert.equal(out[0].travelling, false, 'the crosshair never travels');
+});

@@ -8579,6 +8579,119 @@ aim, and a click that presses an area presses the one under the pointer.
 - A click on one of your own limbs chooses that limb and only lights its area (section 139's rule); the information
   card then names the area's first movement and its muscles, which need not include the muscle that was clicked.
 
+## 209. Faults a tester found in update 73: a view turned away from everything says so and can be reset, arrow keys work during a neck or trunk movement, the cards take the pointer, and smaller ones (25 November)
+
+A tester played Body update 73 as a new player would (the free pointer, the tutorial at three window sizes, keys and
+mouse mixed, the outside view, the map, Lite) and reported twelve faults, each reproduced at least twice
+(`hunt73/FINDINGS.md`; its scenarios and pictures beside it). No crash, nothing lit during a return, no stuck limb, no
+transparent muscle. This section is the eight of them that are about the aim, the keys and the tips; section 210 has
+the four about what is drawn over the picture.
+
+**1. A view turned away from everything said nothing, and nothing brought it back (`LOOK_LOST`).** A drag on empty space
+turns the view freely (the owner, 23 November: the camera "can always move freely"). Four drags of 110 px to one side,
+or one of 240 px down, left a black picture: none of the brain or of either body in it, the tutorial card and the hint
+unchanged, no tip, and neither Reset brain view nor Reset body changed it. While none of the brain's sample points is in
+the picture and a 3 by 3 grid of the game's own picks finds nothing (asked every 0.4 s at most), a tip in the middle of
+the picture says "You have turned away from the brain" and how to get back: drag back, an arrow key, or Reset brain
+view. Reset brain view, pressed with none of the brain in the picture, now also turns the view back to the start look,
+and its notice says so. That is a command of the player's about the view; the camera still never moves by itself.
+Seen: the tip from a turn of 72 degrees on; after the reset the view is at the start look.
+
+**2. Arrow keys pressed during a neck or trunk movement did nothing, then areas were skipped.** A key's step waited
+until the head was still (section 180: the eye view then swung with the head). With the player camera from main the
+step's look is solved from the camera alone and the head carries nothing, so the wait only held the presses back and
+then played them at once: at one key every 0.65 s, two presses on the neck did nothing and the thumb and index areas
+were passed over. The step no longer waits for the head, and the look is no longer silent while the head moves
+(`headSilent`: only without the player camera), so an area a key steps to, or the pointer comes to rest on, during
+such a movement switches on like any other. The tester's walk of 54 presses each way at 0.65 s and at 0.3 s: every
+area visited, one press in 54 starting nothing (before: 8 and 9 at 0.65 s, with seven and eight areas never stopped at).
+
+**4 and 5. The cards take the pointer.** The tutorial's card, the information card and the panels let the pointer
+through to the picture. With the pointer as the aim (206) a pointer resting on the tutorial card at 800x600 named and
+moved the motor area hidden behind it, and a click there pressed it (23 grid points of the card); and the pointer's tip
+followed it over the information card (50 of 109 pointer places near the card at 800x600). The cards now take pointer
+events (`quiet.css`): over a card the pointer is not on the picture, the aim goes to the mark in the middle silently,
+and a press on a card presses nothing. The tip also keeps off the information card, the limb buttons and the map's
+card, as off the tutorial card (`tipSides` `card` takes several boxes; the app's `tipCards`, read every 250 ms at
+most). The line "Right leg · W A S D and your look move it", which showed at the aim whenever it was on nothing,
+follows the crosshair only: for a pointer "on nothing" is most of the picture. The tester's grids at 800x600: 0 card
+points with an area behind them, 0 of 76 and 0 of 177 tips on the information card.
+
+**7. W moved nothing at the start.** Every limb starts reached out, at W's far end: a second of W moved 0.0 to 0.6 cm
+while S moved 47 to 55 cm, and the tutorial's step said "Press W or S to reach". It says "Press S to draw it in, then A
+or D to swing" (the full line: S to draw the chosen limb in, or W to reach it out).
+
+**8. Two quick clicks on a motor area also stepped the chosen limb.** A double click steps the limb choice (19
+November). With the pointer as the aim a second quick click on an area is the player pressing it again. A double click
+on a motor area now presses it twice and leaves the limb alone; anywhere else it steps the limb as before.
+
+**9. A tip could run past the right edge.** The tip opened to the left of its point only in the right 28 % of the
+picture; at 800x600 the tips of the right half's in-between areas, with the pointer at x 544 to 576, ran up to 22 px
+past the edge. With the tip's size known (measured once per content and window size) a tip that would not fit opens to
+the other side, and upward near the bottom. The tester's 244 tips at 800x600: none partly outside the window.
+
+**12. "Space holds the brain" at every dark line of the strip.** The gaps between the strip's blocks are the brain's
+bare glass, so a pointer crossing the strip read that line 11 times in 111 steps. The Space line alone now waits for
+the pointer to rest (`aimStep` `travelling`); on a named muscle or bone it stays, as its second line.
+
+**Tests.** `tests/free-aim.test.mjs`: the tip near the edges and with several cards; `travelling`.
+`tests/browser-free-aim.mjs`: two quick clicks on an area press it twice and keep the limb; drags turn the view away,
+the tip in the middle of the empty picture, Reset brain view turns back; its own drag now starts beside the brain (the
+information card takes the pointer).
+
+**Not done, or not right.**
+- Reset body still leaves the view where it is (204), also when the picture is empty.
+- With the pointer on a card the mark in the middle is the aim, and a tip of the crosshair's can show there.
+- The tutorial's reach step still accepts W at the far end as "reached".
+
+## 210. The other four faults of the hunt: the tutorial's "Brain" ring marks a place where Space takes the brain, the cards of the keys fit the window, the hint stands above the foot line, and the pause page's two tutorial buttons look like its others (25 November)
+
+Findings 3, 6, 10 and 11 of the tester's list (section 209 has the other eight), fixed by a helper on its own branch
+and merged by the lead after its own look at the pictures.
+
+**3. The "Brain" ring of the tutorial's sixth step.** The ring stood at the brain's pivot whatever was drawn there. At
+800x600 that was the mirror body's pelvis: the tip there read "Sacrum · Space holds the mirror body", Space took the
+mirror body and the step stayed 6/9. At 1280x720 and 1600x900 its word "Brain" lay on the "Shoulder aim" mark (40 by
+16 and 40 by 9 px), and from outside the ring lay on the mirror body's shoulder. The ring now goes where the game's own
+pick (`targetsAt`) says bare brain, glass or outline, with no arrow tip on it (`createBrainCue` in `ns-cue-place.mjs`:
+found over 6 to 18 frames, 50 to 95 picks, then kept as a point of the brain), and the words of the limb, joint and
+brain marks keep off the other marks (`CUE_APART`, `placeFor` in `ns-guide-cues.mjs`; `guideCueKeepOut` also takes the
+seventh step's arrow captions). After: at 800x600 the ring is on a patch of brain beside your right hand, Space there
+carries the brain and the step goes to 7/9; the overlaps are 0; from outside the ring is on the brain.
+
+**6. The cards of the keys were taller than a small window.** While Space holds the brain at 800x600 the information
+card "Hands and feet: grip" was 692 px tall with its title 73 px above the top edge; at the full reading level the
+title was out of sight at all three sizes tried. The short card is capped at 66 % of the window's height; the key
+cards (grip, reach), which cannot scroll, are fitted in stages (`KEY_CARD_FIT`, `keyCardStage` in `fitInfoCard`, the
+`data-ns-keyfit` rules in `neurosurge.css`, `musclesShort` and `rowsShort` in `ns-text.mjs`), and a card on a new
+subject starts at its top. After: 317 px at 800x600 with the title in sight; a probe of area, grip, reach and limb
+cards at 800x600, 1024x768 and 1280x720, both reading levels: nothing over the window.
+
+**10. The hint sat on the page's foot line.** After a look up the hint is moved beside the brain's back arrow, and
+there it shared 8 px of height with "Simulated activity · Game editions · Notes and credits" at 1280x720 (hint 681 to
+706, foot line from 698); at 800x600 the usual place shared 84 by 8 px with it too. The hint is raised clear of the
+foot line where they would meet (`FOOT_LINE`, `hintOverFoot`, in the shell's `placeToast`): 668 to 693 at 1280x720,
+848 to 873 at 1600x900, 533 to 573 at the 800x600 start. The limb buttons stand above the hint as in section 207.
+
+**11. Two buttons of the pause page were the browser's own.** "Resume tutorial" and "Restart tutorial" were light grey
+boxes with an outset border on the dark page. They have the page's secondary look and a 3 px focus outline
+(`.ns-guide-action` in `guide-cues.css`).
+
+**Tests.** `tests/hud74.test.mjs` (22: the ring's search, the words apart, the key cards' stages, the hint over the
+foot line). `tests/browser-play-settings.mjs`: both buttons against the page's secondary button.
+`tests/browser-hud-clear.mjs`, a fresh page per size: the hint after three looks up, the ring's pick in both views at
+steps 6 and 7, Space and a drag advancing those steps, the grip card at both reading levels.
+
+**Not done, or not right.**
+- At 800x600 no place has 26 px of bare brain round it, so the ring sits on a small patch beside your right hand; the
+  grip card drops its muscle row there (the short muscle line shows from 1024x768).
+- Seen on the way, not fixed: at 800x600 and 1024x768 the seventh step's two side arrow captions overlap each other by
+  25 px and lie on the shoulder or hip mark; in the 800x600 tutorial the pointer's tip can lie on "Hip aim" (53 by 6
+  px) and is squeezed to a word a line near the right edge; area cards at the full level at 800x600 still cut their
+  honesty lines after three lines; the limb buttons show faintly through the foot of the pause page at 800x600.
+- `tests/browser-hud-clear.mjs` at 1024x768 (not one of its default sizes) reads 15 to 23 jumps in its wide look
+  against a limit of 18.
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**

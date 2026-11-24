@@ -19,7 +19,11 @@
 .ns-guide-summary{cursor:pointer;font-weight:700}
 .ns-guide-steps{padding-inline-start:1.6rem;margin:.6rem 0}
 .ns-guide-steps li,.ns-guide-note{margin:.35rem 0}
-.ns-guide-action{margin:.3rem .5rem .2rem 0;min-height:2.75rem;padding:.3rem .65rem;font:inherit;cursor:pointer}
-.ns-guide-actions :focus-visible{outline:3px solid #58afff;outline-offset:2px}
+.ns-guide-action{margin:.3rem .5rem .2rem 0;min-height:2.75rem;padding:.3rem .85rem;font:inherit;cursor:pointer}
+/* 24 November 2026 (hunt of update 73, finding 11): "Resume tutorial" and "Restart tutorial" on the pause page were the browser's own light grey buttons on the dark page. They have the page's secondary look (loading-r302.css .ns-shell-secondary: a pale line round clear glass, pale words), written out here so this sheet needs no other. */
+.ns-guide-action{border:1px solid #c7d2df;border-radius:8px;background:transparent;color:#e8eef5}
+.ns-guide-action:hover{background:rgba(232,238,245,.08)}
+.ns-guide-action:active{background:rgba(232,238,245,.16)}
+.ns-guide-actions :focus-visible{outline:3px solid #7cc4ff;outline-offset:2px}
 @media(prefers-reduced-motion:reduce){.ns-guide-cues,.ns-guide-cues *{animation:none!important;transition:none!important}}
 @media(forced-colors:active){.ns-guide-mark,.ns-guide-key{border-color:Highlight}.ns-guide-mark-name{color:CanvasText;background:Canvas}}

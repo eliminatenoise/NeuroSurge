@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-24-body-update-73",
+  "version": "experimental-2026-11-25-body-update-74",
   "experimental": true,
-  "source": "Body update 73. A click with the free pointer acts where the pointer is, also right after an arrow key. With the pointer free the pointer is the aim. Full and Lite share the game; drag on empty space to look or choose Capture mouse from the Escape menu.",
+  "source": "Body update 74. Twelve faults found by a tester playing update 73 as a new player are fixed: a view turned away from everything says so and can be reset, arrow keys work during a neck or trunk movement, the cards take the pointer. With the pointer free the pointer is the aim. Full and Lite share the game.",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -32,8 +32,8 @@
     },
     {
       "path": "DESIGN-DECISIONS.md",
-      "bytes": 1035232,
-      "sha256": "f9e68b7c8401b6d770373fac0f195153ecdcfbecab69ab51f4d82aab79c3ab66"
+      "bytes": 1045568,
+      "sha256": "4324f023a283a90e9ce47df742bf8c6d3752cf504243d964c97408654ca9904d"
     },
     {
       "path": "LAUNCHERS.md",
@@ -62,8 +62,8 @@
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 65475,
-      "sha256": "89b9588442d798c14cc4a19b74a281411b47ab902947233e6e9ff3f04fe4f3d0"
+      "bytes": 66575,
+      "sha256": "07ca41c179602d741bd7cebd8cacd207a040cd250ac7f434ee4c9c996ce70393"
     },
     {
       "path": "README.md",
@@ -73,12 +73,12 @@
     {
       "path": "START.html",
       "bytes": 4507,
-      "sha256": "161fb0ca869d1ddf5d7d77671dcad3581e7be112cac096d1ed667a8539265e10"
+      "sha256": "d2ef3c480d4d08ed82c994e90f1c67a7227f21d24410892b930a4d01419d42c4"
     },
     {
       "path": "index.html",
       "bytes": 3909,
-      "sha256": "c2bafcd16fc8e02be7ed56fe73aedbbc37aebe17b44b9a003837eebaf0584ea6"
+      "sha256": "474cca489c3c0cab318676a34959a9863583e62dbd7b38412038016923205988"
     },
     {
       "path": "inputs/FULLBODY-MESH-MANIFEST.json",
@@ -3947,8 +3947,8 @@
     },
     {
       "path": "scene/example/guide-cues.css",
-      "bytes": 2824,
-      "sha256": "21d3a57f9910a643a835f33f084a8cb40cc79c7c8394e996cbb4a97e1852eb62"
+      "bytes": 3378,
+      "sha256": "d108aebd84149e0c43e90b2cafb8be00c8f9477102caf66ed54bab83440492f1"
     },
     {
       "path": "scene/example/index.html",
@@ -3962,8 +3962,8 @@
     },
     {
       "path": "scene/example/neurosurge.css",
-      "bytes": 56709,
-      "sha256": "8e985797dea0fac5364caa5f465f5423fc6ce843675dd6e3b3cb634c5365ed78"
+      "bytes": 58610,
+      "sha256": "a2e1bccebce9e617abf5f1b244347b64a3559653bb7fc6ace76557cd5d30b8ee"
     },
     {
       "path": "scene/example/preview.css",
@@ -3977,8 +3977,8 @@
     },
     {
       "path": "scene/example/quiet.css",
-      "bytes": 38730,
-      "sha256": "fea96a30cc30db0ee4f5effe56e5599de4ef2b1527450efefec95686993ef16e"
+      "bytes": 40030,
+      "sha256": "f4929fbf222ad26b56d50a0ddd2ec164b17974769ebe2f71ff167da04c1d6908"
     },
     {
       "path": "scene/src/ns-actions.mjs",
@@ -3987,8 +3987,8 @@
     },
     {
       "path": "scene/src/ns-app.mjs",
-      "bytes": 1186979,
-      "sha256": "c6aaf9ae6844b6d8e8b2df2c980c753fd75cfb2b3728adcf2bd4312c68af0409"
+      "bytes": 1201005,
+      "sha256": "16d9a6eed0ad9330ace3814770fdcec10a5b2e9dc977d80352bcd7735254802b"
     },
     {
       "path": "scene/src/ns-area-halo.mjs",
@@ -4122,8 +4122,8 @@
     },
     {
       "path": "scene/src/ns-cue-place.mjs",
-      "bytes": 22098,
-      "sha256": "71d3d4776502ed120863cf659dd82020ca9c283478cfe2a1c4e6bddfb29618f1"
+      "bytes": 37071,
+      "sha256": "608ea67cb61fedbb901d5871cde1d6a5fe5c5813aeb74b1773151403cf51ead8"
     },
     {
       "path": "scene/src/ns-dance.mjs",
@@ -4182,8 +4182,8 @@
     },
     {
       "path": "scene/src/ns-guide-cues.mjs",
-      "bytes": 17211,
-      "sha256": "7cb1215c100299ae2c830b627bb8e4fb54d408fdfcf586785f1a31df6fc6c0ba"
+      "bytes": 21226,
+      "sha256": "e7600b1f8b698fa68953d58609fb485122b2c535f6605a96554da6f03518cca4"
     },
     {
       "path": "scene/src/ns-guide.mjs",
@@ -4282,8 +4282,8 @@
     },
     {
       "path": "scene/src/ns-quiet.mjs",
-      "bytes": 19003,
-      "sha256": "9e705ba8244945f97ae0c9e441a642c97fec9b3f49602b9710a8940f5b30e88c"
+      "bytes": 20145,
+      "sha256": "466968f28f38e2075b8c1fdfebaf5885bc9f88cb6ee571b0dca7b57a07bf2e1f"
     },
     {
       "path": "scene/src/ns-raw-look.mjs",
@@ -4317,8 +4317,8 @@
     },
     {
       "path": "scene/src/ns-scene-three.mjs",
-      "bytes": 1393082,
-      "sha256": "41dd903fcafdf0be6c63e55b87c1e85b4ff304e545fd1c9de24da1f4f0f4c8e1"
+      "bytes": 1397762,
+      "sha256": "8fbb4ae24faabd6ccf522bd370506f132b8d42b5d977ec4b346fa18f1bdbe5c3"
     },
     {
       "path": "scene/src/ns-see.mjs",
@@ -4327,8 +4327,8 @@
     },
     {
       "path": "scene/src/ns-text.mjs",
-      "bytes": 154321,
-      "sha256": "c11cc5d2d9b1876d163515b0f6279ae242c82a9429fc81f0d65d4bffde56d947"
+      "bytes": 155793,
+      "sha256": "f4af350baeb444551f60bf8eac9cb7a80eba33cad47ac8e00f7e5db7f9b60f8b"
     },
     {
       "path": "scene/src/ns-vessels.mjs",
@@ -4472,13 +4472,13 @@
     },
     {
       "path": "tests/browser-free-aim.mjs",
-      "bytes": 11352,
-      "sha256": "b527ad669196243c980d6f30c22cfeaa863ab82c0691e3a54f828baa55e2c122"
+      "bytes": 15083,
+      "sha256": "a31e770dfa1da73d6a5744c74fe9ec710c7d88c4f0e17ebac4b7083ce68fc6e2"
     },
     {
       "path": "tests/browser-hud-clear.mjs",
-      "bytes": 20080,
-      "sha256": "b1d229067b67b610b4968da1097ecbd73b73a494ff8a060220f5292f53922d7f"
+      "bytes": 42022,
+      "sha256": "97a56f6c5166d0c6f857febdb814d2e00ad4f922d050b477dd0b3fff6416c2da"
     },
     {
       "path": "tests/browser-keyboard-aim.mjs",
@@ -4512,8 +4512,8 @@
     },
     {
       "path": "tests/browser-play-settings.mjs",
-      "bytes": 14002,
-      "sha256": "e724a36821ca342b6f0b7fa9868216f268d4f58c7be3969eb1c7fee322e518ac"
+      "bytes": 16701,
+      "sha256": "7c8cfcef1b5313bb78b846fb7c6de7ebdce239384db955a2dbffccccf60f5965"
     },
     {
       "path": "tests/browser-player-focus.mjs",
@@ -4647,8 +4647,8 @@
     },
     {
       "path": "tests/free-aim.test.mjs",
-      "bytes": 17713,
-      "sha256": "1f4a1976ee9f269fd8b94246974ef13d6b5909d50dea21311ffdadd5305c8b46"
+      "bytes": 20408,
+      "sha256": "aa40e4fe9fab0d5a6fed29a5d7f7e1d394708de0a96356879106304735067f60"
     },
     {
       "path": "tests/guide-order.test.mjs",
@@ -4679,6 +4679,11 @@
       "path": "tests/hud-words.test.mjs",
       "bytes": 7805,
       "sha256": "b688a1d00f23e48f7a068f51f55668692140bdbee6b1bceb641b337cca1070e3"
+    },
+    {
+      "path": "tests/hud74.test.mjs",
+      "bytes": 26734,
+      "sha256": "f3e5fe44368c02540345bcb0ad6e17bcd927c4236542a61e1aefddaf0e16cb7c"
     },
     {
       "path": "tests/info-settle.test.mjs",

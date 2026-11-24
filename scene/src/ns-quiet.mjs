@@ -148,7 +148,12 @@ export function quietPromptCount(guide) {
  * across, 18 px down). Pure.
  */
 export function tipSides({ x = 0, y = 0, width = 0, height = 0, side = null, tipW = 0, tipH = 0, avoid = null, card = null } = {}) {
-  const right = x > width * 0.72 || (side === 'left' && x > width * 0.3), low = y > height * 0.7;
+  const sized = tipW > 0 && tipH > 0;
+  // 25 November 2026 (section 209, hunt of update 73, finding 9): with the tip's size known, a tip that would run past
+  // the right or bottom edge opens to the other side (at 800x600 the tips of the right half's in-between areas, with the
+  // pointer at x 544 to 576, ran up to 22 px past the right edge: the 0.72 rule alone knows nothing of the tip's width).
+  const right = x > width * 0.72 || (side === 'left' && x > width * 0.3) || (sized && x + 22 + tipW > width && x - 22 - tipW >= 0);
+  const low = y > height * 0.7 || (sized && y + 18 + tipH > height && y - 18 - tipH >= 0);
   const box = (r, l) => ({ x0: r ? x - 22 - tipW : x + 22, y0: l ? y - 18 - tipH : y + 18, x1: r ? x - 22 : x + 22 + tipW, y1: l ? y - 18 : y + 18 + tipH });
   // 24 November 2026 (FREE_AIM, DESIGN-DECISIONS section 207): `card` is a box drawn OVER the tip (the tutorial's card:
   // with the pointer as the aim the tip can open anywhere, and at 800x600 the tip of an area near the top left corner
@@ -156,19 +161,23 @@ export function tipSides({ x = 0, y = 0, width = 0, height = 0, side = null, tip
   // the hand alone; else a side clear of the card; else the usual box is slid down, or up, just past the card (`dy`, CSS
   // px, at most TIP_SLIDE_MAX; left out when 0). The hand's box never slides the tip: it can be large, and a tip far
   // from its point names nothing.
+  // (25 November 2026, section 209, finding 5: `card` may be several boxes, the tutorial's card and the information
+  // card; the slide is off the first one the usual box lies on.)
   const good = a => a && [a.x0, a.y0, a.x1, a.y1].every(Number.isFinite) && a.x1 > a.x0 && a.y1 > a.y0;
-  const soft = good(avoid) ? avoid : null, hard = good(card) ? card : null;
+  const soft = good(avoid) ? avoid : null, hard = (Array.isArray(card) ? card : [card]).filter(good);
   const hits = (b, a) => Boolean(a) && b.x0 < a.x1 && b.x1 > a.x0 && b.y0 < a.y1 && b.y1 > a.y0;
+  const hitsHard = b => hard.some(a => hits(b, a));
   const inside = b => b.x0 >= 0 && b.y0 >= 0 && b.x1 <= width && b.y1 <= height;
   const b0 = box(right, low);
-  if ((!soft && !hard) || !(tipW > 0 && tipH > 0) || (!hits(b0, soft) && !hits(b0, hard))) return { right, low };
+  if ((!soft && !hard.length) || !sized || (!hits(b0, soft) && !hitsHard(b0))) return { right, low };
   const others = [[right, !low], [!right, low], [!right, !low]];
-  for (const [r, l] of others) { const b = box(r, l); if (!hits(b, soft) && !hits(b, hard) && inside(b)) return { right: r, low: l }; }
-  if (!hard || !hits(b0, hard)) return { right, low }; // only the hand is in the way and no side is clear of it: the usual one
-  for (const [r, l] of others) { const b = box(r, l); if (!hits(b, hard) && inside(b)) return { right: r, low: l }; }
-  for (const dy of [hard.y1 + TIP_SLIDE_GAP - b0.y0, hard.y0 - TIP_SLIDE_GAP - b0.y1]) {
+  for (const [r, l] of others) { const b = box(r, l); if (!hits(b, soft) && !hitsHard(b) && inside(b)) return { right: r, low: l }; }
+  if (!hitsHard(b0)) return { right, low }; // only the hand is in the way and no side is clear of it: the usual one
+  for (const [r, l] of others) { const b = box(r, l); if (!hitsHard(b) && inside(b)) return { right: r, low: l }; }
+  const on = hard.find(a => hits(b0, a));
+  for (const dy of [on.y1 + TIP_SLIDE_GAP - b0.y0, on.y0 - TIP_SLIDE_GAP - b0.y1]) {
     const b = { x0: b0.x0, x1: b0.x1, y0: b0.y0 + dy, y1: b0.y1 + dy };
-    if (Math.abs(dy) <= TIP_SLIDE_MAX && inside(b)) return { right, low, dy: Math.round(dy) };
+    if (Math.abs(dy) <= TIP_SLIDE_MAX && inside(b) && !hitsHard(b)) return { right, low, dy: Math.round(dy) };
   }
   return { right, low };
 }
@@ -216,7 +225,7 @@ export function createQuietUi({ doc, root }) {
     } catch { promptRect = null; }
     return promptRect;
   }
-  function update({ tip: model = null, prompt: words = '', count = '', skip = '', x = 0, y = 0, width = 0, height = 0, show = true, side = null, avoid = null } = {}) {
+  function update({ tip: model = null, prompt: words = '', count = '', skip = '', x = 0, y = 0, width = 0, height = 0, show = true, side = null, avoid = null, cards = null } = {}) {
     if (show !== shown) { shown = show; layer.hidden = !show; }
     if (!show) return;
     const key = model ? model.key : null;
@@ -263,12 +272,15 @@ export function createQuietUi({ doc, root }) {
       // (24 November 2026, section 207: the tip also keeps off the tutorial's card, whose box is measured once per its
       // words and window size)
       const card = promptBox(width, height);
-      if (avoid || card) {
+      // (25 November 2026, section 209: the tip's size is always known, once per content and window size, so that a tip
+      // near the right or bottom edge opens the other way; `cards`: more boxes drawn over the tip, the information card)
+      {
         const sk = `${tipKey}|${Math.round(width)}x${Math.round(height)}`;
         if (!tipSize || tipSize.key !== sk) { const w0 = tip.offsetWidth, h0 = tip.offsetHeight; tipSize = { key: sk, w: Number.isFinite(w0) ? w0 : 0, h: Number.isFinite(h0) ? h0 : 0 }; }
         tipW = tipSize.w; tipH = tipSize.h;
       }
-      const { right, low, dy = 0 } = tipSides({ x, y, width, height, side, tipW, tipH, avoid, card });
+      const hard = [card, ...(Array.isArray(cards) ? cards : [])].filter(Boolean);
+      const { right, low, dy = 0 } = tipSides({ x, y, width, height, side, tipW, tipH, avoid, card: hard });
       const pk = `${Math.round(x)}|${Math.round(y)}|${right ? 1 : 0}${low ? 1 : 0}|${dy}`; // (dy follows the card's box: a card that grows moves the tip)
       if (pk !== placeKey) {
         placeKey = pk;

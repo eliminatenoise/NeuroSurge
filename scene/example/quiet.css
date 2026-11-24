@@ -214,7 +214,12 @@ body:has(.ns-keys.ns-ctl) .ns-shell-root .ns-shell-toast { opacity: 0; }
   .ns-infopanel-caveat, .ns-infopanel-explanation, .ns-infopanel-caveats, .ns-infopanel-citations, .ns-infopanel-detail,
   .ns-infopanel-key-easing, .ns-infopanel-row-easing, .ns-infopanel-key-pathway, .ns-infopanel-row-pathway,
   .ns-infopanel-key-movement, .ns-infopanel-row-movement, .ns-infopanel-key-body, .ns-infopanel-row-body) { display: none !important; }
-.ns-app[data-ns-read="read"] .ns-infopanel { max-height: none !important; -webkit-mask-image: none; mask-image: none; bottom: 16px; padding: 14px 16px 14px; border-radius: 14px; background: rgba(5, 8, 12, 0.94); border: 1.5px solid var(--ns-chunk-rim); border-left-width: 5px; }
+/* 24 November 2026 (hunt of update 73, finding 6): the short card had no greatest height at all (max-height: none), and
+   at 800 by 600 the grip card of Space stood 692 px tall in the 600 px window, its title above the top edge. It now
+   has the information column's own greatest height (66 % of the window, never past the top: the full card's box), and
+   a key's card that would run over gives up whole parts (ns-scene-three KEY_CARD_FIT). The areas' cards are far
+   shorter (at most 265 px at 800 by 600) and are as they were. */
+.ns-app[data-ns-read="read"] .ns-infopanel { max-height: min(calc(100% - 30px - var(--ns-gap, 12px)), var(--ns-info-col-maxvh, 66vh)) !important; -webkit-mask-image: none; mask-image: none; bottom: 16px; padding: 14px 16px 14px; border-radius: 14px; background: rgba(5, 8, 12, 0.94); border: 1.5px solid var(--ns-chunk-rim); border-left-width: 5px; }
 .ns-app[data-ns-read="read"] .ns-infopanel-title { margin: 0 64px 2px 0; font-size: 19px; font-weight: 800; color: #fff; }
 .ns-app[data-ns-read="read"] .ns-infopanel :is(.ns-infopanel-plain, .ns-infopanel-moves, .ns-infopanel-rows) {
   margin: 12px 0 0; padding: 12px 0 0; border-top: 1px solid rgba(200, 222, 240, 0.28);
@@ -444,3 +449,11 @@ body:has(.ns-keys.ns-ctl) .ns-shell-root .ns-shell-toast { opacity: 0; }
   .ns-emap-title { font-size: 14px; }
   .ns-app[data-ns-read="more"] .ns-emap-more { max-height: 30vh; }
 }
+
+/* 25 November 2026 (DESIGN-DECISIONS section 209; a hunt of update 73, findings 4 and 5): a card is not the picture.
+   With the pointer free and the pointer as the aim (section 206), the tutorial's card, the information card and the
+   panels let the pointer through: at 800x600 a pointer resting on the tutorial card named and moved the motor area
+   hidden behind it, and a click there pressed it. They take the pointer now: over a card the pointer is not on the
+   picture (the aim goes to the mark in the middle, silently) and a press there presses nothing. */
+.ns-quiet .ns-prompt, .ns-scene-overlay .ns-infopanel, .ns-app .ns-emap-card, .ns-hud .ns-panel { pointer-events: auto; }
+

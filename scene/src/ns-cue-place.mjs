@@ -1,4 +1,5 @@
-// Where the words of a tutorial cue go beside its ring (pure: no DOM, no three.js; tested in Node).
+// Where the words of a tutorial cue go beside its ring, and (at the end, 24 November 2026, HUD74) where the "Brain"
+// ring itself goes (pure: no DOM, no three.js; tested in Node).
 //
 // 24 November 2026 (round r33, package UI5; DESIGN-DECISIONS section 205). An independent check of Body update 70: the
 // tutorial's first cue, "Motor area · Left toes", put its words under its ring whenever the ring was in the top 16 % of
@@ -290,4 +291,227 @@ export function placeCueWords({ x, y, ringHalfPx, ringHalfYPx = ringHalfPx, w, h
     }
   }
   return giveTo(o, x + bestBad.dx - w / 2, y + bestBad.dy - h / 2, false, bestBad.cost, bestBad.side, bestBad.dx, bestBad.dy, false, false);
+}
+
+/* ---------------------------------------------------------------- where the "Brain" ring itself goes */
+
+// 24 November 2026 (package HUD74; the hunt of Body update 73, finding 3). Steps 6 and 7 of the tutorial ("Hold Space on
+// the brain, carry it, then release", "Drag the brain to turn it") mark the brain with a dashed ring and the word
+// "Brain". The ring stood at the brain's turning point as drawn on the screen, whatever was drawn there: at 800x600
+// and 1024x768 that is the mirror body's pelvis (the tip read "Sacrum · Space holds the mirror body", Space took the
+// mirror body and the step stayed 6/9); from outside at 1280x720 and 1600x900 its left shoulder. The ring now goes
+// where the game's own pick says a press takes the brain: the brain's bare glass (or the inside of its outline), not a
+// motor area, not an arrow's tip, not the mirror body and not one of your limbs seen through the glass, where it can
+// with bare brain all round it, clear of the labels, the arrows, the cards and the other cue marks, and with a clear
+// place beside it for its word.
+//
+// The game hands in the pick (ns-app targetsAt, about 0.4 ms each on the test machine), so the search is spread over
+// frames; the place found is kept as a point of the brain (in the brain's own frame), so the ring rides with the brain
+// while it is looked at, carried or turned, and is tried again only when the pick there stops saying "brain".
+/** The rule (display choices; CSS px unless said):
+ * - ringPx: the ring's half size (guide-cues.css: 26 px across); ringRoomPx: the room round the place that must be
+ *   the brain too at eight points (the ring and a little more); roomPx: the wider room of a "roomy" place, eight more
+ *   points (and eight at midRoomPx between): bare brain well round the ring, so the ring is seen to be on the brain
+ *   and on nothing else;
+ * - gridFrac / gridMinPx: the grid of places tried, this share of the picture's shorter side apart. The roomy place
+ *   nearest the brain's middle, with a clear place for its word, wins; places off the two bodies' boxes on the
+ *   screen (`busy`) are tried first, since the bare brain is seldom between your limbs. With no roomy place (a small
+ *   window), the nearest place with the middle room, else the nearest of the first `spare` places that are the brain
+ *   with the ring's own room; one whose word has a clear place first;
+ * - edgePx / topPx: the picture's edge and its top band, which the ring keeps inside (topPx leaves room for the word
+ *   over the ring);
+ * - padPx: the room between the ring and a keep-out box when a place is chosen (a place in use is given up only when
+ *   a box reaches the ring itself);
+ * - wordsW / wordsH: the box of the word "Brain" as guide-cues.css draws it, for the test that it has a clear place;
+ * - msPerFrame, minPicks, maxPicks: the picks of one frame (at least minPicks, then until msPerFrame is spent, never
+ *   more than maxPicks); a search goes on in the next frame where it stopped;
+ * - checkEvery: frames between two picks at the place in use: one pick at a time, its middle and one of the eight
+ *   points of the ring's room in turn (its middle every 2 x checkEvery frames, each point every 16 x checkEvery);
+ * - retryFrames: frames to wait after a search that found no place (the brain out of sight, or all of it covered). */
+export const BRAIN_CUE = Object.freeze({ on: true, ringPx: 13, ringRoomPx: 18, midRoomPx: 26, roomPx: 36, gridFrac: 1 / 14, gridMinPx: 34, edgePx: 34, topPx: 64, padPx: 6, spare: 12,
+  wordsW: 42, wordsH: 19, msPerFrame: 2, minPicks: 3, maxPicks: 24, checkEvery: 5, retryFrames: 45 });
+
+const fin = v => Number.isFinite(v);
+
+/** The places tried, in the order they are tried (pure): [{ x, y }] in CSS px, a grid over the picture inside its
+ * edges; first the places off every `busy` box ([{ x0, y0, x1, y1 }]: the two bodies as drawn), nearest the anchor
+ * first, then the places on one. `anchor` ({ x, y } or null: the picture's middle) is where the brain's middle is
+ * drawn. Empty for a picture too small to hold a grid. */
+export function brainCueGrid({ width, height, anchor = null, busy = null, rules = BRAIN_CUE } = {}) {
+  if (!(width > 0 && height > 0)) return [];
+  const step = Math.max(rules.gridMinPx, Math.round(Math.min(width, height) * rules.gridFrac));
+  const x0 = rules.edgePx, x1 = width - rules.edgePx, y0 = Math.max(rules.edgePx, rules.topPx), y1 = height - rules.edgePx;
+  if (!(x1 > x0 && y1 > y0)) return [];
+  const nx = Math.floor((x1 - x0) / step) + 1, ny = Math.floor((y1 - y0) / step) + 1;
+  const ox = x0 + ((x1 - x0) - (nx - 1) * step) / 2, oy = y0 + ((y1 - y0) - (ny - 1) * step) / 2;
+  const ax = anchor && fin(anchor.x) ? anchor.x : width / 2, ay = anchor && fin(anchor.y) ? anchor.y : height / 2;
+  const list = [];
+  for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+    const x = Math.round(ox + i * step), y = Math.round(oy + j * step);
+    list.push({ x, y, d: (x - ax) * (x - ax) + (y - ay) * (y - ay), busy: !clearOfBoxes(x, y, rules.ringPx, busy, 0) });
+  }
+  list.sort((p, q) => (p.busy ? 1 : 0) - (q.busy ? 1 : 0) || p.d - q.d);
+  return list;
+}
+
+/** True when the square of half size `half` round (x, y), grown by `pad`, meets none of `boxes` ([{ x0, y0, x1, y1 }],
+ * CSS px; a box that is not finite is passed over). Pure. */
+export function clearOfBoxes(x, y, half, boxes, pad = 0) {
+  if (!Array.isArray(boxes)) return true;
+  const r = half + pad;
+  for (let i = 0; i < boxes.length; i++) {
+    const b = boxes[i];
+    if (!b || !(fin(b.x0) && fin(b.y0) && fin(b.x1) && fin(b.y1))) continue;
+    if (x - r < b.x1 && x + r > b.x0 && y - r < b.y1 && y + r > b.y0) return false;
+  }
+  return true;
+}
+
+// the eight points round a place that must be the brain too, r px out
+const discMemo = new Map();
+function discOffsets(r) {
+  let list = discMemo.get(r);
+  if (list) return list;
+  list = [];
+  for (let k = 0; k < 8; k++) { const a = k * Math.PI / 4; list.push([Math.round(Math.cos(a) * r), Math.round(Math.sin(a) * r)]); }
+  discMemo.set(r, list);
+  return list;
+}
+
+/**
+ * The ring's place from frame to frame. `step(input)` returns { x, y } (CSS px, the ring's middle) or null (no place:
+ * none found yet, or the brain is not there). input:
+ *  - frame: the frame's number; width, height: the picture (CSS px); view: any string that changes with the view
+ *    (eye view or outside): the place in use is checked at once when it changes;
+ *  - anchor: { x, y } where the brain's middle is drawn, or null;
+ *  - pick(x, y): the game's pick there: { brain: true when a press takes the brain's bare glass or the inside of its
+ *    outline, point: [x, y, z] the world point hit, plain: false on a named part of the brain (an eyeball, a nerve, a
+ *    ventricle seen between the halves): such a place is no roomy one } (or null); maybe(x, y) (optional): false
+ *    where the brain cannot be (outside its outline): no pick is spent there;
+ *  - toLocal(point): that world point in the brain's own frame; project(local): where such a point is drawn now,
+ *    { x, y } in CSS px, or null when it is not in the picture;
+ *  - keepOut: boxes the ring keeps off ([{ x0, y0, x1, y1 }]); wordsKeepOut: the boxes its word keeps off (by
+ *    default the same); half: the brain's midline for the word (ns-cue-place), or null; busy: the two bodies' boxes
+ *    on the screen (places on them are tried last), or null;
+ *  - hold: the brain is carried or turned now: the place is kept and nothing is picked; away: the camera is on its
+ *    way between two views: no ring and no pick until it rests (the place is then checked at once, by `view`);
+ *  - now(): a clock in ms for the frame's budget.
+ */
+export function createBrainCue(rules = BRAIN_CUE) {
+  let place = null, search = null, waitUntil = -1, viewSeen = null;
+  const give = { x: 0, y: 0 }, words = {};
+  const stats = { searches: 0, picks: 0, found: 0, lost: 0, none: 0, roomy: false, searchPicks: 0, searchFrames: 0 };
+  let used = 0, t0 = 0, clock = null;
+  const spent = () => used >= rules.maxPicks || (used >= rules.minPicks && clock !== null && clock() - t0 >= rules.msPerFrame);
+  const ask = (input, x, y) => { used++; stats.picks++; if (search) search.picks++; let r = null; try { r = input.pick(x, y); } catch { r = null; } return r && r.brain === true ? r : null; };
+  const inside = (p, w, h) => p.x >= rules.edgePx && p.x <= w - rules.edgePx && p.y >= Math.max(rules.edgePx, rules.topPx) && p.y <= h - rules.edgePx;
+  const out = p => { give.x = p.x; give.y = p.y; return give; };
+  // the brain at eight points r px round (x, y)
+  const roomAt = (input, x, y, r) => { for (const o of discOffsets(r)) if (!ask(input, x + o[0], y + o[1])) return false; return true; };
+  const wordsClear = (input, x, y) => {
+    const b = placeCueWords({ x, y, ringHalfPx: rules.ringPx, w: rules.wordsW, h: rules.wordsH, width: input.width, height: input.height,
+      keepOut: Array.isArray(input.wordsKeepOut) ? input.wordsKeepOut : Array.isArray(input.keepOut) ? input.keepOut : [], half: input.half || null, out: words });
+    return Boolean(b && b.clear);
+  };
+  // the place is taken when, picked afresh in this frame, it is the brain with the ring's own room
+  const take = (input, c, roomy) => {
+    const hit = ask(input, c.x, c.y);
+    if (!hit || !roomAt(input, c.x, c.y, rules.ringRoomPx)) return false;
+    let local = null;
+    try { local = Array.isArray(hit.point) ? input.toLocal(hit.point) : null; } catch { local = null; }
+    if (!Array.isArray(local) || local.length !== 3 || !local.every(fin)) return false;
+    place = { local, checkedAt: input.frame, x: c.x, y: c.y, seq: 0 };
+    stats.found++; stats.roomy = roomy; stats.searchPicks = search ? search.picks : 0; stats.searchFrames = search ? input.frame - search.startedAt + 1 : 0;
+    search = null;
+    return true;
+  };
+  function runSearch(input) {
+    if (!search) {
+      search = { list: brainCueGrid({ width: input.width, height: input.height, anchor: input.anchor, busy: input.busy, rules }), i: 0, stage: 0, plain: true, spare: [], spareAt: -1, pass: 0, picks: 0, startedAt: input.frame };
+      stats.searches++;
+    }
+    const Q = search;
+    // one place at a time, in four steps (its middle, the ring's room, the middle room, the wide room), each whole
+    // within a frame
+    while (Q.i < Q.list.length) {
+      if (spent()) return false; // (goes on in the next frame, at this step)
+      const c = Q.list[Q.i];
+      if (Q.stage === 0) {
+        if (!clearOfBoxes(c.x, c.y, rules.ringPx, input.keepOut, rules.padPx) || (typeof input.maybe === 'function' && input.maybe(c.x, c.y) === false)) { Q.i++; continue; }
+        const hit = ask(input, c.x, c.y);
+        if (!hit) { Q.i++; continue; }
+        Q.plain = hit.plain !== false; Q.stage = 1;
+        continue;
+      }
+      if (Q.stage === 1) {
+        if (!roomAt(input, c.x, c.y, rules.ringRoomPx)) { Q.i++; Q.stage = 0; continue; }
+        Q.stage = 2;
+        continue;
+      }
+      if (Q.stage === 2) {
+        // (a named part of the brain, or no middle room: a place with the ring's own room only)
+        if (!Q.plain || !roomAt(input, c.x, c.y, rules.midRoomPx)) { Q.i++; Q.stage = 0; if (Q.spare.length < rules.spare) Q.spare.push({ c, mid: false }); continue; }
+        Q.stage = 3;
+        continue;
+      }
+      const roomy = roomAt(input, c.x, c.y, rules.roomPx);
+      Q.i++; Q.stage = 0;
+      if (roomy && wordsClear(input, c.x, c.y)) { if (take(input, c, true)) return true; continue; }
+      if (Q.spare.length < rules.spare || !Q.spare.some(e => e.mid)) Q.spare.push({ c, mid: true });
+    }
+    // no roomy place with a clear place for its word: of the places kept, the nearest with the middle room and a clear
+    // place for its word, then any with the middle room, then the nearest whose word has a clear place, then any
+    if (Q.spareAt < 0) Q.spareAt = 0;
+    for (; Q.pass < 4; Q.pass++, Q.spareAt = 0) {
+      while (Q.spareAt < Q.spare.length) {
+        if (spent()) return false;
+        const e = Q.spare[Q.spareAt++];
+        if ((Q.pass < 2) !== e.mid) continue;
+        if (!clearOfBoxes(e.c.x, e.c.y, rules.ringPx, input.keepOut, rules.padPx)) continue;
+        if ((Q.pass === 0 || Q.pass === 2) && !wordsClear(input, e.c.x, e.c.y)) continue;
+        if (take(input, e.c, false)) return true;
+      }
+    }
+    search = null; stats.none++; waitUntil = input.frame + rules.retryFrames;
+    return false;
+  }
+  return {
+    step(input) {
+      if (!rules.on || !input || !(input.width > 0 && input.height > 0) || typeof input.pick !== 'function' || typeof input.project !== 'function' || typeof input.toLocal !== 'function' || !fin(input.frame)) return null;
+      used = 0; clock = typeof input.now === 'function' ? input.now : null; t0 = clock ? clock() : 0;
+      const view = `${input.width}x${input.height}|${input.view || ''}`, hold = input.hold === true;
+      if (input.away === true) { viewSeen = null; search = null; return null; }
+      if (place) {
+        let p = null;
+        try { p = input.project(place.local); } catch { p = null; }
+        const on = Boolean(p) && fin(p.x) && fin(p.y);
+        if (hold) { viewSeen = view; return on && p.x >= 0 && p.x <= input.width && p.y >= 0 && p.y <= input.height ? out(p) : null; }
+        let ok = on && inside(p, input.width, input.height) && clearOfBoxes(p.x, p.y, rules.ringPx, input.keepOut, 0);
+        if (ok && view !== viewSeen) {
+          // another view, or the camera at rest again: the whole of it at once
+          place.checkedAt = input.frame;
+          ok = Boolean(ask(input, p.x, p.y)) && roomAt(input, p.x, p.y, rules.ringRoomPx);
+        } else if (ok && input.frame - place.checkedAt >= rules.checkEvery) {
+          // one pick: the place's middle and, in turn, one of the eight points of the ring's room
+          place.checkedAt = input.frame;
+          const n = place.seq++, D = discOffsets(rules.ringRoomPx), o = n % 2 ? D[(n >> 1) % D.length] : null;
+          ok = Boolean(o ? ask(input, p.x + o[0], p.y + o[1]) : ask(input, p.x, p.y));
+        }
+        viewSeen = view;
+        if (ok) return out(p);
+        place = null; stats.lost++; waitUntil = -1;
+      }
+      if (hold) return null;
+      if (view !== viewSeen) { viewSeen = view; search = null; waitUntil = -1; }
+      if (input.frame < waitUntil) return null;
+      if (!runSearch(input) || !place) return null;
+      let p = null;
+      try { p = input.project(place.local); } catch { p = null; }
+      return p && fin(p.x) && fin(p.y) ? out(p) : out(place);
+    },
+    /** Forgets the place (the cue is not shown): the next step searches afresh. */
+    reset() { place = null; search = null; waitUntil = -1; viewSeen = null; },
+    /** For checks: { placed, searching, ...counts }. */
+    state() { return { placed: Boolean(place), searching: Boolean(search), ...stats }; }
+  };
 }

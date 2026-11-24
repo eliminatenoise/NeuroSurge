@@ -73,10 +73,10 @@ try {
   report.scanStarted = scan.trigger.seq;
 
   // 1. A quick sweep across the strip, 20 px a frame, then off the brain: nothing switches on.
-  await page.mouse.move(1350, 700); await rested();
+  await page.mouse.move(1350, 480); await rested();
   const beforeSweep = (await read()).trigger.seq;
   for (let x = 400; x <= 780; x += 20) { await page.mouse.move(x, 150); await page.waitForTimeout(16); }
-  await page.mouse.move(1350, 700);
+  await page.mouse.move(1350, 480);
   const afterSweep = await rested();
   assert.equal(afterSweep.trigger.seq, beforeSweep, 'a pointer that crosses the strip without resting switches nothing on');
 
@@ -148,17 +148,20 @@ try {
   }
   report.stillClick = { front: stillClick.input.front, trigger: `${stillClick.trigger.source}:${stillClick.trigger.regionId}`, stepped: to };
   // ... and the pointer takes the aim back as soon as it moves
-  await page.mouse.move(1350, 700, { steps: 4 });
-  const back = await rested();
-  assert.equal(back.input.at, 'pointer');
-  assert.match(back.cross, /ns-crosshair-away/);
+  await page.mouse.move(1350, 480, { steps: 4 });
+  const backAim = await rested();
+  assert.equal(backAim.input.at, 'pointer');
+  assert.match(backAim.cross, /ns-crosshair-away/);
 
   // 6. A drag on empty space turns the look; the pointer is still free afterwards.
-  await page.mouse.move(1450, 780); await rested();
+  // (25 November 2026, section 209: the cards take the pointer now, the information card in the bottom right corner too,
+  // so the drag starts on empty space beside the brain, not on that card)
+  await page.mouse.move(1500, 300); await rested();
   const beforeDrag = await read();
+  assert.equal(beforeDrag.input.at, 'pointer');
   assert.equal(beforeDrag.input.front, null, 'empty space under the pointer');
   await page.mouse.down();
-  for (let i = 1; i <= 10; i++) { await page.mouse.move(1450 - i * 12, 780 - i * 4); await page.waitForTimeout(16); }
+  for (let i = 1; i <= 10; i++) { await page.mouse.move(1500 - i * 12, 300 - i * 4); await page.waitForTimeout(16); }
   const during = await frames(2);
   assert.equal(during.input.at, 'crosshair', 'while the look is dragged the crosshair is the aim');
   await page.mouse.up();
@@ -167,7 +170,62 @@ try {
   assert.equal(afterDrag.lock, null);
   assert.equal(afterDrag.carry, null);
 
-  report.final = { trigger: afterDrag.trigger.seq, guide: afterDrag.guide };
+  // 7. (section 209, finding 8) Two quick clicks on a motor area press it twice and leave the chosen limb alone.
+  const limbOf = () => page.evaluate(() => window.__nsQA.inspect().limbs.limb);
+  let areaPoint = null;
+  for (let y = 60; y <= height - 220 && !areaPoint; y += 30) for (let x = 60; x <= width - 340; x += 30) {
+    await page.mouse.move(x, y);
+    const s = await frames(3);
+    if (s.input.at === 'pointer' && /^brain:area:(?!.*scan)/.test(s.input.front || '')) { areaPoint = [x, y]; break; }
+  }
+  assert.ok(areaPoint, 'a motor area under the pointer again');
+  const onArea = await rested();
+  const limbBefore = await limbOf();
+  await page.mouse.click(areaPoint[0], areaPoint[1]);
+  await page.waitForTimeout(140);
+  await page.mouse.click(areaPoint[0], areaPoint[1]);
+  const twice = await rested();
+  assert.equal(await limbOf(), limbBefore, 'two quick clicks on a motor area do not step the chosen limb');
+  assert.equal(twice.trigger.seq, onArea.trigger.seq + 2, 'they press the area twice');
+  assert.equal(twice.trigger.source, 'click');
+
+  // 8. (section 209, finding 1, LOOK_LOST) Drags on empty space can turn the view away from everything: a tip in the
+  // middle of the empty picture says so, and Reset brain view turns the view back.
+  const startLook = (await read()).look;
+  for (let n = 0; n < 8; n++) {
+    let from = null;
+    for (const [x, y] of [[width - 60, 200], [60, 200], [width - 60, height / 2], [60, height / 2], [width / 2, 60], [width - 60, 110]]) {
+      await page.mouse.move(x, y);
+      const s = await frames(3);
+      const top = await page.evaluate(([x, y]) => document.elementFromPoint(x, y)?.id, [x, y]);
+      if (top === 'ns-canvas' && s.input.at === 'pointer' && !s.input.front) { from = [x, y]; break; }
+    }
+    if (!from) break;
+    await page.mouse.down();
+    for (let k = 1; k <= 11; k++) { await page.mouse.move(from[0] - k * 10, from[1]); await page.waitForTimeout(16); }
+    await page.mouse.up();
+    await frames(4);
+    if (Math.abs((await read()).look[0] - startLook[0]) > 2.2) break;
+  }
+  await page.waitForTimeout(900); // past LOOK_LOST.probeMs
+  const lost = await frames(4);
+  assert.ok(Math.abs(lost.look[0] - startLook[0]) > 1.2, `the drags turned the view far away (${lost.look[0]})`);
+  assert.equal(lost.tip?.kind, 'hold', 'an empty picture says where the brain went');
+  assert.match(lost.tip.text, /You have turned away from the brain/);
+  assert.match(lost.tip.text, /Reset brain view/);
+  assert.ok(Math.abs((lost.tip.box[0] + lost.tip.box[2]) / 2 - width / 2) < 260 && Math.abs((lost.tip.box[1] + lost.tip.box[3]) / 2 - height / 2) < 160, `the tip is in the middle of the picture (${JSON.stringify(lost.tip.box.map(Math.round))})`);
+  await shot('lost');
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: /^Reset brain view$/ }).click();
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => window.__nsQA.inspect().shell.mode === 'playing');
+  const back = await rested();
+  const nearLook = (a, b) => Math.abs(a[0] - b[0]) < 1e-6 && Math.abs(a[1] - b[1]) < 0.5;
+  assert.ok(nearLook(back.look, [0, back.look[1]]) || Math.abs(back.look[0]) < 0.01, `Reset brain view turned the view back (${back.look})`);
+  assert.ok(!back.tip || !/turned away/.test(back.tip.text), 'the words are gone when the brain is in view');
+  assert.match(back.input.front || '', /^(brain|mirror|own):/, 'something is under the middle mark again');
+
+  report.final = { trigger: back.trigger.seq, guide: back.guide, lostLook: lost.look };
   assert.deepEqual(errors, []);
   console.log(JSON.stringify(report, null, 2));
 } catch (error) {

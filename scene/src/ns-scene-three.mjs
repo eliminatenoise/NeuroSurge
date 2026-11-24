@@ -3825,6 +3825,24 @@ export function caveatsToDrop(bottoms, limit, overflows = true) {
   for (let i = bottoms.length - 1; i >= 0 && !(bottoms[i] <= limit); i--) n++;
   return n;
 }
+/** 24 November 2026 (hunt of update 73, finding 6; DESIGN-DECISIONS sections 69 and 197 are the model). The cards of the
+ * keys (the grip of Space, the reach keys: ns-text graspInfoCard, reachInfoCard) have no More detail, so they cannot
+ * scroll, and nothing fitted them: at the short reading level the card had no greatest height at all (quiet.css), and
+ * at 800 by 600 the grip card was 692 px tall in a 600 px window, its title above the top edge; at the full level it
+ * was cut in the middle of a line at its foot at every size (873 px of words in 394, 738 in 505, 605 in 473). Such a
+ * card (data-ns-card="key") is tried with everything and, while it runs over its box, gives up one more part, whole
+ * (data-ns-keyfit on the card, read by neurosurge.css): 1 the muscle row in its short form where the card has one
+ * (plain names, no Latin), 2 the movement row (the title and the first sentence say it), 3 the muscle row, 4 the
+ * "Game rule" line, 5 the first sentence. The title, the key and the strip part always stay; the text keeps its size.
+ * on false: no fit (as before). */
+export const KEY_CARD_FIT = Object.freeze({ on: true, max: 5 });
+/** PURE (KEY_CARD_FIT): the first stage at which the card no longer runs over. overAt(stage): how far the card's words
+ * run over its box at that stage (CSS px; the caller sets the stage on the card and measures). Returns 0..max (max when
+ * even that runs over: nothing more to give up). */
+export function keyCardStage(overAt, max = KEY_CARD_FIT.max) {
+  for (let s = 0; s <= max; s++) { const over = overAt(s); if (!(Number.isFinite(over) && over > 1)) return s; }
+  return max;
+}
 export const INFO_PANEL = Object.freeze({ colPx: 300, colVw: 25, gapPx: 12, portraitVh: 36, maxCaveats: 2, maxCitations: 4, colMaxVh: 66, maxRows: 4, cornerVw: 18.75, cornerShortVh: 48 });
 /** R3-integrator: in portrait the top of the bottom band holds the legend (right) and the drag-to-look toast (left); the
  * information panel below them is capped to the band minus this height (CSS mirror --ns-portrait-legend-reserve). */
@@ -3930,11 +3948,14 @@ export function infoPanelContent(model) {
   const citations = cites.slice(0, INFO_PANEL.maxCitations).map(c => `${s(c.key)}${c.verified === true ? '' : T.unverified}`).join(' · ');
   let rows = [], plain = s(model.plain), simulated = region ? s(model.simulated) : '', known = region ? s(model.known) : '';
   let regionCaveat = region ? s(model.regionCaveat) : '', more = null;
+  // (KEY_CARD_FIT: a key's card, without More detail, and its rows' short forms by heading)
+  const keyCard = Boolean(card) && card.more === null, rowsShort = {};
   if (card) {
     // Round 3 (D3): the ns-text plain card. One lead sentence, at most INFO_PANEL.maxRows rows, the short honesty lines,
     // and everything technical (technical name, hemisphere, all muscle names, the full explanation, the action note,
     // the general caveats and the sources) in a collapsed "More detail".
     rows = (Array.isArray(card.rows) ? card.rows : []).filter(r => Array.isArray(r) && s(r[0]) && s(r[1])).map(r => [s(r[0]), s(r[1])]);
+    if (keyCard && card.rowsShort && typeof card.rowsShort === 'object') for (const r of rows) { const t = s(card.rowsShort[r[0]]); if (t && t !== r[1]) rowsShort[r[0]] = t; }
     plain = s(card.lead) || plain;
     simulated = s(card.simulated) || simulated;
     known = s(card.known) || known;
@@ -3989,7 +4010,7 @@ export function infoPanelContent(model) {
     viewed: model.viewed === 'last' ? T.viewedLast : '',
     plain,
     moves, movesHeading: moves.length ? s(TM.heading) : '', movesAtEnd: s(TM.atEnd), movesCurrent: s(TM.current), movesBack: s(TM.back),
-    rows: rows.slice(0, INFO_PANEL.maxRows),
+    rows: rows.slice(0, INFO_PANEL.maxRows), rowsShort, card: keyCard ? 'key' : '',
     // R558: the swatch and the meter show the area's OWN colour (calm tint -> glow), as on the brain and the muscles.
     activity: v === null ? null : { value: v, text: NsText.activityLine(v), css: NsColors.areaSwatchCss(model.regionId, v) || activityColorCss(v), meter: NsColors.areaMeterCss(model.regionId) },
     activations: NsText.activationsLine(n),
@@ -6752,6 +6773,7 @@ export function createScene({
   // Plain hover captions (DOM, textContent only, never pointer targets): the hovered arrow's, and every brain arrow's
   // while the "Try this" goal is 'orbit'.
   const arrowTips = {};
+  const ARROW_CAPTION_H = 22; // (a caption's height as layoutArrowTips takes it, CSS px: one line of 11.5 px type with its padding)
   if (overlay) {
     for (const target of ['brain', 'mirror']) for (const d of ARROW_DIRS) {
       const e = el('div', `ns-arrow-tip ns-arrow-tip-${target}`, overlay);
@@ -10615,6 +10637,11 @@ export function createScene({
     const attr = (k, v) => { if (info.panel.getAttribute(k) !== v) { info.panel.setAttribute(k, v); grew = true; } };
     attr('data-mode', c.mode);
     attr('data-left-arm', c.leftArm ? 'true' : 'false');
+    attr('data-ns-card', c.card || ''); // (KEY_CARD_FIT: a key's card is fitted by its own stages, fitInfoCard)
+    // (hunt of update 73, finding 6: a card that cannot scroll starts at its top. An opened area card is scrolled to its
+    // More detail; the grip card that followed kept that scroll, with nothing to scroll it back: its title was out of
+    // sight at every window size. Written once per subject, never read.)
+    if (info.scrollKey !== c.key) { info.scrollKey = c.key; if (!c.more) { try { info.panel.scrollTop = 0; } catch { /* no scroll */ } } }
     put(info.heading, c.heading);
     put(info.title, c.title);
     put(info.tag, c.tag);
@@ -10633,14 +10660,17 @@ export function createScene({
       if (info.meterMark.style) { const left = `${(c.activity.value * 100).toFixed(1)}%`; if (info.markLeft !== left) { info.markLeft = left; info.meterMark.style.left = left; } }
     } else { put(info.activity, ''); hide(info.actRow, true); hide(info.meter, true); }
     put(info.activations, c.activations);
-    const rowsSig = JSON.stringify(c.rows);
+    const rowsSig = JSON.stringify([c.rows, c.rowsShort]);
     if (rowsSig !== info.rowsSig) {
       info.rowsSig = rowsSig; grew = true;
       while (info.rows.firstChild) info.rows.removeChild(info.rows.firstChild);
       for (const [k, v] of c.rows) {
         const slug = ROW_SLUG[k] || k.toLowerCase().split(/[^a-z]+/)[0] || 'row';
         el('dt', `ns-infopanel-key-${slug}`, info.rows).textContent = k;
-        el('dd', `ns-infopanel-row-${slug}`, info.rows).textContent = v;
+        // (KEY_CARD_FIT: a row with a short form carries both; the stylesheet shows one of them)
+        const short = c.rowsShort && typeof c.rowsShort[k] === 'string' ? c.rowsShort[k] : '';
+        el('dd', `ns-infopanel-row-${slug}${short ? ' ns-infopanel-row-long' : ''}`, info.rows).textContent = v;
+        if (short) el('dd', `ns-infopanel-row-${slug} ns-infopanel-row-short`, info.rows).textContent = short;
       }
     }
     hide(info.rows, c.rows.length === 0);
@@ -12586,6 +12616,16 @@ export function createScene({
     const sig = `${cssW}x${cssH}|${info.grewN | 0}|${open ? 1 : 0}|${INFO_WHOLE.on ? brainInViewAttr : ''}`;
     if (sig === info.fitSig) return;
     info.fitSig = sig;
+    // 24 November 2026 (KEY_CARD_FIT): a key's card (the grip, a reach key) has its own stages, at every reading level:
+    // it has no More detail to open, so it never scrolls. An area's card carries no stage.
+    const keyCard = KEY_CARD_FIT.on && p.getAttribute('data-ns-card') === 'key';
+    if (!keyCard) { if (typeof p.removeAttribute === 'function' && p.getAttribute('data-ns-keyfit') !== null) p.removeAttribute('data-ns-keyfit'); }
+    else {
+      if (p.getAttribute('data-ns-trim') !== '0') p.setAttribute('data-ns-trim', '0');
+      if (INFO_WHOLE.on && p.getAttribute('data-ns-lead') !== 'whole') p.setAttribute('data-ns-lead', 'whole');
+      keyCardStage(st => { const mark = String(st); if (p.getAttribute('data-ns-keyfit') !== mark) p.setAttribute('data-ns-keyfit', mark); return p.scrollHeight - p.clientHeight; });
+      return;
+    }
     // 22 November 2026 (UI3, INFO_WHOLE): the lead sentence is shown whole (no line clamp) or left out whole
     if (INFO_WHOLE.on && p.getAttribute('data-ns-lead') !== 'whole') p.setAttribute('data-ns-lead', 'whole');
     for (let t = 0; t <= (open ? 0 : INFO_TRIM_MAX); t++) {
@@ -12821,6 +12861,16 @@ export function createScene({
       for (const d of ARROW_DIRS) { const b = set.boxes[d]; if (b) put(b.x0, b.y0, b.x1, b.y1, 2, true); }
     }
     for (const r of hudRectCache || []) if (!r.cue && r !== tipZone) put(r.x0, r.y0, r.x1, r.y1, HUD_CLEAR.hudWeight);
+    // (24 November 2026, HUD74: and, in the tutorial's step 7, "Drag the brain to turn it", the plain captions that
+    // step shows by every brain arrow: words like the cards'. From outside at 1024x768 the Brain ring lay 26 x 2 px
+    // under one. They are laid out when the frame is drawn, so a frame behind, like the labels. In the other steps a
+    // caption shows only for an arrow pointed at, and the cue's words are placed as they were.)
+    if (guideGoalAttr === 'orbit') for (const k in arrowTips) {
+      const T = arrowTips[k];
+      if (!T.shown || !(T.w > 0)) continue;
+      const x = parseFloat(T.left), y = parseFloat(T.top);
+      put(x, y, x + T.w, y + ARROW_CAPTION_H, HUD_CLEAR.hudWeight, true);
+    }
     // (pass 2: the brain's midline, in the key; the boxes' list is the same array, refilled, not a new one a frame)
     const half = cueMidline();
     if (half) h = (h * 31 + Math.round(half.x0) * 7 + Math.round(half.y0) * 13 + Math.round(half.dxdy * 1000) * 3) % 2147483629;
@@ -14293,7 +14343,7 @@ export function createScene({
       // 20 November 2026 (hunt 7): the caption's own width, measured once each time it comes up (it does not wrap; the
       // estimate capped at 260 px let the 295 px "... the side on your right" run 31 px past an 800 px window's edge).
       if (!T.shown) { T.el.hidden = false; T.shown = true; const m = T.el.offsetWidth; T.w = m > 0 ? m : null; }
-      const w = T.w || Math.min(260, 7.2 * T.el.textContent.length + 18), h = 22;
+      const w = T.w || Math.min(260, 7.2 * T.el.textContent.length + 18), h = ARROW_CAPTION_H;
       // just past the arrow's outer end, along its compass direction
       const xMax = Math.max(4, cssW - reserveRight - w - 4), yMax = Math.max(topPx, cssH - reserveBottom - h - 4);
       // R558 (Message 7): never on top of ANY shown tip (the two sets' tips can be near each other), its own first.

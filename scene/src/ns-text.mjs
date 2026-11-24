@@ -313,7 +313,7 @@ const STEP_TABLE = [
 const CONTROL_TABLE = [
   ['Mouse / trackpad', 'drag on empty space to look around. Your head and neck turn, and past their reach your eyes turn further. As you look up or down in the eye view, the chosen limb goes with your view'],
   ['1 to 4', 'choose a limb: 1 left arm, 2 left leg, 3 right leg, 4 right arm. The chosen limb lights up.'],
-  ['Double click', 'choose the next limb; keep the second click held to keep stepping'],
+  ['Double click', 'off the motor areas: choose the next limb; keep the second click held to keep stepping'],
   ['W / S', 'W reaches the chosen limb\'s hand or foot straight out from its shoulder or hip; S draws it straight back in'],
   ['A / D', 'swing the chosen limb to your left or right without changing its bend'],
   ['Point / Click', 'point at a motor area: its part contracts, then returns. Click to do it again. A click never closes a hand. With the mouse captured, the mark at the middle of the picture does the pointing.'],
@@ -426,6 +426,8 @@ export const SHELL = deepFreeze({
   resetHelp: 'Reset body puts your whole body back the way it started and clears the marks on used areas. ' +
     'Reset brain view puts the brain back where it started, and the mirror body back where a mirror shows you.',
   brainReset: 'Brain view reset: the brain is back in its first place and angle. The mirror body is back where a mirror shows you.',
+  // 25 November 2026 (ns-app LOOK_LOST): the reset was pressed with none of the brain in the picture
+  brainResetLook: 'Brain view reset: the brain is back in its first place and angle, and your view is turned back to it. The mirror body is back where a mirror shows you.',
   // R5-text (D19, optional): a separate "Reset mirror body" button and its notice.
   resetMirror: 'Reset mirror body',
   mirrorReset: 'Mirror body reset: it is back where a mirror shows you.',
@@ -1144,6 +1146,9 @@ export const GRASP_INFO = deepFreeze({
     muscles: 'finger benders in the forearm (flexor digitorum superficialis and profundus), long thumb bender (flexor pollicis longus), ' +
       'thumb muscles of the palm (flexor pollicis brevis, opponens pollicis, adductor pollicis); toe benders (flexor digitorum longus ' +
       'and brevis, flexor hallucis longus and brevis). The wrist extensors hold the wrists steady',
+    // (24 November 2026, hunt of update 73, finding 6: the same muscles by their plain names only, for a card that has no
+    // room for the long line: at 800 by 600 that line alone took 17 lines of the card's narrow column)
+    musclesShort: 'finger, thumb and toe benders; the wrist extensors hold the wrists steady',
     caveat: 'Game rule: the closed hands and curled toes are a sign of the grasp. The game carries what is held; nothing touches it.'
   },
   open: {
@@ -1152,6 +1157,7 @@ export const GRASP_INFO = deepFreeze({
     movement: 'The fingers and thumbs straighten and the hands open (finger and thumb extension); the toes uncurl',
     muscles: 'finger straighteners on the back of the forearm (extensor digitorum, extensor indicis, extensor digiti minimi), ' +
       'thumb straighteners (extensor pollicis longus and brevis)',
+    musclesShort: 'finger and thumb straighteners',
     caveat: 'Game rule: the hands open when they let go. A real hand can also let go just by relaxing.'
   },
   holding: { brain: 'the brain', mirror: 'the mirror body', rightArm: 'your right hand', leftArm: 'your left hand', rightLeg: 'your right foot', leftLeg: 'your left foot' },
@@ -1170,7 +1176,8 @@ export const GRASP_INFO = deepFreeze({
 /** PURE: the information card for the grip of a Space grasp. grip = { phase: 'close' | 'open', holding: 'brain' |
  * 'mirror' | a limb id (ns-grasp LIMB_IDS) | null, chosen: the limb id this press of Space chose (nothing held) | null,
  * kept: the hold was taken with a tap }. Null for no grip.
- * Returns the plainInfoCard shape (as reachInfoCard), with key for the renderer's change test. */
+ * Returns the plainInfoCard shape (as reachInfoCard), with key for the renderer's change test, and rowsShort
+ * ({ heading: the row's short form }) for a card too small for the long muscle line. */
 export function graspInfoCard(grip) {
   if (!grip || (grip.phase !== 'close' && grip.phase !== 'open')) return null;
   const closing = grip.phase === 'close', kept = grip.kept === true;
@@ -1194,6 +1201,8 @@ export function graspInfoCard(grip) {
       [GRASP_INFO.rows.movement, part.movement],
       [GRASP_INFO.rows.muscles, part.muscles]
     ],
+    // (a row's short form, by its heading: shown instead of the long one where the card has no room, ns-scene-three KEY_CARD_FIT)
+    rowsShort: { [GRASP_INFO.rows.muscles]: part.musclesShort },
     simulated: GRASP_INFO.simulated,
     known: '',
     caveat: part.caveat,
@@ -1703,7 +1712,8 @@ export const GUIDE = deepFreeze({
     readInfo: "Press R to change how much information is shown."
   },
   tutorialGoals: {
-    moveHand: "Press W or S to reach, then A or D to swing the chosen limb sideways.",
+    // (25 November 2026, section 209, finding 7: every limb starts reached out, at W's far end, so W moved nothing: S first)
+    moveHand: "Press S to draw the chosen limb in, or W to reach it out, then A or D to swing it sideways.",
     dragBrain: "Hold Space over the brain, move your view to carry it, then release Space.",
     orbit: "Drag the brain to turn it.",
     thirdPerson: "Press E to look at your body from behind, then press E again to return.",
@@ -1711,7 +1721,7 @@ export const GUIDE = deepFreeze({
   partial: {
     // (21 November 2026, hunt H22: W and S move along the limb, A and D swing it)
     moveHandNeedX: 'Good! Now try A or D to swing it left or right.',
-    moveHandNeedZ: 'Good! Now try W or S to reach it out or draw it in.',
+    moveHandNeedZ: 'Good! Now try S to draw it in, or W to reach it out.',
     // R558: shown while a number-key goal is current, after a number whose movement was already at its end.
     numberKeyStill: 'That movement is already there. Press another number from the card.',
     // 21 November 2026 (hunt H18): shown while the tutorial's first step is current, after the look switched on an area
@@ -1758,12 +1768,12 @@ export const GUIDE = deepFreeze({
     // 19 November (the tutorial): how to pass a step, shown small beside the line (the key ns-app listens for)
     skip: 'Enter: skip',
     byText: {
-      "Press W or S to reach, then A or D to swing the chosen limb sideways.": "Press W or S to reach, then A or D to swing",
+      "Press S to draw the chosen limb in, or W to reach it out, then A or D to swing it sideways.": "Press S to draw it in, then A or D to swing",
       "Hold Space over the brain, move your view to carry it, then release Space.": "Hold Space on the brain, carry it, then release",
       "Drag the brain to turn it.": "Drag the brain to turn it",
       "Press E to look at your body from behind, then press E again to return.": "Press E to see your body from behind",
       'Good! Now try A or D to swing it left or right.': 'Now A or D',
-      'Good! Now try W or S to reach it out or draw it in.': 'Now W or S',
+      'Good! Now try S to draw it in, or W to reach it out.': 'Now S or W',
       'That movement is already there. Press another number from the card.': 'Already there: press another number',
       'Nothing moved there. Aim at another coloured area: a part moves.': 'Nothing moved: aim at another colour',
       'Nothing moves there. Aim at a coloured area that moves a part, then click it.': 'Nothing moves there: aim at a colour',
@@ -1842,6 +1852,9 @@ export const TIP = deepFreeze({
   // (and when the look has carried it out of sight: the full cards' lost-brain line, HUD.brainAwayHint; second pass: both
   // tips only while none of the brain is in the picture, ns-reference-graph brainLostWords)
   brainAway: { title: 'The brain is out of sight', hint: 'Look round, or press Esc, then Reset brain view.' },
+  /** 25 November 2026 (ns-app LOOK_LOST, section 209): the tip in the middle of an empty picture: the player's own drag
+   * turned the view away from the brain and both bodies. */
+  viewLost: { title: 'You have turned away from the brain', hint: 'Drag back, or press ← or →. Esc, then Reset brain view, also turns you back.' },
 });
 
 /** The guide line shown in the status card: "Try this (2 of 7): Press W, A, S or D to move your left hand.";

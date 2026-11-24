@@ -992,6 +992,20 @@ html[data-ns-glow="on"] .ns-scene-overlay[data-ns-brain-in-view="false"] .ns-inf
   .ns-app:not([data-ns-unfold="true"]) .ns-infopanel:is([data-ns-trim="3"], [data-ns-trim="4"]):not(:has(.ns-infopanel-detail[open])) :is(.ns-infopanel-key-easing, .ns-infopanel-row-easing) { display: none; }
   .ns-app:not([data-ns-unfold="true"]) .ns-infopanel[data-ns-trim="4"]:not(:has(.ns-infopanel-detail[open])) .ns-infopanel-rows { display: none; }
 }
+/* 24 November 2026 (hunt of update 73, finding 6; ns-scene-three KEY_CARD_FIT). The cards of the keys (the grip of
+   Space, the reach keys) have no More detail and cannot scroll. While such a card runs over its box it gives up one
+   more part, whole, at every reading level and window shape (data-ns-keyfit on the card): 1 the muscle row in its
+   short form, 2 the movement row, 3 the muscle row, 4 the "Game rule" line, 5 the first sentence. The title, the key
+   and the strip part always stay, and the text keeps its size. A row with a short form carries both lines; one shows. */
+.ns-infopanel:not([data-ns-card="key"]:is([data-ns-keyfit="1"], [data-ns-keyfit="2"])) .ns-infopanel-rows dd.ns-infopanel-row-short { display: none !important; }
+.ns-infopanel[data-ns-card="key"]:is([data-ns-keyfit="1"], [data-ns-keyfit="2"]) .ns-infopanel-rows dd.ns-infopanel-row-long { display: none !important; }
+.ns-infopanel[data-ns-card="key"]:is([data-ns-keyfit="2"], [data-ns-keyfit="3"], [data-ns-keyfit="4"], [data-ns-keyfit="5"]) :is(.ns-infopanel-key-movement, .ns-infopanel-row-movement) { display: none !important; }
+.ns-infopanel[data-ns-card="key"]:is([data-ns-keyfit="3"], [data-ns-keyfit="4"], [data-ns-keyfit="5"]) :is(.ns-infopanel-key-muscles, .ns-infopanel-row-muscles) { display: none !important; }
+.ns-infopanel[data-ns-card="key"]:is([data-ns-keyfit="4"], [data-ns-keyfit="5"]) .ns-infopanel-caveat { display: none !important; }
+.ns-infopanel[data-ns-card="key"][data-ns-keyfit="5"] .ns-infopanel-plain { display: none !important; }
+/* (and its two honesty lines are whole, like its other parts: at 800 by 600, in the card's 120 px column, the three-line
+   clamp ended "Simulated: textbook muscle roles shown at a made-up level. Nothin…"; the stages make the room) */
+.ns-infopanel[data-ns-card="key"] :is(.ns-infopanel-simulated, .ns-infopanel-caveat) { -webkit-line-clamp: unset; }
 
 /* R558 (user Message 48, the R key: "read information ... make sure the information isn't such an eyesore ... and
    make sure that it starts off in that mode"). The app root carries the information state (ns-app setInfoRead):
