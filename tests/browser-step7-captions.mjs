@@ -1,4 +1,4 @@
-// 25 November 2026 (DESIGN-DECISIONS section 211): the tutorial's seventh step, "Drag the brain to turn it", in
+// 25 November 2026 (DESIGN-DECISIONS section 211): the tutorial's step "Drag the brain to turn it" (the seventh then), in
 // Chromium at the two window sizes where its captions lay on each other. The step shows a caption by each of the
 // brain's four arrows: they use the shorter words, none lies on another, and none lies on a ring or mark of the
 // tutorial, with no limb, a leg and an arm chosen.
@@ -40,8 +40,10 @@ try {
     await page.waitForFunction(() => document.querySelector('#ns-app')?.dataset.nsPhase === 'playing');
     await page.waitForTimeout(800);
     const step = () => page.evaluate(() => document.querySelector('.ns-prompt-count')?.textContent ?? '');
-    for (let i = 0; i < 10 && (await step()) !== '7/9'; i++) { await page.keyboard.press('Enter'); await page.waitForTimeout(300); }
-    assert.equal(await step(), '7/9', `${tag}: the tutorial is at its seventh step`);
+    // (the eighth step of ten since the look step of section 216; the seventh of nine when this test was written)
+    for (let i = 0; i < 10 && (await step()) !== '8/10'; i++) { await page.keyboard.press('Enter'); await page.waitForTimeout(300); }
+    assert.equal(await step(), '8/10', `${tag}: the tutorial is at "Drag the brain to turn it"`);
+    assert.equal(await page.evaluate(() => document.querySelector('.ns-scene-overlay')?.getAttribute('data-ns-guide-goal') ?? null), 'orbit', `${tag}: that step is the one that shows every brain arrow's caption`);
     await page.mouse.move(width / 2, height - 12); // off the picture's objects: no arrow is pointed at
     const boxes = () => page.evaluate(() => {
       const seen = e => e.getClientRects().length > 0 && !e.hidden && getComputedStyle(e).visibility !== 'hidden';

@@ -8978,6 +8978,50 @@ tests.
 - Still open from the second tester's list: clicks while Space grips or Shift is held (finding 8) and the browser's
   own pinch (finding 10).
 
+## 216. Two things brought in from the hosted Movement mirror preview: the tutorial practises the look that raises and lowers a limb, and a finger works on the picture (25 November)
+
+The project's other maintainer keeps a copy of the game inside the Movement mirror preview (in the NeuroTranslation
+repository) and adds to it. Two of its additions are the game's own and were not in the game: a tutorial step for
+the look that moves the chosen limb, and touch input. They are brought in here as written there, so that the game on
+its own page and the game inside the preview stay one game; the preview's own parts (the command box, the motion
+recorder, its panels) stay there.
+
+**1. A tenth tutorial step: "Look a little up or down to move the limb" (`aimJoint`).** The owner (23 November):
+"shoulder/hip extension should be tied to the camera ... You shouldn't have to look all the way down to bring it all
+the way down." The game had the rule (a look up or down raises or lowers the chosen limb at its shoulder or hip) and
+no step that taught it; section 214 gave the mark its words, and a tester had found the mark unexplained. The step
+comes fourth, after the limb's key: the tutorial moves on when the wrist or ankle has moved 2.5 cm against its
+shoulder or hip within 0.35 s of game time after a look up or down (`GUIDE_OPTIONS.jointAimMinM`,
+`AIM_PRACTICE_RESPONSE_S`). A sideways look does not finish it; seen from outside the step asks for E first. A build
+without the player camera has no such step and keeps nine. Seen at 1280x720 with a leg and an arm chosen: a sideways
+drag of 80 px leaves the step at 4/10, a drag of 50 px down completes it. Added here: the step has the card's drag
+picture with its arrows up and down (213), and the mark reads "Look up or down: the leg follows" through it (214).
+
+**2. Touch.** A finger on the picture came through the browser's stand-in mouse events: a tap was a pointer move and
+a click, and started two movements. Now a first finger on the picture follows the mouse's rules: a short tap on a
+motor area presses it once on release, at the place of the tap (the aim is given with the click and starts no pulse
+of its own); a finger dragged over empty space turns the look and starts nothing; a drag that begins on the brain,
+the mirror body or a limb turns it; a touch the browser cancels presses nothing; the pointer is never captured by a
+touch. A keyboard is still needed for the keys.
+
+**3. The player guides** take the other maintainer's sentences for these and for the changes of sections 209 to 213
+(the lost view, links with added parameters, the drag of the view, the limb's ring), in both editions.
+
+**Tests.** `tests/tutorial.test.mjs`: ten steps, the look step in its place, a move under 2.5 cm or by the keys does
+not do it, a build without the player camera has nine. `tests/browser-touch.mjs` (new; on update 78 a tap starts
+two movements): a tap on each of two areas starts one movement of that area, a finger's drag turns the look 26
+degrees and starts nothing, a tap on empty space presses nothing. The browser tests that walk the tutorial count ten
+steps. 844 unit tests, 24 browser tests.
+
+**Not done, or not right.**
+- Touch was tried in the desktop browser's emulation only, not on a phone or a tablet; small upright windows still
+  cannot start (15), and the keys have no touch form, so a touch-only player cannot choose a limb, grip or leave the
+  tutorial's key steps except by skipping, which also needs a key.
+- The look step counts a look made with the captured mouse or a drag; an arrow key's step of the look was not tried
+  against it.
+- The preview's copy and this one still differ in the preview's own parts; each update here is carried over there by
+  its maintainer.
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**
@@ -8996,6 +9040,14 @@ tests.
 - With the pointer free the pointer is the aim (206): the chosen limb still goes with the look (a drag or the captured
   mouse), not with the pointer; a resting pointer waits a tenth of a second before its area moves, while the captured
   crosshair still switches areas on at once, also during a drag across the strip; pointing was not tried on a touch screen.
+- From the two play-throughs of updates 73 and 74 and the work that followed (209 to 215): at 800x600 the tutorial's card
+  lies on the upper end of the left arm's strip while the tutorial runs, and at the full reading level the limb buttons
+  still lie on your body in the outside view; while Space grips, a click acts at the middle mark or presses nothing, and
+  with Shift held and nothing behind, a click presses nothing; after a far drag and S, A and D can move the left hand
+  almost nothing, and S stops where the right hand meets the body; in a window taller than wide the hint stands over
+  the picture's lower part; a pinch zooms the page (the browser's own zoom is left to the player); nothing on the
+  playing screen shows the arrow keys, E after the tutorial, Shift, two taps of Space or the double click (the pause
+  page lists them), and a keyboard-only player has no key that presses the aimed area a second time.
 - In the outside view the mirror body's up arrow is kept near its body; no place there is clear of the strip and the
   other arrows off its head at 1600x900 and 800x600, so it lies over the face there, as in update 70 (205). The tutorial
   cue's words, steadier since pass 3 of 205, still jump 8 times in an 800x600 look (update 70: 6), one jump in a wide look

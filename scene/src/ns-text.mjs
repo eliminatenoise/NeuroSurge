@@ -1716,6 +1716,7 @@ export const GUIDE = deepFreeze({
     readInfo: "Press R to change how much information is shown."
   },
   tutorialGoals: {
+    aimJoint: 'Look a little up or down to raise or lower the limb you selected. Watch its hand or foot.',
     // (25 November 2026, section 209, finding 7: every limb starts reached out, at W's far end, so W moved nothing: S first)
     moveHand: "Press S to draw the chosen limb in, or W to reach it out, then A or D to swing it sideways.",
     dragBrain: "Hold Space over the brain, move your view to carry it, then release Space.",
@@ -1723,6 +1724,7 @@ export const GUIDE = deepFreeze({
     thirdPerson: "Press E to look at your body from behind, then press E again to return.",
   },
   partial: {
+    aimJointOutside: 'Press E to return to the eye view and practise raising or lowering the limb.',
     // (21 November 2026, hunt H22: W and S move along the limb, A and D swing it)
     moveHandNeedX: 'Good! Now try A or D to swing it left or right.',
     moveHandNeedZ: 'Good! Now try S to draw it in, or W to reach it out.',
@@ -1766,12 +1768,14 @@ export const GUIDE = deepFreeze({
     holdPart: 'Hold down 1 or 2. Let go to stop',
     dragLimb: "Drag a visible arm or leg to change its pose",
     chooseLimb: "Press 2, 3 or 4 to select another limb",
+    aimJoint: 'Look a little up or down to move the limb',
     readInfo: "Press R to change the information shown",
     nice: 'Nice!',
     finished: 'All done. Esc shows the controls.',
     // 19 November (the tutorial): how to pass a step, shown small beside the line (the key ns-app listens for)
     skip: 'Enter: skip',
     byText: {
+      'Press E to return to the eye view and practise raising or lowering the limb.': 'Press E to return to the eye view',
       "Press S to draw the chosen limb in, or W to reach it out, then A or D to swing it sideways.": "Press S to draw it in, then A or D to swing",
       "Hold Space over the brain, move your view to carry it, then release Space.": "Hold Space on the brain, carry it, then release",
       "Drag the brain to turn it.": "Drag the brain to turn it",
@@ -1794,7 +1798,7 @@ export const GUIDE = deepFreeze({
     simpleHeading: "Simple instructions",
     technicalHeading: "Technical notes",
     progress: "Follow the current instruction as you play. Enter skips that step. Resume keeps your progress, and Restart takes you to step one.",
-    technical: "Progress uses game events. The movement step needs input on both axes. A limb drag must reach 12 degrees. A brain carry counts on release after a turn of at least 0.12 radians or a key-driven carry of at least 0.2 game metres. Completed steps are saved on this device when local storage is available. The visual cues do not activate the areas they mark.",
+    technical: "The shoulder or hip step checks that the wrist or ankle moves at least 2.5 cm relative to the joint. It measures from just before you look up or down, and checks for up to 0.35 seconds of game time after the look. The keyboard movement step needs input on both axes. A limb drag must reach 12 degrees. A brain carry counts on release after a turn of at least 0.12 radians or a key-driven carry of at least 0.2 game metres. The game saves completed steps on this device when local storage is available. The visual cues do not activate the areas they mark.",
     motor: "Motor area",
     limb: "Body part",
     shoulder: "Shoulder aim",

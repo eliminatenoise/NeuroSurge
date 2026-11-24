@@ -1,4 +1,4 @@
-// 25 November 2026 (DESIGN-DECISIONS section 213, LIMB_CUE): the tutorial's fifth step, "Drag a visible arm or leg",
+// 25 November 2026 (DESIGN-DECISIONS section 213, LIMB_CUE): the tutorial's step "Drag a visible arm or leg" (the sixth of ten),
 // in Chromium. The ring that names the chosen limb stands where a press takes that limb, and a drag that starts on the
 // ring moves that limb and completes the step. Before, with the left leg chosen, the ring lay on your left arm.
 // Run with Node and Playwright (NS_PLAYWRIGHT_MODULE, NS_CHROMIUM, NS_ANGLE as for the other browser tests).
@@ -39,14 +39,15 @@ try {
     await page.waitForFunction(() => document.querySelector('#ns-app')?.dataset.nsPhase === 'playing');
     await page.waitForTimeout(800);
     const step = () => page.evaluate(() => document.querySelector('.ns-prompt-count')?.textContent ?? '');
-    const until = async n => { for (let i = 0; i < 8 && (await step()) !== `${n}/9`; i++) { await page.keyboard.press('Enter'); await page.waitForTimeout(300); } assert.equal(await step(), `${n}/9`, `${tag}: at step ${n}`); };
+    const until = async n => { for (let i = 0; i < 8 && (await step()) !== `${n}/10`; i++) { await page.keyboard.press('Enter'); await page.waitForTimeout(300); } assert.equal(await step(), `${n}/10`, `${tag}: at step ${n}`); };
     await until(3);
     await page.keyboard.press(key);            // step 3: the limb's key
     await page.waitForTimeout(700);
-    // step 4 as a player does it: S draws the limb in, A swings it (the hand or foot is then behind another limb in
+    await until(5);                            // step 4 (the look that raises and lowers the limb, section 216) skipped
+    // step 5 as a player does it: S draws the limb in, A swings it (the hand or foot is then behind another limb in
     // the picture, which is where the ring used to go wrong)
     for (const k of ['s', 'a']) { await page.keyboard.down(k); await page.waitForTimeout(500); await page.keyboard.up(k); await page.waitForTimeout(500); }
-    await until(5);
+    await until(6);
     await page.mouse.move(width - 20, height * 0.4);
     await page.waitForTimeout(1500);           // the ring finds its place over a few frames
     const ring = await page.evaluate(() => { const e = document.querySelector('.ns-guide-cues .ns-guide-mark-limb'); if (!e || !e.getClientRects().length) return null; const r = e.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2, r.width]; });
@@ -72,7 +73,7 @@ try {
     assert.ok(movedCm > 5, `${tag}: the drag on the ring moved the ${limb} (${movedCm.toFixed(1)} cm)`);
     assert.deepEqual(after.orbit, before.orbit, `${tag}: the brain was not turned`);
     assert.deepEqual(after.look, before.look, `${tag}: the view was not turned`);
-    assert.equal(await step(), '6/9', `${tag}: the step is done`);
+    assert.equal(await step(), '7/10', `${tag}: the step is done`);
     report.cases.push({ size: `${width}x${height}`, key, ring: ring.map(Math.round), under, movedCm: Math.round(movedCm * 10) / 10 });
     await page.close();
   }

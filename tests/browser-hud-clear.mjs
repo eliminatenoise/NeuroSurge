@@ -339,8 +339,10 @@ try {
     const stepNow = () => page.evaluate(() => { const c = document.querySelector('.ns-prompt-count'); return c && c.getClientRects().length ? c.textContent.trim() : ''; });
     await page.keyboard.press('2');
     await advance(6);
-    for (let i = 0; i < 9 && !/^6\//.test(await stepNow()); i++) { await page.keyboard.press('Enter'); await page.waitForTimeout(350); }
-    assert.match(await stepNow(), /^6\/\d/, `${tag}: the tutorial is at its step 6`);
+    // (25 November 2026, section 216: with the look step the tutorial has ten steps; "step 6" and "step 7" below are still
+    // "Hold Space on the brain" and "Drag the brain to turn it", now counted 7/10 and 8/10)
+    for (let i = 0; i < 10 && !/^7\//.test(await stepNow()); i++) { await page.keyboard.press('Enter'); await page.waitForTimeout(350); }
+    assert.match(await stepNow(), /^7\/\d/, `${tag}: the tutorial is at "Hold Space on the brain"`);
     await page.mouse.move(width - 46, Math.round(height * 0.42));
     const cueMarks = () => {
       const B = e => { const r = e.getBoundingClientRect(); return [r.left, r.top, r.right, r.bottom]; };
@@ -454,8 +456,8 @@ try {
     await advance(4);
     { const m = await page.evaluate(cueMarks); assert.ok(m.rings.brain, `${tag}: the ring stays on the brain while it is carried`); }
     await page.keyboard.up('Space');
-    await page.waitForFunction(() => /^7\//.test((document.querySelector('.ns-prompt-count') || {}).textContent || ''), null, { timeout: 8000 }).catch(() => {});
-    assert.match(await stepNow(), /^7\/\d/, `${tag}: after the brain was carried and let go the tutorial goes on to step 7`);
+    await page.waitForFunction(() => /^8\//.test((document.querySelector('.ns-prompt-count') || {}).textContent || ''), null, { timeout: 8000 }).catch(() => {});
+    assert.match(await stepNow(), /^8\/\d/, `${tag}: after the brain was carried and let go the tutorial goes on to "Drag the brain to turn it"`);
     // (6) the full level (R): an opened area card is scrolled to its More detail; the grip card that follows kept that
     // scroll and its title was out of sight at every size, with 132 to 479 px of it under its foot
     await page.mouse.move(width - 46, Math.round(height * 0.42));
@@ -506,8 +508,8 @@ try {
     await page.mouse.down();
     for (let i = 1; i <= 10; i++) { await page.mouse.move(at7b[0] + i * 6, at7b[1]); await page.waitForTimeout(20); }
     await page.mouse.up();
-    await page.waitForFunction(() => /^8\//.test((document.querySelector('.ns-prompt-count') || {}).textContent || ''), null, { timeout: 8000 }).catch(() => {});
-    assert.match(await stepNow(), /^8\/\d/, `${tag}: a drag from the Brain ring turns the brain and the tutorial goes on to step 8`);
+    await page.waitForFunction(() => /^9\//.test((document.querySelector('.ns-prompt-count') || {}).textContent || ''), null, { timeout: 8000 }).catch(() => {});
+    assert.match(await stepNow(), /^9\/\d/, `${tag}: a drag from the Brain ring turns the brain and the tutorial goes on to the next step`);
     // ---- 25 November 2026 (FIX76; a second play-through of update 74, finding 9) ----
     // In the outside view your own head and trunk are at the bottom middle of the picture, where the limb buttons and
     // the hint stand: at 800x600 the two rows covered 64 % of them (69 % at 1280x720, 61 % at 1600x900). While a strip

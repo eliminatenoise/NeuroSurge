@@ -5,11 +5,12 @@ import { GUIDE } from './ns-text.mjs';
 import { CUE_WORDS, placeCueWords } from './ns-cue-place.mjs';
 
 const AREA_STEPS = new Set(['lookStrip', 'pressArea']);
-const LIMB_STEPS = new Set(['chooseLimb', 'moveHand', 'dragLimb']);
+const LIMB_STEPS = new Set(['chooseLimb', 'aimJoint', 'moveHand', 'dragLimb']);
 const ARM = new Set(['leftArm', 'rightArm']);
 const LEG = new Set(['leftLeg', 'rightLeg']);
 const KEYS = {
   chooseLimb: /\b[1-4]\b/g,
+  aimJoint: /\bE\b/g,
   moveHand: /\b[WASD]\b/g,
   dragBrain: /\bSpace\b/g,
   thirdPerson: /\bE\b/g,
@@ -18,8 +19,9 @@ const KEYS = {
 /** 25 November 2026 (DESIGN-DECISIONS section 213; a tester who followed only the rings: steps 2, 5 and 7 showed the
  * same ring with no sign of whether to click or to drag). The hand's part of a step, drawn as a small picture under
  * the step's number on the tutorial's card (guide-cues.css, `data-ns-gesture` on the card): point at it, click it,
- * press and drag it, or carry it. A step done with keys has its key cards and no picture. */
-export const GESTURES = Object.freeze({ lookStrip: 'point', pressArea: 'click', dragLimb: 'drag', dragBrain: 'carry', orbit: 'drag' });
+ * press and drag it, or carry it; the look step (section 216) has the drag with its arrows up and down. A step done
+ * with keys has its key cards and no picture. */
+export const GESTURES = Object.freeze({ lookStrip: 'point', pressArea: 'click', aimJoint: 'drag-up-down', dragLimb: 'drag', dragBrain: 'carry', orbit: 'drag' });
 let nextId = 0;
 
 function element(parent, tag, className, text) {
@@ -294,7 +296,7 @@ export function createGuideCues(host, { prompt: givenPrompt = null } = {}) {
     const active = input?.tutorial === true && g?.visible === true && !g.finished && !!g.goalId;
     const step = active ? g.goalId : null;
     // (25 November 2026, section 214: in the tutorial's two limb-key steps the mark's words say what it is for)
-    const teach = step === 'chooseLimb' || step === 'moveHand';
+    const teach = step === 'chooseLimb' || step === 'aimJoint' || step === 'moveHand';
     const joint = input?.showJointAim === true ?
       (ARM.has(input.selectedLimb) ? (teach && GUIDE.cue.shoulderTeach) || GUIDE.cue.shoulder : LEG.has(input.selectedLimb) ? (teach && GUIDE.cue.hipTeach) || GUIDE.cue.hip : null) : null;
     if (!active && !joint) {

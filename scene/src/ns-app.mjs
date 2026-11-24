@@ -722,6 +722,7 @@ export function viewFramePoint(pose, place, fovYDeg, aspect) {
 
 const LIMB_AIM_Y_NDC = 0.5;
 const LIMB_AIM_HALF_SWEEP_RAD = 18 * DEG;
+const AIM_PRACTICE_RESPONSE_S = 0.35;
 
 /** Map a small up/down look around the selection point onto the two remaining sides of a joint's range. */
 export function aimJointDegrees(neutral, min, max, pitchChange) {
@@ -6977,7 +6978,7 @@ export function start(params = {}) {
   } catch { /* unreadable storage: the in-memory settings are already normalised */ }
   // R4-text (D7): the "Try this" guide (pure state machine, ns-guide). Never pauses or blocks play.
   // R5-integrate-core (R5-text W2): only the round-5 goals whose feature is wired in this build (GUIDE_FEATURES).
-  let guideFeatures = { thirdPerson: false, glow: false, mirror: false, moveKeys: false };
+  let guideFeatures = { thirdPerson: false, glow: false, mirror: false, moveKeys: false, jointAim: false };
   let guide = NG.guideFromStorage((() => { try { return storage && typeof storage.getItem === 'function' ? storage.getItem(NG.GUIDE_STORAGE_KEY) : null; } catch { return null; } })(), 0, { features: guideFeatures, tutorial: true });
   // 19 November 2026 (EASE, the playable tutorial): steps done outside the frame loop (R pressed, Enter to skip a
   // step) wait here for the next frame's guideStep.
@@ -7331,6 +7332,7 @@ export function start(params = {}) {
   // jointAimStaleOut: the drawn frame of the moment of a reset; the aim is not taken up again from it, only from a frame
   // drawn after the reset, or the next look up or down would aim from the pose the reset took away.)
   let jointAim = null, jointAimStaleOut = null;
+  let aimPractice = null;
   // 19 November 2026 (LIMB_KEYS.view.hold): the chosen limb's end as the view holds it: { limb, world: the place asked
   // for (world m), x / y / dist: where that place stands in the picture, ok: those three are usable, lookMs: the
   // pointer's last look time when they were taken, joints: the limb's joint angles as last left by the hold (a body
@@ -7645,6 +7647,7 @@ export function start(params = {}) {
   function refreshGuideFeatures() {
     const next = { thirdPerson: GUIDE_FEATURES.thirdPerson && Boolean(sceneFn('setCameraPose')),
       glow: GUIDE_FEATURES.glow && glowWired, mirror: GUIDE_FEATURES.mirror && mirrorWired && Boolean(bodyRig),
+      jointAim: Boolean(playerCamera && bodyRig),
       // R558 (Messages 55 and 56): the number-key goals need the numbered movement list on screen (only the scene's own
       // information card draws it) and the number keys wired in the controls (the controls arrive after the first
       // body install, so this is asked again on a later refresh).
@@ -7839,6 +7842,7 @@ export function start(params = {}) {
     simState = cancelCarryLatches(simState);
     // R558: the own-limb hold (F) and a limb dial build-up (press-drag) belong to the app; they end here too.
     limbGrasp = null; limbView = null; leftDialBinding = null; leftDial = 0; spaceChoseLimb = null;
+    aimPractice = null;
     seedNext = true;
     carryRawEvents.length = 0; orbitQueue.length = 0; viewRequests = 0; moveRequests.length = 0; areaRequests.length = 0; areaFreshPending = false; areaWalkQuiet = null; areaWalkHeldStep = false; areaWalkReleased = false;
     const seq = cs && cs.button && Number.isSafeInteger(cs.button.seq) ? cs.button.seq : 0;
@@ -9665,6 +9669,7 @@ export function start(params = {}) {
        * limb lights for a moment (also when it is chosen again: the answer to the key is always seen). */
       function chooseLimb(n, { turn = true } = {}) {
         if (!LIMB_KEYS.on || !(n >= 1 && n <= LIMB_KEYS.order.length)) return;
+        aimPractice = null;
         limbControlPicked = true;
         limbChoice = n;
         const limb = LIMB_KEYS.order[n - 1];
@@ -9912,6 +9917,11 @@ export function start(params = {}) {
         return at ? { x: at.x / width, y: at.y / height } : null;
       }
 
+      function relativeLimbEnd(limb, out) {
+        const points = limbEnds(limb, out);
+        return points ? points.frame.map((value, axis) => value - points.root[axis]) : null;
+      }
+
       function updateJointAim(axes) {
         if (!playerCamera || !firstPersonNow() || axes.x || axes.z || holdBusy()) { jointAim = null; return; }
         const limb = chosenLimb();
@@ -9952,6 +9962,7 @@ export function start(params = {}) {
             transformDirection(attachment.bodyToCamera, [x, -reach * Math.cos(target), -reach * Math.sin(target)]));
           jointAim.hand = handKeepOut(root.map((v, i) => v + offset[i]));
         }
+        return true;
       }
       /** The posed segments of the drawn body, made once for a pose (the hold asks for them several times a frame). */
       let segsMemo = { posed: null, head: null, segs: null };
@@ -12372,7 +12383,11 @@ export function start(params = {}) {
             gazeArea: simState && simState.activity && typeof simState.activity.gazeArea === 'string' ? simState.activity.gazeArea : null,
             clicked: timing.events.some(e => e && e.type === 'click'),
             pressSeq: cs.button && cs.button.via === 'pointer' && Number.isSafeInteger(cs.button.seq) ? cs.button.seq : null });
-          aimSeen = a.seen; aimNow = a; aimRay = null;
+          aimSeen = a.seen;
+          // A touch supplies its aim and click together on release. Record the aim without starting a gaze pulse.
+          const touchClick = timing.events.some(event => event?.type === 'click' && event.touch === true);
+          aimNow = touchClick ? { ...a, silent: true, arrivedFrom: undefined } : a;
+          aimRay = null;
           // (section 208: what the aiming pointer is on is what this frame's click presses: the look's event is placed at the
           // start of the frame, as for a reach-behind click, so a click that comes in the same frame as the press that gave
           // the pointer the aim does not find the crosshair's area of the frame before)
@@ -12688,7 +12703,22 @@ export function start(params = {}) {
         // per frame, before the attempts)
         { const k = live && headOffs ? NsPace.trunkRideKey(headOffs.now) : trunkRideKeyLast; trunkRideCarry = k !== trunkRideKeyLast; trunkRideKeyLast = k; }
 
-        if (live) updateJointAim(controlsApi.axes(cs));
+        const aimInput = live && updateJointAim(controlsApi.axes(cs));
+        const practisingAim = live && jointAim && guideFeatures.jointAim && !guide.hidden && !guide.paused && NG.currentGoal(guide) === 'aimJoint';
+        const moveSeqBeforeAim = simState.activity?.moveSeq;
+        if (!practisingAim || (aimPractice && (aimPractice.limb !== jointAim.limb ||
+            aimPractice.moveSeq !== moveSeqBeforeAim || (!aimInput && aimPractice.lookMs !== cs.lookMs)))) aimPractice = null;
+        if (practisingAim && aimInput) {
+          // Start from the pose before this vertical look. A sideways look cannot finish the lesson.
+          if (!aimPractice || simState.t > aimPractice.until) {
+            const start = relativeLimbEnd(jointAim.limb);
+            aimPractice = start ? { limb: jointAim.limb, start, moveSeq: moveSeqBeforeAim } : null;
+          }
+          if (aimPractice) {
+            aimPractice.lookMs = cs.lookMs;
+            aimPractice.until = simState.t + AIM_PRACTICE_RESPONSE_S;
+          }
+        }
         const baseTiming = live && jointAim?.bodyEvent
           ? { ...timing, events: [...timing.events, jointAim.bodyEvent] } : timing;
         // R558: ONE attempt at this frame, from the camera choice to the simulation step. It commits nothing: the caller
@@ -13840,6 +13870,18 @@ export function start(params = {}) {
         if (emapOn || (emapView ? !emapView.built || emapView.amount > 0 : !EMAP_BUILD.onPress)) { if (!emapNote) emapFrame(now, out); }
         if (ambientEmap) ambientEmap.frame({ nowMs: now, enabled: ambientEnabled && !emapOn && !(emapView?.amount > 0), reduced: prefersReducedMotion() });
         frameTimer.mark('glow');
+        if (aimPractice && (simState.activity?.moveSeq !== aimPractice.moveSeq || simState.t > aimPractice.until)) aimPractice = null;
+        if (aimPractice) {
+          // The simulated limb can keep moving after a single look input.
+          const end = relativeLimbEnd(aimPractice.limb, out);
+          if (end) {
+            const m = Math.hypot(...end.map((value, axis) => value - aimPractice.start[axis]));
+            if (m >= NG.GUIDE_OPTIONS.jointAimMinM) {
+              guideAsyncEvents.push({ type: 'jointAim', m });
+              aimPractice = null;
+            }
+          }
+        }
         refreshGuideFeatures();
         // R558 (hunt 3 check): the sim re-applies the legacy glassHit override to its cached RAW gaze every frame, so in
         // legacy mode the hit is kept while the raw gaze is empty (the glass it made); clearing it there lost the glass
@@ -14181,7 +14223,7 @@ export function start(params = {}) {
               ? sim.guideMotorTarget(camPose, out.brainTransform, camPose.viewFovYDeg || holdFov(), aspect, out.gaze?.regionId) : null;
             const motor = targeted ? guidePoint(targeted.world, targeted.area.label || targeted.area.id,
               mods.colors?.areaColorCss?.(targeted.area.id)) : null;
-            const limbKeysStep = step === 'chooseLimb' || step === 'moveHand' || step === 'dragLimb';
+            const limbKeysStep = step === 'chooseLimb' || step === 'aimJoint' || step === 'moveHand' || step === 'dragLimb';
             // (section 213, LIMB_CUE: on the limb where a press takes it; the wrist or ankle as projected until such a
             // place is found, and when none is)
             let limb = null;
@@ -14194,7 +14236,7 @@ export function start(params = {}) {
             // (24 November 2026, UI5: the words of a shown cue keep clear of the mirror body's head and neck, the labels,
             // the arrows and the cards: ns-scene-three guideCueKeepOut, ns-cue-place)
             const showJointAim = Boolean(playerCamera && firstPersonNow() && limbHold && !holdBusy() &&
-                (limbControlPicked || step === 'chooseLimb' || step === 'moveHand'));
+                (limbControlPicked || step === 'chooseLimb' || step === 'aimJoint' || step === 'moveHand'));
             const brainStep = step === 'dragBrain' || step === 'orbit';
             const cueKeep = (motor || limb || brainStep || showJointAim) && sceneFn('guideCueKeepOut') ? callScene('guideCueKeepOut') : null;
             // 24 November 2026 (HUD74; the hunt of update 73, finding 3): the "Brain" ring stood at the brain's turning point

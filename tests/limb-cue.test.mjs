@@ -46,7 +46,7 @@ const { TUTORIAL_GOAL_IDS } = await import('../scene/src/ns-guide.mjs');
 const fs = await import('node:fs');
 
 test('every tutorial step done with the pointer has a hand picture, a step done with keys has none, and each picture is drawn', () => {
-  assert.deepEqual(GESTURES, { lookStrip: 'point', pressArea: 'click', dragLimb: 'drag', dragBrain: 'carry', orbit: 'drag' });
+  assert.deepEqual(GESTURES, { lookStrip: 'point', pressArea: 'click', aimJoint: 'drag-up-down', dragLimb: 'drag', dragBrain: 'carry', orbit: 'drag' });
   for (const id of Object.keys(GESTURES)) assert.ok(TUTORIAL_GOAL_IDS.includes(id), `${id} is a step of the tutorial`);
   for (const id of ['chooseLimb', 'moveHand', 'thirdPerson', 'readInfo']) assert.equal(GESTURES[id], undefined, `${id}: its key cards say it`);
   const css = fs.readFileSync(new URL('../scene/example/guide-cues.css', import.meta.url), 'utf8');

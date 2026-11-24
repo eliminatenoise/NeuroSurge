@@ -11,11 +11,21 @@
 
 The **Resume** button keeps the pointer free. To turn the view with every mouse movement, choose **Capture mouse** in the controls. Press **Escape** to release it and open the controls again. If capture is unavailable, drag on an empty part of the picture to keep playing.
 
+If you turn far enough that the brain and both bodies leave the picture, a message says you have turned away. Drag the empty space back toward the brain, press an arrow key to aim at a motor area, or press Escape and choose Reset brain view. While the brain is out of view, Reset brain view returns the camera to its starting direction. The tutorial and information cards receive your clicks, so you can read them without pressing a motor area behind them. When the tutorial shows a Brain ring, aim at it and press Space to pick up the brain.
+
+A game link can still open when the app that shared it adds tracking information to the address. If the game shows an address error, select **Start the game** to open the usual address.
+
+Drag on an empty part of the picture to turn your view. Finish the drag before aiming at a coloured area to start a movement. When the tutorial asks you to drag a limb, start at the centre of the ring and move the pointer while holding the button. If you hid the information cards, press R to show them again. If the ring stays hidden, turn the view until the limb is clear. If you turn away from the whole scene, the game shows how to look back, even with the information cards hidden.
+
+You can turn the view with a finger in either edition. Touch an empty part of the game picture and slide your finger. Lift it to stop turning and leave the view where you put it. To start a movement, tap a coloured area of the brain and lift your finger without dragging. If the browser cancels the touch, the tap starts no movement. Keep a keyboard available for key commands.
+
 ## Move one limb yourself
 
 During play, press **1** for the left arm, **2** for the left leg, **3** for the right leg or **4** for the right arm. Use **W**, **A**, **S** and **D** to move the selected limb. Release the key when it reaches the position you want.
 
 From the view out of your body, look a little up or down to raise or lower the selected arm at the shoulder or the selected leg at the hip. You can do this without looking straight up or at the floor. After you select a limb, the aiming mark for this control sits about a quarter of the way down from the top of the screen. The mark stays there. The drawn wrist or ankle follows the joint, so it can move away from the mark when the limb reaches the end of its movement or the camera looks elsewhere.
+
+Step 4 lets you practise this movement. Drag up or down on an empty part of the picture. If you chose **Capture mouse**, move the mouse up or down. Watch the hand or foot on the limb you chose. The tutorial advances when the wrist or ankle moves at least 2.5 cm compared with its position beside the shoulder or hip just before you looked. The game gives it up to 0.35 seconds of game time to move. If you are looking from outside the body, press **E** to return to the eye view first.
 
 Press and drag on a limb to move the joint you pressed on. Press **Space** to grip. Aim at the brain or mirror body and hold Space to carry it, then release to put it down. You can drag the brain or mirror body to turn it. Hold **Shift** on the initial press to reach the item behind the one you would usually select.
 

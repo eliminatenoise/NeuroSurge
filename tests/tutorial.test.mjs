@@ -10,13 +10,16 @@ import { GUIDE } from '../scene/src/ns-text.mjs';
 import { quietPromptText, quietPromptCount, createQuietUi } from '../scene/src/ns-quiet.mjs';
 import { fakeDoc, all, hasClass } from './fake-doc.mjs';
 
-const F = { thirdPerson: true };
+// (25 November 2026, section 216: with the player camera the tutorial has a tenth step, the look that raises and lowers
+// the chosen limb, `aimJoint`: a build without that camera has nine)
+const F = { thirdPerson: true, jointAim: true };
 const fresh = () => NG.createGuide({ now: 0, features: F, tutorial: true });
 const EVENTS = {
   // 20 November 2026: the look's own switch-on of an area that moves something (no longer the bare look at an area)
   lookStrip: [{ type: 'activate', regionId: 'lh_knee', isLeftArm: false, kind: 'effector', moves: true, source: 'gaze' }],
   pressArea: [{ type: 'activate', regionId: 'lh_knee', isLeftArm: false, kind: 'effector', moves: true, source: 'click' }],
   chooseLimb: [{ type: 'limbChoice', n: 3 }],
+  aimJoint: [{ type: 'jointAim', m: 0.05 }],
   dragLimb: [{ type: 'limbDrag', deg: 30 }],
   dragBrain: [{ type: 'grab', on: true }, { type: 'grab', on: false, dragRad: 0.3 }],
   orbit: [{ type: 'orbit' }],
@@ -25,8 +28,8 @@ const EVENTS = {
   readInfo: [{ type: 'read' }]
 };
 
-test('the tutorial is nine steps in the order a newcomer needs them, each with one short line', () => {
-  assert.deepEqual([...NG.TUTORIAL_GOAL_IDS], ['lookStrip', 'pressArea', 'chooseLimb', 'moveHand', 'dragLimb', 'dragBrain', 'orbit', 'thirdPerson', 'readInfo']);
+test('the tutorial is ten steps in the order a newcomer needs them, each with one short line', () => {
+  assert.deepEqual([...NG.TUTORIAL_GOAL_IDS], ['lookStrip', 'pressArea', 'chooseLimb', 'aimJoint', 'moveHand', 'dragLimb', 'dragBrain', 'orbit', 'thirdPerson', 'readInfo']);
   const g = fresh();
   assert.deepEqual(g.goals, [...NG.TUTORIAL_GOAL_IDS]);
   assert.equal(g.tutorial, true);
@@ -34,23 +37,26 @@ test('the tutorial is nine steps in the order a newcomer needs them, each with o
   assert.equal(g.hidden, false, 'it starts by itself on a first visit');
   for (const id of NG.TUTORIAL_GOAL_IDS) {
     assert.ok(typeof GUIDE.short[id] === 'string' && GUIDE.short[id].length > 0 && GUIDE.short[id].length <= 48, `one short line for ${id}`);
-    assert.ok(typeof GUIDE.goals[id] === 'string' && GUIDE.goals[id].length > 10, `full line for ${id}`);
+    const full = (GUIDE.tutorialGoals && GUIDE.tutorialGoals[id]) || GUIDE.goals[id];
+    assert.ok(typeof full === 'string' && full.length > 10, `full line for ${id}`);
   }
   // later on 19 November the owner took the numbered lists of an area's movements away and a look switches an area on
   // again: no line of the tutorial asks for "a number" of such a list. (Later still the keys 1 to 4 got their new
   // meaning, the choice of the limb: the one step that teaches it names those keys themselves.)
-  for (const id of NG.TUTORIAL_GOAL_IDS) assert.doesNotMatch(GUIDE.short[id] + ' ' + GUIDE.goals[id], /\b1 or 2\b|number/i, `${id} names no numbered movement`);
+  for (const id of NG.TUTORIAL_GOAL_IDS) assert.doesNotMatch(GUIDE.short[id] + ' ' + ((GUIDE.tutorialGoals && GUIDE.tutorialGoals[id]) || GUIDE.goals[id]), /\b1 or 2\b|number/i, `${id} names no numbered movement`);
   assert.match(GUIDE.short.chooseLimb, /2, 3 or 4/);
   assert.match(GUIDE.goals.chooseLimb, /double click/i);
-  assert.deepEqual([...NG.tutorialGoalIds({})], NG.TUTORIAL_GOAL_IDS.filter(id => id !== 'thirdPerson'), 'a build without the outside view has no step for it');
+  assert.deepEqual([...NG.tutorialGoalIds({ jointAim: true })], NG.TUTORIAL_GOAL_IDS.filter(id => id !== 'thirdPerson'), 'a build without the outside view has no step for it');
+  assert.deepEqual([...NG.tutorialGoalIds({ thirdPerson: true })], NG.TUTORIAL_GOAL_IDS.filter(id => id !== 'aimJoint'), 'a build without the player camera has no look step');
+  assert.ok(NG.GUIDE_OPTIONS.jointAimMinM > 0.01 && NG.GUIDE_OPTIONS.jointAimMinM <= 0.05, 'the look step asks for a move one can see, a few centimetres');
 });
 
-test('each step is done by its own action, in order, and the count goes 1/9 ... 9/9', () => {
+test('each step is done by its own action, in order, and the count goes 1/10 ... 10/10', () => {
   let g = fresh(), t = 1;
   NG.TUTORIAL_GOAL_IDS.forEach((id, i) => {
     assert.equal(NG.currentGoal(g), id);
     const v = NG.guideView(g, t + 5);
-    assert.equal(quietPromptCount(v), `${i + 1}/9`);
+    assert.equal(quietPromptCount(v), `${i + 1}/10`);
     assert.equal(v.goalId, id);
     assert.ok(quietPromptText({ ...v, nice: false }, GUIDE.short).length > 0);
     g = NG.guideStep(g, EVENTS[id], t += 3);
@@ -84,6 +90,11 @@ test('strict: an action of a later step does not jump the tutorial ahead; a nudg
   g = NG.guideStep(g, [{ type: 'limbChoice', n: 1 }], 5.6);
   assert.equal(NG.currentGoal(g), 'chooseLimb', 'choosing the left arm again, the limb the game starts on, is not choosing another limb');
   g = NG.guideStep(g, [{ type: 'limbChoice', n: 2 }], 5.7);
+  assert.equal(NG.currentGoal(g), 'aimJoint');
+  // (section 216: the look step: a move of the wrist or ankle under jointAimMinM is no move; seen from outside it is not counted)
+  g = NG.guideStep(g, [...EVENTS.moveHand, { type: 'jointAim', m: NG.GUIDE_OPTIONS.jointAimMinM / 2 }], 5.72);
+  assert.equal(NG.currentGoal(g), 'aimJoint', 'the keys do not do the look\'s step, nor does a move too small to see');
+  g = NG.guideStep(g, EVENTS.aimJoint, 5.75);
   assert.equal(NG.currentGoal(g), 'moveHand');
   g = NG.guideStep(g, EVENTS.moveHand, 5.8);
   assert.equal(NG.currentGoal(g), 'dragLimb');
@@ -116,7 +127,7 @@ test('Enter skips the step that shows; the Esc page hides it, shows it and start
   assert.equal(NG.guideView(g, 1.1).nice, false, 'a skipped step is not praised');
   assert.equal(NG.guideView(NG.guideStep(fresh(), EVENTS.lookStrip, 1), 1.1).nice, true, 'a step really done is');
   g = NG.guideStep(g, [{ type: 'skip' }, { type: 'skip' }], 2);
-  assert.equal(NG.currentGoal(g), 'moveHand');
+  assert.equal(NG.currentGoal(g), 'aimJoint');
   assert.equal(NG.guideView(g, 2.1).step, 4);
   const hidden = NG.hideGuide(g);
   assert.equal(NG.guideView(hidden, 3).visible, false);
@@ -128,7 +139,7 @@ test('Enter skips the step that shows; the Esc page hides it, shows it and start
   assert.equal(NG.goalsDone(again), 0);
   assert.equal(NG.guideView(again, 4).visible, true);
   let all8 = fresh();
-  for (let i = 0; i < 9; i++) all8 = NG.guideStep(all8, [{ type: 'skip' }], 10 + i);
+  for (let i = 0; i < NG.TUTORIAL_GOAL_IDS.length; i++) all8 = NG.guideStep(all8, [{ type: 'skip' }], 10 + i);
   assert.equal(NG.currentGoal(all8), null);
   assert.equal(NG.guideStep(all8, [{ type: 'skip' }], 30), all8, 'nothing left to skip: nothing changes');
 });

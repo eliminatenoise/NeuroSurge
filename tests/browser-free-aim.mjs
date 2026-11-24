@@ -56,7 +56,7 @@ try {
   assert.equal(start.input.at, 'crosshair', 'before the pointer has moved over the picture the crosshair is the aim');
   assert.equal(start.trigger.seq, 0);
   assert.match(start.toast, /Drag empty space to look around/);
-  assert.equal(start.guide, '1/9');
+  assert.equal(start.guide, '1/10'); // (ten steps since the look step, section 216)
   assert.doesNotMatch(start.cross, /ns-crosshair-away/);
 
   // Find motor areas under the pointer on a coarse grid of the upper picture (moving in big steps: nothing rests).

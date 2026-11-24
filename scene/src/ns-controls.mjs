@@ -766,7 +766,10 @@ export function createControls({
    * and 34): opts.behind true marks a click that reaches behind (REACH_CODES held): { type: 'click', behind: true }. */
   function click(state, timeMs, opts = {}) {
     if (state.events.length >= EVENT_QUEUE_LIMIT) return state;
-    return { ...state, events: [...state.events, stamp(opts && opts.behind === true ? { type: 'click', behind: true } : { type: 'click' }, timeMs)] };
+    const event = { type: 'click' };
+    if (opts?.behind === true) event.behind = true;
+    if (opts?.touch === true) event.touch = true;
+    return { ...state, events: [...state.events, stamp(event, timeMs)] };
   }
 
   /** Reach axes: x = D - A (right positive), z = W - S (forward positive); opposite keys cancel. */
@@ -1061,6 +1064,8 @@ function uiCommandOf(el, root) {
  *     while a request is still pending is not counted either.
  *   - Look: mousemove uses movementX/Y while the canvas holds the lock; while NOT locked, a drag (mousemove with a
  *     button held after a press on the canvas) changes the look by the same sensitivity (dragToLook, default on).
+ *   - A primary touch on the canvas uses the same aim and drag rules. A tap activates on release, an empty-area
+ *     drag turns the look without requesting pointer lock, and a cancelled touch releases without a click.
  *   - The canvas context menu is suppressed so a secondary (right) trackpad click can act as a click.
  *   - U1-controls round 2: Escape keydown (not auto-repeat) releases every key and queues { type: 'escape' } on the UI
  *     queue; it is not prevented (the browser still exits pointer lock) and grants no user activation, so re-locking
@@ -1207,9 +1212,11 @@ export function bindDom(target, controls, getState, setState, options = {}) {
   let lastClient = null;
   let arrowPress = false;     // R5-input: the held free-mouse press began on a 3D arrow (no drag-to-look while it lasts)
   let pressDrag = false;      // R558: the held press began on the brain, the mirror body or an own limb (it may turn it)
+  let finger = null;
   const hasButtons = typeof controls.buttonDown === 'function' && typeof controls.buttonUp === 'function';
   const hasPointer = typeof controls.pointerAt === 'function' && typeof controls.pointerLeave === 'function';
   function clearPointerFlags() {
+    finger = null;
     dragging = false;
     arrowPress = false;
     pressDrag = false;
@@ -1418,7 +1425,76 @@ export function bindDom(target, controls, getState, setState, options = {}) {
     }
   });
   on(doc, 'pointerlockerror', () => lockRefused());
+  function touchMatches(e) {
+    return finger !== null && e.pointerType === 'touch' && finger.id === e.pointerId;
+  }
+  function mouseFromTouch(e) {
+    return finger !== null || e.sourceCapabilities?.firesTouchEvents === true;
+  }
+  on(target, 'pointerdown', e => {
+    if (e.pointerType !== 'touch' || e.isPrimary === false || finger || isLocked() ||
+        arrowPress || pressDrag || dragging) return;
+    const point = localPoint(e);
+    if (!point) return;
+    e.preventDefault(); // Suppress compatibility mouse events. The game already applies touch-action: none.
+    const at = eventTime(e);
+    finger = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: false };
+    if (hasButtons) apply(s => controls.buttonDown(s, at, { via: 'pointer', x: point.x, y: point.y }));
+    arrowPress = onArrow(point);
+    const item = arrowPress ? null : dragTarget(point);
+    pressDrag = item !== null;
+    dragging = !arrowPress && !pressDrag && dragToLook;
+    if (item) apply(s => controls.dragStart(s, item.target, { binding: item.binding }));
+  });
+  function moveTouch(e) {
+    if (!touchMatches(e) || arrowPress) return;
+    if (!Number.isFinite(e.clientX) || !Number.isFinite(e.clientY)) return;
+    const dx = e.clientX - finger.x, dy = e.clientY - finger.y;
+    if (!pressDrag && !finger.moved && Math.hypot(dx, dy) < DRAG_CLICK_SLOP_PX) return;
+    finger.x = e.clientX;
+    finger.y = e.clientY;
+    finger.moved = true;
+    if (pressDrag) apply(s => controls.dragMove(s, dx, dy));
+    else if (dragging) {
+      if (hasPointer) apply(s => controls.pointerLeave(s));
+      apply(s => controls.pointerMove(s, dx, dy, eventTime(e)));
+    }
+  }
+  on(view, 'pointermove', moveTouch);
+  on(view, 'pointerup', e => {
+    if (!touchMatches(e)) return;
+    const at = eventTime(e);
+    const end = localPoint(e);
+    if (!end || end.x < 0 || end.y < 0 || end.x > end.w || end.y > end.h) {
+      cancelTouch(e);
+      return;
+    }
+    // A browser may deliver the last displacement only with the release.
+    moveTouch(e);
+    let clicked = !arrowPress && !finger.moved;
+    if (pressDrag) apply(s => {
+      const result = controls.dragEnd(s, { releasedAtMs: at });
+      clicked = result.click;
+      return result.state;
+    });
+    if (clicked) {
+      // Hover can drive a motor area on its own. Give tap aim to the game only on release.
+      if (hasPointer) apply(s => controls.pointerAt(s, end.x, end.y, at));
+      apply(s => controls.click(s, at, { touch: true }));
+    }
+    else if (hasPointer) apply(s => controls.pointerLeave(s));
+    if (hasButtons) apply(s => controls.buttonUp(s, at));
+    clearPointerFlags();
+  });
+  function cancelTouch(e) {
+    if (!touchMatches(e)) return;
+    cancelPointerGesture(eventTime(e));
+    if (hasPointer) apply(s => controls.pointerLeave(s));
+  }
+  on(view, 'pointercancel', cancelTouch);
+  on(target, 'lostpointercapture', cancelTouch);
   on(target, 'mousedown', e => {
+    if (mouseFromTouch(e)) return;
     const at = eventTime(e);
     // Review fix: a second button pressed while a press-and-drag is held is ignored. It used to start the gesture
     // afresh, so letting go gave a click on top of the turn already made.
@@ -1469,6 +1545,7 @@ export function bindDom(target, controls, getState, setState, options = {}) {
     if (canLock && !lockPending) requestLock(); // retry (e.g. after the browser's post-Esc cooldown)
   });
   on(view, 'mouseup', e => {
+    if (mouseFromTouch(e)) return;
     if (!(Number.isFinite(e.buttons) && e.buttons !== 0)) {
       if (lockAfterArrow) { lockAfterArrow = false; if (arrowPress && !isLocked() && !lockFallback && !lockPending) requestLock(); }
       dragging = false;
@@ -1485,6 +1562,7 @@ export function bindDom(target, controls, getState, setState, options = {}) {
     }
   });
   on(doc, 'mousemove', e => {
+    if (mouseFromTouch(e)) return;
     syncReach(e); // R558 (Messages 33 and 34): the HUD's preview of the item behind follows Shift
     const at = eventTime(e);
     // A missed release (it happened outside the page, or the browser dropped it): with no button down any more, the
