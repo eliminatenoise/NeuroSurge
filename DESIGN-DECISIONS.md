@@ -8545,6 +8545,40 @@ edges shows no tip on the card or outside the picture.
   crossed although nothing was switched on.
 - The bar steps up or down by 11 to 26 px when the pointer is captured or freed.
 
+## 208. A click with the free pointer acts where the pointer is, also right after an arrow key (24 November)
+
+Section 206 made the last thing the player moved the aim: after an arrow key's step the crosshair aims until the
+pointer next MOVES. A click made then without moving the mouse was still the crosshair's: it pressed the area the key
+had aimed at, wherever the pointer was (seen in `tests/browser-free-aim.mjs`: the pointer on nothing, the click
+pressed `rh_hand`, the key's area), while a click on a muscle or on one of your limbs acted at the pointer, as a mouse
+click does everywhere else. One press, two places.
+
+**A new press with the free pointer takes the aim, like a move (`aimStep` `pressSeq`).** The controls count the presses
+made with the free pointer (`button.seq` while `button.via` is 'pointer'); a new one puts the aim at the pointer on its
+own frame, silently while the button is down. A press that starts a drag of the view is followed by the look's own
+movement, so the crosshair aims during the drag as before.
+
+**The frame that carries the click places the look first.** A press on empty space or on a motor area's glass sends
+its click at the press, in the same frame that gives the pointer the aim; the activity applies a click to the area the
+look is on when the click arrives, and the look's event came later in the frame, so the click still found the
+crosshair's area of the frame before. With the pointer as the aim and a click in the frame, the look's event is placed
+at the start of the frame (`gazeAt` 0), the rule a reach-behind click already uses.
+
+Seen in the browser after an arrow key's step with the mouse left still: a click with the pointer on nothing presses
+nothing (it pressed the key's area before); with the pointer on a motor area it presses that area.
+
+**Tests.** `tests/free-aim.test.mjs`: the press takes the aim without a move, silently while down; its release is not
+silent and no arrival follows; a press that starts a look drag hands the aim to the crosshair; no free press while
+captured. `tests/browser-free-aim.mjs` (5b): after the arrow key, a click without a mouse move makes the pointer the
+aim, and a click that presses an area presses the one under the pointer.
+
+**Not done, or not right.**
+- With the pointer captured nothing changes: a click presses what the crosshair is on.
+- A keyboard-only player has no key that presses the area an arrow key aimed at; the look that the key places starts
+  the area's movement once, and a repeat needs a click on the area.
+- A click on one of your own limbs chooses that limb and only lights its area (section 139's rule); the information
+  card then names the area's first movement and its muscles, which need not include the muscle that was clicked.
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**
@@ -8555,9 +8589,11 @@ edges shows no tip on the card or outside the picture.
 **Limits of this build that were looked at and left, each with its reason in the section named.**
 - The camera from GitHub main is kept (204): the eye view stands about a metre behind the eye and turns in place, it never
   follows the body or turns to a chosen limb, and Reset body leaves the view where it is; with a limb chosen a look up or
-  down also moves that limb. Your own body is smaller in the start picture than before. The owner's Message 167 (the view
-  shifts to a chosen limb and keeps it in the frame) and Message 179 ("a proper first person view") are not met by that
-  design (204).
+  down also moves that limb. Your own body is smaller in the start picture than before. That is what the owner asked for
+  on 23 November ("The camera should never automatically shift"; "the camera can never get locked and it can always move
+  freely"; no close-up effects that magnify or hide body parts), which replaces Message 167 (the view shifts to a chosen
+  limb and keeps it in the frame). Message 179 ("a proper first person view") is not met by a camera a metre behind the
+  eye (204).
 - With the pointer free the pointer is the aim (206): the chosen limb still goes with the look (a drag or the captured
   mouse), not with the pointer; a resting pointer waits a tenth of a second before its area moves, while the captured
   crosshair still switches areas on at once, also during a drag across the strip; pointing was not tried on a touch screen.

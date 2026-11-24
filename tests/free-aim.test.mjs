@@ -170,6 +170,42 @@ test('the tip: a named part can carry the Space line as its second line', () => 
   assert.equal(area.hint, 'Bend left elbow');
 });
 
+// 24 November 2026 (DESIGN-DECISIONS section 208): a press with the free pointer is the pointer's own act
+test('a new press with the free pointer takes the aim back from the crosshair without the mouse moving', () => {
+  const frames = (() => { let seen = null, t = 0; const cur = { lookMs: null, free: true, width: W, height: H }; const out = [];
+    const step = more => { t += 16; const r = aimStep(seen, { ...cur, nowMs: t, ...more }); seen = r.seen; out.push(r); };
+    const p = at(550, 120, 100), look0 = { yaw: 0, pitch: -0.445 }, look1 = { yaw: 0.35, pitch: -0.37 };
+    step({ pointer: null, ...look0, pressSeq: null });            // 0
+    step({ pointer: p, ...look0, pressSeq: null });               // 1 the pointer aims
+    for (let k = 0; k < 8; k++) step({ pointer: p, ...look0, pressSeq: null, gazeArea: 'A' });
+    step({ pointer: p, ...look1, pressSeq: null, gazeArea: 'A' }); // 10 an arrow key placed the look
+    step({ pointer: p, ...look1, pressSeq: null, gazeArea: 'B' }); // 11
+    step({ pointer: p, ...look1, pressSeq: 1, down: true, gazeArea: 'B' }); // 12 the press, the mouse still
+    step({ pointer: p, ...look1, pressSeq: 1, down: false, clicked: true, gazeArea: 'A' }); // 13 the release: its click
+    step({ pointer: p, ...look1, pressSeq: 1, gazeArea: 'A' });   // 14
+    return out; })();
+  assert.equal(frames[10].pointer, false, 'the key put the aim at the crosshair');
+  assert.equal(frames[11].pointer, false);
+  assert.equal(frames[12].pointer, true, 'the press is at the pointer: the pointer is the aim');
+  assert.equal(frames[12].silent, true, 'silently while the button is down');
+  assert.equal(frames[13].pointer, true);
+  assert.equal(frames[13].silent, false, 'the click at the release presses what is under the pointer');
+  assert.equal(frames[13].arrivedFrom, undefined, 'and no arrival follows the click');
+  assert.equal(frames[14].arrivedFrom, undefined);
+  // a press that starts a drag of the view: the look moves after it, so the crosshair aims during the drag
+  const drag = (() => { let seen = null, t = 0; const out = []; const step = more => { t += 16; const r = aimStep(seen, { free: true, width: W, height: H, lookMs: null, yaw: 0, pitch: 0, nowMs: t, ...more }); seen = r.seen; out.push(r); };
+    const p = at(1300, 300, 100);
+    step({ pointer: null, pressSeq: null }); step({ pointer: p, pressSeq: null });
+    step({ pointer: p, pressSeq: 1, down: true });
+    step({ pointer: at(1280, 308, 132), pressSeq: 1, down: true, lookMs: 132, yaw: 0.08, pitch: -0.03 });
+    return out; })();
+  assert.equal(drag[2].pointer, true);
+  assert.equal(drag[3].pointer, false, 'the look moved last');
+  // with the pointer captured there is no free press (pressSeq null): nothing changes
+  const cap = aimStep(null, { pointer: null, free: false, width: W, height: H, pressSeq: null });
+  assert.equal(cap.pointer, false);
+});
+
 // 24 November 2026 (HINT_ROW, DESIGN-DECISIONS section 207): the limb buttons' bar stands clear of the hint under the picture
 test('the limb bar is raised by exactly what the hint reaches into its space, plus the gap', () => {
   const box = (left, top, right, bottom) => ({ left, top, right, bottom });

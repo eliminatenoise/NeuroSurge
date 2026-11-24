@@ -171,17 +171,26 @@ export const FREE_AIM = Object.freeze({ on: true, restPx: 3, restMs: 100 });
  * pointer ({ x, y, timeMs } | null) and look now; free: the game plays with the pointer not captured; width / height:
  * the picture (CSS px); busy: Space is down, keeps a hold, or something is carried or dragged by the look; down: a
  * mouse button is down; nowMs: the frame's time; gazeArea: the area the activity has as looked at as the frame begins
- * (a string or null); clicked: a click reaches the activity this frame.
+ * (a string or null); clicked: a click reaches the activity this frame; pressSeq: the count of presses made with the
+ * free pointer (the controls' button seq while its `via` is 'pointer'; null otherwise). A new press is the pointer's
+ * own act at its place, so it takes the aim like a move does (24 November 2026, section 208: after an arrow key had
+ * put the aim at the crosshair, a click made without moving the mouse pressed the area the KEY had aimed at, wherever
+ * the pointer was, while a click on a muscle acted at the pointer).
  * Returns { seen (the next record), pointer (the pointer is the aim), x, y (the aim's place), silent (record what is
  * under the aim without switching it on), arrivedFrom (undefined, or the area to tell this frame's gaze event: the
  * pointer has just come to rest), ms (when the player last moved the aim: the look's own time, or the time of the
  * pointer's last move as the aim; null before either) }. */
-export function aimStep(seen, { pointer = null, lookMs = null, yaw = 0, pitch = 0, free = false, width = 0, height = 0, busy = false, down = false, nowMs = 0, gazeArea = null, clicked = false, on = FREE_AIM.on, restPx = FREE_AIM.restPx, restMs = FREE_AIM.restMs } = {}) {
-  const s = seen && typeof seen === 'object' ? { ...seen } : { pointer: null, lookMs: null, yaw: null, pitch: null, pSeq: 0, lSeq: 0, seq: 0, ms: null, was: false, anchor: null, moving: false, from: null, left: false };
+export function aimStep(seen, { pointer = null, lookMs = null, yaw = 0, pitch = 0, free = false, width = 0, height = 0, busy = false, down = false, nowMs = 0, gazeArea = null, clicked = false, pressSeq = null, on = FREE_AIM.on, restPx = FREE_AIM.restPx, restMs = FREE_AIM.restMs } = {}) {
+  const s = seen && typeof seen === 'object' ? { ...seen } : { pointer: null, lookMs: null, yaw: null, pitch: null, pSeq: 0, lSeq: 0, seq: 0, ms: null, was: false, anchor: null, moving: false, from: null, left: false, press: undefined };
   const pMoved = pointer !== s.pointer;
   if (pMoved) { s.pointer = pointer; if (pointer) s.pSeq = ++s.seq; }
   const lMoved = lookMs !== s.lookMs || yaw !== s.yaw || pitch !== s.pitch;
   if (lMoved) { s.lookMs = lookMs; s.yaw = yaw; s.pitch = pitch; s.lSeq = ++s.seq; }
+  // (a new press with the free pointer: the pointer's own act at its place; after the look's change of this same frame,
+  // so a press that follows an arrow key's step takes the aim)
+  const pressed = Number.isSafeInteger(pressSeq) && s.press !== undefined && pressSeq !== s.press;
+  s.press = Number.isSafeInteger(pressSeq) ? pressSeq : s.press === undefined ? null : s.press;
+  if (pressed && pointer) s.pSeq = ++s.seq;
   const inside = Boolean(pointer) && Number.isFinite(pointer.x) && Number.isFinite(pointer.y) && pointer.x >= 0 && pointer.y >= 0 && pointer.x <= width && pointer.y <= height;
   const aims = on === true && free === true && inside && s.pSeq > s.lSeq && busy !== true;
   if (aims && pMoved && Number.isFinite(pointer.timeMs)) s.ms = pointer.timeMs;
@@ -12054,8 +12063,13 @@ export function start(params = {}) {
           const a = aimStep(aimSeen, { pointer: cs.pointer || null, lookMs: cs.lookMs === undefined ? null : cs.lookMs, yaw: cs.yaw, pitch: cs.pitch, free: live && !lockedNow(),
             width: size ? size.width : 0, height: size ? size.height : 0, busy: spBusy || carried, down: Boolean(cs.button && cs.button.down), nowMs: now,
             gazeArea: simState && simState.activity && typeof simState.activity.gazeArea === 'string' ? simState.activity.gazeArea : null,
-            clicked: timing.events.some(e => e && e.type === 'click') });
+            clicked: timing.events.some(e => e && e.type === 'click'),
+            pressSeq: cs.button && cs.button.via === 'pointer' && Number.isSafeInteger(cs.button.seq) ? cs.button.seq : null });
           aimSeen = a.seen; aimNow = a; aimRay = null;
+          // (section 208: what the aiming pointer is on is what this frame's click presses: the look's event is placed at the
+          // start of the frame, as for a reach-behind click, so a click that comes in the same frame as the press that gave
+          // the pointer the aim does not find the crosshair's area of the frame before)
+          if (aimNow.pointer && timing.gazeAt !== 0 && timing.events.some(e => e && e.type === 'click')) timing = { ...timing, gazeAt: 0 };
         }
         let lookByGame = false, lookMovedNow = false; // (lookMovedNow: the player's pointer moved the look this frame, CARRY_ARRIVAL)
         if (live) {

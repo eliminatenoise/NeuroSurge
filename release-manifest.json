@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-24-body-update-72",
+  "version": "experimental-2026-11-24-body-update-73",
   "experimental": true,
-  "source": "Body update 72. The limb buttons stand clear of the hint under the picture, and the tip beside the pointer keeps off the tutorial card. With the pointer free the pointer is the aim. Full and Lite share the game; drag on empty space to look or choose Capture mouse from the Escape menu.",
+  "source": "Body update 73. A click with the free pointer acts where the pointer is, also right after an arrow key. With the pointer free the pointer is the aim. Full and Lite share the game; drag on empty space to look or choose Capture mouse from the Escape menu.",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -32,8 +32,8 @@
     },
     {
       "path": "DESIGN-DECISIONS.md",
-      "bytes": 1032235,
-      "sha256": "d07a81d3acf02950b3a1e3edc14f62042caff3cad333b933f2b03ce2b325f261"
+      "bytes": 1035232,
+      "sha256": "f9e68b7c8401b6d770373fac0f195153ecdcfbecab69ab51f4d82aab79c3ab66"
     },
     {
       "path": "LAUNCHERS.md",
@@ -62,8 +62,8 @@
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 65014,
-      "sha256": "a4fa42081ef8218beaeb62c05bad0806eb6e72410c49b25599d68462c6b4350a"
+      "bytes": 65475,
+      "sha256": "89b9588442d798c14cc4a19b74a281411b47ab902947233e6e9ff3f04fe4f3d0"
     },
     {
       "path": "README.md",
@@ -73,12 +73,12 @@
     {
       "path": "START.html",
       "bytes": 4507,
-      "sha256": "a3f12f29d64da46b55995cdb8bb237445f677e128a3b1f86a849db24fe1d938a"
+      "sha256": "161fb0ca869d1ddf5d7d77671dcad3581e7be112cac096d1ed667a8539265e10"
     },
     {
       "path": "index.html",
       "bytes": 3909,
-      "sha256": "0cabcd5242fc754b2b06da19cc95c2c78fb4b156c7133ae62e9e2e39f90713fa"
+      "sha256": "c2bafcd16fc8e02be7ed56fe73aedbbc37aebe17b44b9a003837eebaf0584ea6"
     },
     {
       "path": "inputs/FULLBODY-MESH-MANIFEST.json",
@@ -3987,8 +3987,8 @@
     },
     {
       "path": "scene/src/ns-app.mjs",
-      "bytes": 1185445,
-      "sha256": "def273278d955eb5c3df17229d750a8044b6aa180cd1944e597df49e359a7a23"
+      "bytes": 1186979,
+      "sha256": "c6aaf9ae6844b6d8e8b2df2c980c753fd75cfb2b3728adcf2bd4312c68af0409"
     },
     {
       "path": "scene/src/ns-area-halo.mjs",
@@ -4472,8 +4472,8 @@
     },
     {
       "path": "tests/browser-free-aim.mjs",
-      "bytes": 10416,
-      "sha256": "144a7d13852d63a0cb8ef367ddf279e18bcdc2e2a9ffa4c562fce7741beec030"
+      "bytes": 11352,
+      "sha256": "b527ad669196243c980d6f30c22cfeaa863ab82c0691e3a54f828baa55e2c122"
     },
     {
       "path": "tests/browser-hud-clear.mjs",
@@ -4647,8 +4647,8 @@
     },
     {
       "path": "tests/free-aim.test.mjs",
-      "bytes": 14826,
-      "sha256": "ce3fac6e387fec1d3e5804a9fdf02b0e757a3e9053c11157d10f989a21f2f4f0"
+      "bytes": 17713,
+      "sha256": "1f4a1976ee9f269fd8b94246974ef13d6b5909d50dea21311ffdadd5305c8b46"
     },
     {
       "path": "tests/guide-order.test.mjs",

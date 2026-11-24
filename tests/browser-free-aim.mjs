@@ -137,6 +137,16 @@ try {
   assert.equal(stepped.tip?.kind, 'area');
   assert.ok(Math.abs((stepped.tip.box[1] + stepped.tip.box[3]) / 2 - height / 2) < 120, 'the tip is beside the crosshair');
   await shot('arrow');
+  // 5b. (section 208) A click made now, without moving the mouse, is the pointer's: the pointer is the aim again, and
+  // if the click presses a motor area it is the one under the pointer, not the one the key aimed at.
+  await page.mouse.down(); await page.waitForTimeout(40); await page.mouse.up();
+  const stillClick = await rested();
+  assert.equal(stillClick.input.at, 'pointer', 'a press with the free pointer takes the aim');
+  if (stillClick.trigger.seq !== stepped.trigger.seq && stillClick.trigger.source === 'click') {
+    const under = /^brain:area:(.+)$/.exec(stillClick.input.front || '');
+    assert.ok(under && stillClick.trigger.regionId === under[1], `the click pressed the area under the pointer (${stillClick.input.front}), not ${to}: ${stillClick.trigger.regionId}`);
+  }
+  report.stillClick = { front: stillClick.input.front, trigger: `${stillClick.trigger.source}:${stillClick.trigger.regionId}`, stepped: to };
   // ... and the pointer takes the aim back as soon as it moves
   await page.mouse.move(1350, 700, { steps: 4 });
   const back = await rested();
