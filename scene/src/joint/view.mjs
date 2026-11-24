@@ -2,15 +2,17 @@ import {BONES,WRIST,TRACKED_POINTS,trackedPoint,observation,endpoint,observeTarg
 import {captureSource,readKeyframes} from './media.mjs';
 import {calibratedPose, poseForSelection, trackedLimbs, trackingChoices} from '../camera/limb-pose.mjs';
 import {createVideoTakeWindow, pictureOffsetMs, poseForFollow} from '../camera/limb-take.mjs';
+import {localMotion} from './forecast-controls.mjs';
+import {advanceCameraHistory,cameraForecasts,movementForecast,newCameraHistory,queueCameraForecast} from './adaptive-motion.mjs';
 
 import {bindTouch, isTouchQuestion, touchPanel} from './touch.mjs';
 
 const markup=`
 <header class="joint-title"><div><h1>Movement mirror</h1></div><div><button data-size type="button">Compact</button> <button data-close type="button">Close</button></div></header>
 <div class="joint-layout"><div class="joint-stage">
-<canvas width="640" height="480" aria-label="Frontal field with the tracked skeleton and the forecast for the selected point"></canvas>
-<p class="joint-key"><span>● Observed or simulated</span><span>◎ Forecast +120 ms</span></p>
-<p data-frame>Waiting for movement.</p><p data-camera-follow role="status" hidden></p><p data-forecast></p><p data-score></p><p data-goal role="status"></p>
+<canvas width="640" height="480" aria-label="Skeleton, selected tracked point and its forecast"></canvas>
+<p class="joint-key"><span>● Observed or simulated</span><span class="joint-selection" hidden><span aria-hidden="true">⌜⌟</span> Selected point</span><span>◎ Forecast +120 ms</span></p>
+<p data-point-cue role="status"></p><p data-frame>Waiting for movement.</p><p data-camera-follow role="status" hidden></p><p data-forecast></p><p data-score></p><p data-goal role="status"></p>
 <p data-take-status role="status" hidden></p><button data-take-command type="button" hidden>Open Command box</button>
 </div><div class="joint-inputs"><fieldset><legend>C · Follow movement</legend>
 <label>Source <select data-source><option value="camera">Live camera</option><option value="clip">Recorded video</option><option value="stills">Timestamped stills</option></select></label>
@@ -22,6 +24,8 @@ const markup=`
 <p id="joint-follow-help" hidden>Choose what moves the avatar. Choose Forecast only to keep manual control. For live camera, show a clear bend in each knee you want the body to follow.</p>
 <label>Point to forecast <select data-side><option value="auto">Either visible wrist</option></select></label>
 <p id="joint-forecast-help" hidden>The forecast can use a different point, including a hip or ankle. It shows where that point may appear in the image 0.12 seconds later.</p>
+<label>Forecast method <select data-method aria-describedby="joint-method-help"><option value="model">NeuroTranslate 0.0</option><option value="adaptive">Adapt to recent tracking</option><optgroup label="Known movement"><option value="A1D1">Walking</option><option value="A3D1">Squat</option><option value="A6D1">Shoulder press</option><option value="A9D3">Jumping jacks</option></optgroup></select></label>
+<p id="joint-method-help">Choose a named movement when you know the action. Recent tracking combines forecasts using earlier points found by your camera tracker.</p>
 <p id="joint-take-help" hidden>Save up to eight seconds of tracked movement for the limbs the avatar follows. The movement readings stay in this tab.</p>
 <button data-start type="button">Start camera</button> <button data-save-take type="button" aria-describedby="joint-take-help" hidden disabled>Save take</button> <button data-stop type="button" disabled>Stop</button>
 <video muted playsinline hidden></video><p data-status role="status">Camera off. Images stay on this device.</p>
@@ -31,7 +35,7 @@ const markup=`
 <p data-language role="status">Try “Raise my left hand above my shoulder.” The avatar attempts the goal. The ring forecasts its wrist.</p></form>
 ${touchPanel}
 <details><summary>Virtual brain</summary><p>Three invented unit histories. Which unit would the model rank first for the next single-spike bin?</p><button data-brain type="button">Score virtual units</button><output data-brain-output></output></details>
-<details><summary>Measurements and limits</summary><p>The tracker estimates 2D joint positions in each source image. The model uses the last five frames to forecast the selected point 120 ms ahead. The score uses the nearest tracked frame within 40 ms of the target time, even when the reply arrives later. Simulated movement is compared with a simulated frame.</p><p>The model trained on tracked animal movement. Human camera accuracy remains unmeasured. Sparse keyframes and tracking losses can leave gaps. No frames are interpolated. Camera images contain no neural recording. The 3D game checks the drawn wrist and shoulder in world metres. The standalone two-link arm checks its drawing in pixels.</p></details>
+<details><summary>Measurements and limits</summary><p>The tracker estimates 2D joint positions in each source image. The forecast uses the last five frames to place the selected point 120 ms ahead. The score uses the nearest tracked frame within 40 ms of the target time, even when the reply arrives later. Simulated movement is compared with a simulated frame.</p><p>The model learned from tracked animal movement. The <a href="${new URL('../../../index.html#camera-test',import.meta.url)}">recorded-image tests</a> compare the forecast with separate optical measurements. Live camera accuracy remains unverified. Sparse keyframes and tracking losses can leave gaps. Camera tracking measures positions in the image. The 3D game checks the drawn wrist and shoulder in world metres. The standalone arm checks its drawing in pixels.</p></details>
 <p data-model></p>
 </div></div>`;
 const finitePair=p=>Array.isArray(p)&&p.length===2&&p.every(Number.isFinite);
@@ -46,7 +50,10 @@ export function bindJointView({host,onPose=()=>{},embedded=false,readRig=null,on
   const canvas=el('canvas'),ctx=canvas.getContext('2d'),video=el('video');
   const stageImage=document.createElement('canvas'), frameCtx=stageImage.getContext('2d',{alpha:false});
   const source=el('[data-source]'),pointControl=el('[data-side]'),followControl=el('[data-follow]'),goalField=el('#joint-outcome');
+  const methodControl=el('[data-method]');
+  if (!browserModel) methodControl.querySelector('option[value="adaptive"]').remove();
   const cameraFollow=el('[data-camera-follow]'), title=el('.joint-title h1');
+  const pointCue=el('[data-point-cue]'), selectionKey=el('.joint-selection');
   const startButton=el('[data-start]'), stopButton=el('[data-stop]'), sizeButton=el('[data-size]');
   const saveTake = el('[data-save-take]');
   const takeStatus = el('[data-take-status]');
@@ -75,6 +82,7 @@ export function bindJointView({host,onPose=()=>{},embedded=false,readRig=null,on
   }
   const comparisons=new Set();
   let media=null,epoch=0,controller=new AbortController(),pending=null,busy=false,rows=[],latest=null,shown=null,schedule=null,modelHash=null,recognizer=null,active=false,simSide=null,lastIssue=-Infinity,activePoint=null;
+  let adaptiveHistory=newCameraHistory(), browserPredictor=null;
   let lastComparisonIssue=-Infinity;
   let lastBodyPose = null, bodyRevision = 0;
   if (!embedded) {el('[data-close]').hidden=true;el('[data-size]').hidden=true;}
@@ -138,6 +146,19 @@ export function bindJointView({host,onPose=()=>{},embedded=false,readRig=null,on
     if(!latest?.photo) {ctx.fillStyle='#abbdba';ctx.beginPath();ctx.arc(320,100,31,0,Math.PI*2);ctx.fill();}
     for(const [a,b] of BONES)line(xy[a],xy[b],latest?.photo?'#cbf7e5':'#97beb0',Math.max(2,w*.009));
     for(const p of xy) if(finitePair(p)){ctx.fillStyle='#c6ffe1';ctx.beginPath();ctx.arc(...p,Math.max(2,w*.007),0,Math.PI*2);ctx.fill();}
+    const selected=latest?.photo && activePoint!==null ? xy[activePoint] : null;
+    if (finitePair(selected)) {
+      const [x,y]=selected;
+      const radius=Math.max(7,w*.017);
+      ctx.beginPath();
+      for (const [side,vertical] of [[-1,-1],[1,-1],[1,1],[-1,1]]) {
+        ctx.moveTo(x+side*radius*.48,y+vertical*radius);
+        ctx.lineTo(x+side*radius,y+vertical*radius);
+        ctx.lineTo(x+side*radius,y+vertical*radius*.48);
+      }
+      ctx.strokeStyle='#102a32';ctx.lineWidth=5;ctx.stroke();
+      ctx.strokeStyle='#75f3f6';ctx.lineWidth=2;ctx.stroke();
+    }
     if(shown && latest && shown.point!==undefined && finitePair(xy[shown.point]) && latest.t<=shown.issue+.18) {
       line(shown.origin,shown.pred,'#ffba61',3);
       ctx.strokeStyle='#ffba61';ctx.lineWidth=3;ctx.beginPath();ctx.arc(...shown.pred,Math.max(6,w*.016),0,Math.PI*2);ctx.stroke();
@@ -145,7 +166,10 @@ export function bindJointView({host,onPose=()=>{},embedded=false,readRig=null,on
   }
   function clearHistory(reason='', {keepImage=false}={}) {
     epoch++;controller.abort();controller=new AbortController();pending=null;rows=[];shown=null;lastIssue=-Infinity;activePoint=null;
+    adaptiveHistory=newCameraHistory();
     if (!keepImage) latest=null;
+    pointCue.textContent='';
+    selectionKey.hidden=true;
     comparisons.clear();lastComparisonIssue=-Infinity;
     text('[data-frame]',reason||'Waiting for movement.');text('[data-forecast]','');text('[data-score]','');paint();
   }
@@ -194,10 +218,20 @@ export function bindJointView({host,onPose=()=>{},embedded=false,readRig=null,on
     if(!keep){clearHistory();text('[data-goal]','');}
     text('[data-status]','Capture stopped.');releaseCapturePose();
   }
+  async function getBrowserPredictor() {
+    browserPredictor ??= (await import('./browser-forecast.mjs')).predictBrowserTask;
+    return browserPredictor;
+  }
+  function acceptPrediction(task,d) {
+    if(d.task!==task || !/^[a-f0-9]{64}$/.test(d.checkpoint_sha256) || (modelHash && d.checkpoint_sha256!==modelHash)) throw Error('The selected checkpoint changed. Reopen this session.');
+    modelHash=d.checkpoint_sha256;
+    node.dataset.checkpoint=modelHash;
+    return d.prediction[0];
+  }
   async function forecast(task,X,signal) {
     let d;
     if (browserModel) {
-      const { predictBrowserTask } = await import('./browser-forecast.mjs');
+      const predictBrowserTask = await getBrowserPredictor();
       signal.throwIfAborted();
       d = predictBrowserTask(task, X);
     } else {
@@ -206,19 +240,48 @@ export function bindJointView({host,onPose=()=>{},embedded=false,readRig=null,on
       d=await r.json();
     }
     signal.throwIfAborted();
-    if(d.task!==task || !/^[a-f0-9]{64}$/.test(d.checkpoint_sha256) || (modelHash && d.checkpoint_sha256!==modelHash)) throw Error('The selected checkpoint changed. Reopen this session.');
-    modelHash=d.checkpoint_sha256;
+    const prediction=acceptPrediction(task,d);
     text('[data-model]', (browserModel ? 'Browser checkpoint ' : 'Local checkpoint ') + modelHash);
-    node.dataset.checkpoint=modelHash;
-    return d.prediction[0];
+    return prediction;
+  }
+  function forecastFromTracking(packet) {
+    const previous=rows.slice(0,-1).findLast(row=>finitePair(row.xy[packet.point]));
+    const velocity=packet.origin.map((value,axis)=>value+packet.lead*(value-previous.xy[packet.point][axis])/(packet.issue-previous.t));
+    const base={persistence:packet.origin,velocity,...localMotion(rows,packet.point,packet.lead)};
+    if (methodControl.value!=='adaptive') {
+      const {known_movement}=movementForecast(methodControl.value,base);
+      return {position:known_movement,summary:'Forecast uses the movement name.'};
+    }
+    base.attention=endpoint(packet,acceptPrediction('landmark_motion',browserPredictor('landmark_motion',packet.X)));
+    const {camera_blend,cameraEvidence}=cameraForecasts(adaptiveHistory,base);
+    queueCameraForecast(adaptiveHistory,packet,base);
+    return {position:camera_blend,summary:cameraEvidence.matured
+      ? 'Forecast uses recent tracking feedback.' : 'Holding the last point while collecting tracking feedback.'};
+  }
+  async function changeForecastMethod() {
+    if (!simSide) {
+      clearHistory('Forecast method changed. Building a new window.',{keepImage:true});
+      text('[data-model]','Waiting for tracked movement.');
+    }
+    if (methodControl.value!=='adaptive' || browserPredictor) return;
+    if (!simSide) text('[data-model]','Loading the forecast model.');
+    try {
+      await getBrowserPredictor();
+      if (!simSide && methodControl.value==='adaptive') text('[data-model]','Waiting for tracked movement.');
+    } catch {
+      if (methodControl.value!=='adaptive') return;
+      methodControl.value='model';
+      if (!simSide) text('[data-model]','Could not load the forecast model. A named movement can still use tracked positions.');
+    }
   }
   async function drain() {
     if(busy || !pending) return;
     busy=true;
     const job=pending;pending=null;
     try {
-      const pred=endpoint(job.packet,await forecast('landmark_motion',job.packet.X,controller.signal));
+      const pred=job.direct?.position ?? endpoint(job.packet,await forecast('landmark_motion',job.packet.X,controller.signal));
       if(job.epoch!==epoch) return;
+      if(job.direct) text('[data-model]',job.direct.summary);
       const p={...job.packet,pred,label:job.label};
       job.pred=pred;
       job.replyThrough=latest?.t??p.issue;
@@ -272,6 +335,15 @@ export function bindJointView({host,onPose=()=>{},embedded=false,readRig=null,on
     activePoint=present ? point.index : null;
     if(frame.bitmap){stageImage.width=frame.w;stageImage.height=frame.h;frameCtx.drawImage(frame.bitmap,0,0);}
     latest={xy:frame.xy,t:frame.t,id:frame.id,w:frame.w,h:frame.h,photo:!!frame.bitmap};
+    if (frame.bitmap) {
+      let label=point ? 'the '+point.label : 'the selected point';
+      if (chosen==='auto' && !present) label='either wrist';
+      const cue=present ? 'Brackets mark '+label+' in the image.' : source.value==='camera'
+        ? 'Keep '+label+' and nearby joints in view.'
+        : 'Choose another point or use images that show '+label+'.';
+      if (pointCue.textContent!==cue) pointCue.textContent=cue;
+      selectionKey.hidden=!present;
+    }
     if (!present) text('[data-forecast]',(point?.label || 'Selected point')+' obscured. Forecast withheld.');
     rows.push(latest);rows=rows.slice(-5);
     text('[data-frame]',kind+' · frame '+frame.id+' · '+frame.t.toFixed(3)+' s · '+frame.xy.filter(finitePair).length+(frame.bitmap?' tracked points':' simulated points'));
@@ -279,12 +351,22 @@ export function bindJointView({host,onPose=()=>{},embedded=false,readRig=null,on
       observeTarget(job, frame);
       showComparison(job);
     }
-    if (present && frame.t>=lastIssue+.12-1e-9) {
+    const adapting=Boolean(frame.bitmap) && methodControl.value==='adaptive';
+    if (adapting) advanceCameraHistory(adaptiveHistory,frame,observeTarget);
+    if (present && (!adapting || browserPredictor) && frame.t>=lastIssue+.12-1e-9) {
       const packet=observation(rows,point.index);
       if(packet) {
         lastIssue=frame.t;
+        let direct=null;
+        try {
+          if(frame.bitmap && methodControl.value!=='model') direct=forecastFromTracking(packet);
+        } catch(error) {
+          text('[data-forecast]',error.message);
+          paint();
+          return;
+        }
         if (pending) comparisons.delete(pending);
-        pending={epoch,packet,label:point.label,tracked:Boolean(frame.bitmap),closed:false};
+        pending={epoch,packet,direct,label:point.label,tracked:Boolean(frame.bitmap),closed:false};
         comparisons.add(pending);
         drain();
       }
@@ -314,21 +396,23 @@ export function bindJointView({host,onPose=()=>{},embedded=false,readRig=null,on
       let lastCameraPoseAt=null;
       media=captureSource({kind,video,clip,stills,followKnees:embedded,captureWrists:canSaveTake,waitForFinalFrame:true,
         getBodyRevision:()=>kind==='clip' && video.paused ? null : bodyRevision,
+        getForecastRevision:()=>epoch,
         onFrame:f=>{
           let pose=f.pose;
           if (cameraKnees) {
             lastCameraPoseAt=performance.now();
             pose=calibratedPose(cameraKnees,'armsAndKnees',pose,lastCameraPoseAt);
           }
-          // Source images remain eligible for the forecast. The avatar uses
-          // only those acquired after its most recent control change.
+          // Forecast and avatar controls track their own source revisions.
           if (f.bodyRevision===bodyRevision && (kind!=='clip' || !video.paused)) {
             const selected = embedded ? poseForFollow(pose, followControl.value) : pose;
             applyCapturePose(selected);
             showCameraFollow(selected,f.pose,kind);
             updateTake(f, selected, stills?.[0].t);
           }
-          add(f,{camera:'Live camera estimate',clip:'Recorded video estimate',stills:'Still-image estimate'}[kind],pointControl.value);
+          if (f.forecastRevision===epoch) {
+            add(f,{camera:'Live camera estimate',clip:'Recorded video estimate',stills:'Still-image estimate'}[kind],pointControl.value);
+          }
         },
         onReset:reason=>{
           if (cameraKnees && lastCameraPoseAt!==null) {
@@ -428,6 +512,7 @@ export function bindJointView({host,onPose=()=>{},embedded=false,readRig=null,on
   goalField.addEventListener('input',stopDictation);
   source.addEventListener('change',changeSource);
   pointControl.addEventListener('change',()=>clearHistory('Point changed. Building a new window.', {keepImage:true}));
+  methodControl.addEventListener('change',changeForecastMethod);
   followControl.addEventListener('change',()=>{
     clearTake();
     if (!media || simSide) return;

@@ -260,46 +260,76 @@ export function createLimbTake({panel, emit, onFinish, onReplay, returnFocus}) {
     const sides = saved.counts.length === 2 ? ' (' + saved.counts[0] + ' left, ' + saved.counts[1] + ' right)' : '';
     return title + ' · ' + seconds(saved.duration) + ' · ' + saved.count + ' pose samples' + sides + '.';
   }
-  function stopReplay() {
+  function stopReplay(completed = false) {
     if (!playing) return;
-    const label = playing.label;
+    const {steps} = playing;
     playing = null;
     stopClock();
     emit(null);
     const last = saved ? summary() : '';
-    info.textContent = label ? 'Replay ended · “' + label + '”.' + (last ? ' Last take · ' + last : '') : last || 'Replay ended.';
+    const label = steps[0].label;
+    if (steps.length > 1) {
+      info.textContent = completed ? 'Take sequence finished.' : 'Take sequence stopped.';
+    } else {
+      info.textContent = label ? 'Replay ended · “' + label + '”.' + (last ? ' Last take · ' + last : '') : last || 'Replay ended.';
+    }
     refresh();
   }
   function play(take = saved, label = '', interval) {
-    if (!playable || live || !take || playing) return;
+    if (take) playSteps([{take, label, interval}]);
+  }
+  function playSteps(steps) {
+    if (!playable || live || playing || !steps.length) return;
+    if (!steps.every(({take, interval}) => {
+      const start = interval?.start ?? 0, end = interval?.end ?? take?.duration;
+      return take && 0 <= start && start < end && end <= take.duration;
+    })) return;
+    playing = {steps, index: 0};
+    beginStep(playing);
+  }
+  function advanceStep(sequence) {
+    if (sequence.index + 1 === sequence.steps.length) {
+      stopReplay(true);
+      return;
+    }
+    // Release the previous limb targets for a render frame. The next take
+    // starts from its own first visible sample.
+    emit(null);
+    sequence.index++;
+    animation = requestAnimationFrame(() => beginStep(sequence));
+  }
+  function beginStep(sequence) {
+    if (playing !== sequence) return;
+    const {take, label, interval} = sequence.steps[sequence.index];
     const start = interval?.start ?? 0, end = interval?.end ?? take.duration;
-    if (!(0 <= start && start < end && end <= take.duration)) return;
     const frames = take.frames;
     let next = 0;
     while (next < frames.length && frames[next].time < start) next++;
     onReplay(take.limb);
-    playing = {start: performance.now(), next, label};
+    const began = performance.now();
     const span = interval ? ' · ' + (Math.floor(start) / 1000) + '–' + (Math.floor(end) / 1000) + ' s' : '';
-    info.textContent = 'Replaying ' + (label ? '“' + label + '” · ' : '') + take.name.toLowerCase() + span + ' with the camera off.';
+    const counter = sequence.steps.length > 1 ? 'Take ' + (sequence.index + 1) + ' of ' + sequence.steps.length + '. ' : '';
+    info.textContent = counter + 'Replaying ' + (label ? '“' + label + '” · ' : '') + take.name.toLowerCase() + span + ' with the camera off.';
     refresh();
     function tick() {
-      const elapsed = start + Math.max(0, performance.now() - playing.start);
+      if (playing !== sequence) return;
+      const elapsed = start + Math.max(0, performance.now() - began);
       clock.textContent = seconds(Math.min(elapsed, end));
       // Use only acquired frames in [start, end). No previously held pose
       // supplies an artificial sample at start, even during a tracking gap.
-      if (interval && elapsed >= end) { stopReplay(); return; }
+      if (interval && elapsed >= end) { advanceStep(sequence); return; }
       let last;
-      while (playing.next < frames.length && frames[playing.next].time <= elapsed) {
-        last = frames[playing.next++];
+      while (next < frames.length && frames[next].time <= elapsed) {
+        last = frames[next++];
       }
       // Only the animated body receives in-between poses. The stored samples
       // used for comparisons and forecasts remain tied to actual pictures.
-      const before = frames[playing.next - 1], after = frames[playing.next];
+      const before = frames[next - 1], after = frames[next];
       if (take.source === 'pictures' && before?.pose && after?.pose && before.time >= start &&
           elapsed > before.time && after.time <= end) {
         emit(betweenPictures(before.pose, after.pose, (elapsed - before.time) / (after.time - before.time)), take.limb);
       } else if (last) emit(last.pose, take.limb);
-      if (elapsed >= take.duration && !last) stopReplay();
+      if (elapsed >= take.duration && !last) advanceStep(sequence);
       else animation = requestAnimationFrame(tick);
     }
     tick();
@@ -321,7 +351,7 @@ export function createLimbTake({panel, emit, onFinish, onReplay, returnFocus}) {
   }
   refresh();
   return {
-    observe, interrupt, play,
+    observe, interrupt, play, playSteps,
     save(take, displayName, source) {
       saved = {...take, name: displayName, source};
       info.textContent = summary();

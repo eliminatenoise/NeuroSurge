@@ -16,10 +16,12 @@ export function readKeyframes(files, times, {minimum=1} = {}) {
   return rows;
 }
 export function captureSource({kind,video,clip,stills,followKnees=false,getLimb,captureWrists=false,
-  waitForFinalFrame=false,getBodyRevision,onFrame,onReset,onStatus,onError,onEnd}) {
+  waitForFinalFrame=false,getBodyRevision,getForecastRevision,onFrame,onReset,onStatus,onError,onEnd}) {
   let closed=false, epoch=0, id=0, busy=false, clock=0, callback, stream, objectURL, worker, timer, silence, finish;
   let endPending=false;
-  const buffer=document.createElement('canvas'), ctx=buffer.getContext('2d',{alpha:false});
+  const buffer=document.createElement('canvas');
+  // Request a CPU canvas for the frames passed to the pose tracker.
+  const ctx=buffer.getContext('2d',{alpha:false,willReadFrequently:true});
   const cancel=()=>new DOMException('Stopped','AbortError');
   function reset(reason) { if (!closed) { epoch++; onReset(reason); } }
   function stop() {
@@ -66,6 +68,7 @@ export function captureSource({kind,video,clip,stills,followKnees=false,getLimb,
     const gen=epoch, grabbed=performance.now(), scale=Math.min(1,640/Math.max(w,h));
     const limb = getLimb ? getLimb() : followKnees ? 'armsAndKnees' : 'bothArms';
     const bodyRevision = getBodyRevision?.();
+    const forecastRevision = getForecastRevision?.();
     busy=true;
     try {
       buffer.width=Math.max(1,Math.round(w*scale)); buffer.height=Math.max(1,Math.round(h*scale));
@@ -84,6 +87,7 @@ export function captureSource({kind,video,clip,stills,followKnees=false,getLimb,
       }
       onFrame({id:sequence,t,xy:result.xy,pose:result.result,w:buffer.width,h:buffer.height,bitmap:buffer,
         ...(getBodyRevision ? {bodyRevision} : {}),
+        ...(getForecastRevision ? {forecastRevision} : {}),
         ...(getLimb ? {limbPaths:result.limbPaths} : {}),
         ...(captureWrists ? {wrists:result.wrists,armGeometry:result.armGeometry} : {})});
     } catch (error) {

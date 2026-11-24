@@ -1,6 +1,6 @@
 # NeuroSurge
 
-**[Play Full](https://eliminatenoise.github.io/NeuroSurge/scene/example/preview.html) · [Play Lite](https://eliminatenoise.github.io/NeuroSurge/scene/example/preview.html?edition=lite) · [Download Lite offline preview](https://github.com/eliminatenoise/NeuroSurge/releases/download/lite-browser-forecast-2026-11-24/NeuroSurge-Lite.zip) · [Open the game menu](https://eliminatenoise.github.io/NeuroSurge/) · [Download launchers](https://eliminatenoise.github.io/NeuroSurge/START.html)**
+**[Play Full](https://eliminatenoise.github.io/NeuroSurge/scene/example/preview.html) · [Play Lite](https://eliminatenoise.github.io/NeuroSurge/scene/example/preview.html?edition=lite) · [Download Lite offline preview](https://github.com/eliminatenoise/NeuroSurge/releases/download/lite-take-sequences-2026-11-24/NeuroSurge-Lite.zip) · [Open the game menu](https://eliminatenoise.github.io/NeuroSurge/) · [Download launchers](https://eliminatenoise.github.io/NeuroSurge/START.html)**
 
 **[Play the Movement mirror preview](https://eliminatenoise.github.io/NeuroTranslation/previews/neurosurge/)** · [Full preview](https://eliminatenoise.github.io/NeuroTranslation/previews/neurosurge/scene/example/preview.html) · [Lite preview](https://eliminatenoise.github.io/NeuroTranslation/previews/neurosurge/scene/example/preview.html?edition=lite)
 

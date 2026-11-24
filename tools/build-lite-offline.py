@@ -19,6 +19,7 @@ LITE_MENU = "lite/offline-menu.html"
 SIMPLE_GUIDE = "lite/OFFLINE.md"
 TECHNICAL_GUIDE = "lite/OFFLINE-TECHNICAL.md"
 FULL_GAME_URL = "https://eliminatenoise.github.io/NeuroSurge/scene/example/preview.html"
+FULL_PREVIEW_URL = "https://eliminatenoise.github.io/NeuroTranslation/previews/neurosurge/scene/example/preview.html"
 GUIDE_PAGES = {"simple": "PLAYER-GUIDE.html", "technical": "PLAYER-GUIDE-TECHNICAL.html"}
 CREDITS = "assets/player-guides/CREDITS-AND-LICENCES.txt"
 ATTRIBUTION = "assets/player-guides/ASSET-ATTRIBUTION-INDEX.txt"
@@ -146,12 +147,12 @@ def assembly():
     payload[ATTRIBUTION] = payload["ASSET-ATTRIBUTION-INDEX.md"]
 
     rewrite_text(payload, "lite/README.md", {
-        "[Open NeuroSurge Full](../)": f"[Open Full online]({FULL_GAME_URL})",
+        "[Open NeuroSurge Full](../)": f"[Play Full preview online]({FULL_PREVIEW_URL})",
         "(OFFLINE.md)": "(../README.md)",
         "(OFFLINE-TECHNICAL.md)": "(../README-TECHNICAL.md)",
     })
     rewrite_text(payload, "PREVIEW-NOTES.html", {
-        '<a href="scene/example/preview.html">Play Full</a>': f'<a href="{FULL_GAME_URL}">Open Full online</a>',
+        '<a href="scene/example/preview.html">Play Full</a>': f'<a href="{FULL_PREVIEW_URL}">Play Full preview online</a>',
         "https://github.com/eliminatenoise/NeuroSurge/blob/main/PLAYER-GUIDE.md": GUIDE_PAGES["simple"],
         "https://github.com/eliminatenoise/NeuroSurge/blob/main/PLAYER-GUIDE-TECHNICAL.md": GUIDE_PAGES["technical"],
         'href="CREDITS-AND-LICENCES.md"': f'href="{CREDITS}"',
@@ -160,7 +161,7 @@ def assembly():
         ("simple", "PLAYER-GUIDE.md", "technical"), ("technical", "PLAYER-GUIDE-TECHNICAL.md", "simple")
     ):
         links = {
-            f"[Play Full]({FULL_GAME_URL})": f"[Open Full online]({FULL_GAME_URL})",
+            f"[Play Full]({FULL_GAME_URL})": f"[Play Full preview online]({FULL_PREVIEW_URL})",
             f"[Play Lite]({FULL_GAME_URL}?edition=lite)": "[Play Lite](scene/example/preview.html?edition=lite)",
         }
         if guide == "PLAYER-GUIDE.md":

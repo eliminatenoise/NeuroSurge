@@ -5,7 +5,8 @@
 .joint-title{display:flex;align-items:center;justify-content:space-between}.joint-title h1{font-size:clamp(1.6rem,5vw,3.3rem);letter-spacing:-.045em;margin:0 0 .5rem}
 .joint-title small,.joint-inputs legend{font-weight:650}.joint-layout{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(16rem,1fr);gap:1.25rem}
 .joint-stage{min-width:0;align-self:start}.joint-stage canvas{width:100%;height:auto;display:block;background:#102a32;border-radius:.5rem}
-.joint-key{display:flex;gap:1em;flex-wrap:wrap;font-size:.8rem;font-weight:650}.joint-key span:last-child{color:#865207}
+.joint-key{display:flex;gap:1em;flex-wrap:wrap;font-size:.8rem;font-weight:650}.joint-key>span:last-child{color:#865207}.joint-selection{color:#215a65}
+.joint-stage [data-point-cue]:empty{margin:0}
 .joint-view p{margin:.5rem 0}.joint-inputs form,.joint-inputs fieldset,.joint-inputs details{min-width:0;margin:.2rem 0 1rem;padding:.8rem;border:1px solid #b8c7ba;border-radius:.4rem}
 .joint-inputs label,.joint-inputs output{display:block;margin:.35rem 0}.joint-view input,.joint-view select,.joint-view button{font:inherit;max-width:100%;color:#153b34}
 .joint-view input,.joint-view select{padding:.35rem;border:1px solid #849e92;border-radius:.25rem}.joint-view input{width:100%}

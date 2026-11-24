@@ -656,6 +656,15 @@ export function createCameraCapture({ onPose, onArmPose, returnFocus = () => {},
     leave();
     take?.clear();
   }
+  function prepareReplay(hasTarget) {
+    if (disposed || document.hidden || current || (!take && !hasTarget)) return false;
+    if (!take || sourceMode !== 'camera' || panel.hidden) {
+      sourceMode = 'camera';
+      show('Camera off.', false);
+      sourceSelect.value = sourceMode;
+    }
+    return true;
+  }
   window.addEventListener('pagehide', forget);
   document.addEventListener('visibilitychange', hide);
   return {
@@ -682,13 +691,10 @@ export function createCameraCapture({ onPose, onArmPose, returnFocus = () => {},
       return true;
     },
     replayTake(target, label, interval) {
-      if (disposed || document.hidden || !take || current) return;
-      if (sourceMode !== 'camera' || panel.hidden) {
-        sourceMode = 'camera';
-        sourceSelect.value = sourceMode;
-        show('Camera off.', false);
-      }
-      take.play(target, label, interval);
+      if (prepareReplay(Boolean(target))) take.play(target, label, interval);
+    },
+    replayTakes(steps) {
+      if (prepareReplay(steps.length > 0)) take.playSteps(steps);
     },
     setPlayable(value) { take?.setPlayable(value); },
     dispose() {

@@ -3,7 +3,7 @@ import {bindGripPreview, gripCommand} from './grip-preview/panel.mjs';
 import {bindWristForecast} from './camera/wrist-forecast/panel.mjs';
 import {bindReachStudy} from './camera/reach-study/panel.mjs';
 import {comparisonNames} from './camera/take-comparison.mjs';
-import {bindNamedTakes, namedReplayRequest, namedIntervalRequest, resolveTakeInterval, takeSeconds} from './camera/named-takes.mjs';
+import {bindNamedTakes, namedReplayRequest, namedIntervalRequest, resolveTakeInterval, resolveTakeSequence, takeSeconds} from './camera/named-takes.mjs';
 import { actionFor } from './word-motion/inference.mjs';
 import { bindWordMotion } from './word-motion/player.mjs';
 
@@ -130,7 +130,7 @@ export function findBodyRecordings(phrase, clips) {
 
 import {isTouchQuestion} from './joint/touch.mjs';
 
-export function bindActionChat({ dialog, trigger, canvas, canOpen, pause, resume, getBodyMap, hasAvatarRig, getLatestTake, replayTake, runJointGoal, askTouch, takeRecorderInstruction = 'Press C to open the recorder.' }) {
+export function bindActionChat({ dialog, trigger, canvas, canOpen, pause, resume, getBodyMap, hasAvatarRig, getLatestTake, replayTake, replayTakes, runJointGoal, askTouch, takeRecorderInstruction = 'Press C to open the recorder.' }) {
   const win = dialog.ownerDocument.defaultView;
   const field = dialog.querySelector('input');
   const message = dialog.querySelector('[role=status]');
@@ -327,6 +327,18 @@ export function bindActionChat({ dialog, trigger, canvas, canOpen, pause, resume
       stopVoice();
       message.textContent = named.compare(pairNames);
       if (message.textContent) field.focus();
+      return;
+    }
+    const takeSequence = resolveTakeSequence(field.value, named.lookup);
+    if (takeSequence) {
+      clearSearch();
+      stopVoice();
+      if (takeSequence.error) {
+        message.textContent = takeSequence.error;
+        field.focus();
+        return;
+      }
+      dismiss(() => replayTakes(takeSequence.steps));
       return;
     }
     const wholeName = namedReplayRequest(field.value);

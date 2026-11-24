@@ -15,13 +15,19 @@
     <nav aria-label="Game and guides">
       <a href="@ROOT@lite/simple.html">Simple guide</a>
       <a href="@ROOT@lite/technical.html">Technical guide</a>
+      <a href="@ROOT@lite/simple.html#takes">Save and replay takes</a>
       <a href="@ROOT@movement-mirror.html">Movement mirror without the game</a>
       <a href="@ROOT@PREVIEW-NOTES.html">Controls and credits</a>
-      <a href="https://eliminatenoise.github.io/NeuroSurge/scene/example/preview.html">Open Full online</a>
+      <a href="https://eliminatenoise.github.io/NeuroTranslation/previews/neurosurge/scene/example/preview.html">Play Full preview online</a>
     </nav>
     <section id="local-model">
       <h2>Movement and fingertip forecasts</h2>
       <p>Press <strong>C</strong> in the game to forecast a tracked point in your browser. To try the separate fingertip forecast, extract the <a href="https://github.com/eliminatenoise/NeuroTranslation/raw/refs/heads/main/models/neurotranslate-0.0.zip">NeuroTranslate model</a> beside the game folder. Install Python 3.10 or later with NumPy and open <strong>Play fingertip touch</strong> for your system.</p>
+    </section>
+    <section id="camera-test">
+      <h2>Forecast test on recorded movement</h2>
+      <p>The preview forecasts a point in the image 120 milliseconds ahead. An earlier test used two recorded views of 44 movements from 11 people. It compared the forecasts with separate optical motion measurements. The mean position error was 14.08 pixels for holding the last position, 14.60 for the model alone and 13.55 for the forecast that used earlier camera tracking. Images were resized to 640 pixels along the longest side before scoring. Each person counted equally.</p>
+      <p>Live camera accuracy still needs a test. <a href="https://eliminatenoise.github.io/NeuroTranslation/previews/neurosurge/technical.html#camera-test">See the full comparison online</a>.</p>
     </section>
   </main>
 </body>

@@ -8212,7 +8212,8 @@ export function start(params = {}) {
     hasAvatarRig: () => Boolean(bodyRig),
     takeRecorderInstruction,
     getLatestTake: () => motionCamera?.latestTake,
-    replayTake: (take, label, interval) => { if (gameReady() && shellIsPlaying(shellState)) motionCamera?.replayTake(take, label, interval); }
+    replayTake: (take, label, interval) => { if (gameReady() && shellIsPlaying(shellState)) motionCamera?.replayTake(take, label, interval); },
+    replayTakes: steps => { if (gameReady() && shellIsPlaying(shellState)) motionCamera?.replayTakes(steps); }
   }) : null;
   // Returning to a game control gives the player back the remaining steps.
   const manualOverride = () => { if (actionSequence) endActionSequence(); };
