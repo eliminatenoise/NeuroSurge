@@ -293,8 +293,10 @@ export function createGuideCues(host, { prompt: givenPrompt = null } = {}) {
     const g = input?.guide;
     const active = input?.tutorial === true && g?.visible === true && !g.finished && !!g.goalId;
     const step = active ? g.goalId : null;
+    // (25 November 2026, section 214: in the tutorial's two limb-key steps the mark's words say what it is for)
+    const teach = step === 'chooseLimb' || step === 'moveHand';
     const joint = input?.showJointAim === true ?
-      (ARM.has(input.selectedLimb) ? GUIDE.cue.shoulder : LEG.has(input.selectedLimb) ? GUIDE.cue.hip : null) : null;
+      (ARM.has(input.selectedLimb) ? (teach && GUIDE.cue.shoulderTeach) || GUIDE.cue.shoulder : LEG.has(input.selectedLimb) ? (teach && GUIDE.cue.hipTeach) || GUIDE.cue.hip : null) : null;
     if (!active && !joint) {
       if (!layer.hidden) {
         layer.hidden = true;

@@ -8878,6 +8878,70 @@ tests.
 - The limb's ring tries places on a straight line from shoulder or hip to elbow or knee to wrist or ankle; a limb
   wholly behind another has no such place, and the ring is then at the wrist or ankle as before.
 
+## 214. Three more of the second tester's faults: the first S after a far drag draws the limb in, the information card ends under the map's card, the limb buttons stand beside your body in the outside view; and the aim mark says what it is for (25 November)
+
+Findings 7, 3 and 9 of the play-through of update 74 (213), by a helper on its own branch (`r38-fix76`), each
+reproduced with the tester's scenario before and after; and one thing from the tester's list of what a player who
+never reads cannot know.
+
+**1. After a limb was dragged far up and let go, the first S moved it 0.0 cm (finding 7).** The owner (Message 207):
+"The limb should never get stuck."
+- *Legs.* A thigh dragged to 110 degrees is drawn with its knee bent 46 degrees (the knee gives passively), while the
+  activity keeps 6. The hold's solve started from the activity's angles, 15 to 19 cm from where the foot is drawn;
+  every answer was a jump across the key's way, refused, and the next frame began from the same start. The solve now
+  starts from the knee as drawn (`holdBendAsDrawn` in `ns-limb-pace.mjs`, called in the hold). The tester's scenario,
+  first S for 0.6 s after the drag: left leg 0.0 cm before, 44.3 after; right leg 0.0 before, 43.2 after (the lead's
+  run on the merged build; the helper's own runs gave 16 to 41 cm, less while other browsers ran).
+- *Right arm.* Its first S moving nothing is the elbow at the end of its range (145 degrees): the arm is already
+  folded. The fault was the W after it, which stopped beside the neck after 8 to 10 cm because each answer took the
+  hand 5 to 8 mm into the head's keep-out. A key's move that ends inside the body's keep-out is now asked again for a
+  place on its surface (`keyBodySlide`). W after S: 10.1 cm before, 38.2 after.
+- *A scan* of 192 presses on both builds (four limbs, twelve far drags each, then W, A, S, D): keys that moved the end
+  under 1 cm although the opposite key then moved it more than 5 cm went from 27 to 19; of those, the ones that were
+  neither at a range's end nor stopped by another limb went from 4 to 0.
+
+**2. At 800x600 with the map on and the full cards, the information card lay on the map's card (finding 3).**
+Neither card knew of the other: of 30 states a window size (reading levels, views, a held grip), 10 shared pixels at
+800x600 and 2 at 1280x720. The scene now writes the map card's lower edge on the information card
+(`noteEmapFoot`), the style sheet caps the card's height with it, and the card is fitted again; under 901 px of width
+the map's card leaves out its More detail. After: 0 of 30 at 800x600, 1024x768 and 1280x720, the card's title in
+sight.
+
+**3. In the outside view the limb buttons and the hint lay on your own head and trunk (finding 9).** The camera
+stays where it is; the two rows move. In the outside view they stand in the free strip beside your head and trunk,
+on the left first (`ns-rows-place.mjs`; `rowsOutside` and `placeLimbBar` in `ns-app.mjs`). The share of your head and
+trunk under the two rows, in the lower 38 % of the picture: 64.3 % before and 0 after at 800x600 at the short reading
+level, 68.8 % and 0 at 1280x720, 60.9 % and 0 at 1600x900. The eye view is unchanged; the buttons stay 6 px clear of
+the hint (207) and the hint above the foot line (210).
+
+**4. "Shoulder aim" and "Hip aim" were never explained in the game.** The mark is a fixed height a quarter of the way
+down the picture, the place the chosen limb's wrist or ankle is aimed at when the look goes up or down. While the
+tutorial's two limb-key steps show (3 and 4), its words read "Look up or down: the arm follows" (or "the leg");
+afterwards it keeps its short name. Its line for a reader of the screen says what the look does. And the search for
+the limb ring's place (213) rests when the limb is hidden: after two rounds of every place without one it tries one
+place every six frames, not one a frame.
+
+**Tests.** `tests/fix76-limbs.test.mjs`, `tests/fix76-cards.test.mjs`, `tests/fix76-rows.test.mjs` (new);
+`tests/limb-cue.test.mjs`: the mark's teaching words. `tests/browser-limb-stuck.mjs` (new; fails on update 76): after
+a far drag the first S moves each leg. `tests/browser-emap.mjs`: the two cards share no pixel.
+`tests/browser-hud-clear.mjs`: the rows beside the body in the outside view. 843 unit tests, 22 browser tests. Frames
+a second in the four parts of the lead's measure: 60.0 / 60.0 / 60.2 / 59.5 (update 76 in the same hour: 60.0 / 60.0 /
+60.1 / 59.6).
+
+**Not done, or not right.**
+- At 800x600 at the full reading level there is no free strip beside the body in the outside view, and the two rows
+  stay where they were.
+- The left arm: once S has folded it, A and D move the hand 0.0 to 1.2 cm, and A can stop after 17 cm (also on update
+  76). A limb stopped by another limb stays stopped, as designed (LIMB_BLOCK). S still stops where the right hand
+  meets the body. A leg that folds also swings outward at the hip (7 to 33 degrees).
+- The game's own flag `limbs.hold.stuck` reads true on any refused frame, a range's real end included; it is no
+  measure of a stuck limb.
+- On update 76 the first S moved nothing only at the full frame rate: with twelve browsers running the same drags
+  moved the leg 31 cm. A slow machine may never have shown the fault.
+- At 1024x768 the hint's dark box is wider than its two lines of words.
+- Still open from the tester's list: the layout in a window of 700 by 900 (finding 5), clicks while Space grips or
+  Shift is held (finding 8), the browser's own pinch (finding 10).
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**

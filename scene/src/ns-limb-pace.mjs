@@ -10,6 +10,50 @@ const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const len = a => Math.hypot(a[0], a[1], a[2]);
 
 /**
+ * 25 November 2026 (FIX76; a hunt of Body update 74, finding 7; the owner, Message 207: "The limb should never get
+ * stuck"). HOLD_DRAWN: the pose the hold's solve starts from has the knee AS IT IS DRAWN. A thigh lifted past where a
+ * straight knee lets it go is drawn with its knee giving way (ns-body passiveKneeAngles) while the activity keeps the
+ * knee angle it had: a drag of the thigh up to 110 degrees leaves the activity's knee at 6 degrees and the drawn knee at
+ * 46. The solve started from the activity's angles, and its combined-range rule (a nearly straight knee lets the hip
+ * flex to about 101 degrees only) put that start 15 to 19 cm from the foot on screen. From there every answer was a
+ * jump: S's answer went across the keys' way and was refused on every frame, with the same start the frame after (the
+ * foot moved 0.0 cm for as long as S was held; A and D likewise), and W's was taken as a 19 cm throw of the foot in a
+ * tenth of a second. With the knee as drawn the start is the pose on screen: S folds the knee on from where it is drawn,
+ * W lets the hip come down as the knee straightens, A and D swing the lifted leg. Only a knee the drawn pose bends
+ * FURTHER is changed; an elbow has no such rule.
+ *   start    { jointId: degrees }, the activity's angles the solve starts from
+ *   bendId   the limb's bend joint (ns-grasp LIMB_CHAIN bend)
+ *   passive  ns-body passiveKneeAngles (targets -> targets as drawn)
+ * Returns the bend joint's angle to start from (start's own where nothing differs). Pure. */
+export const HOLD_DRAWN = Object.freeze({ on: true });
+export function holdBendAsDrawn(start, bendId, passive, o = HOLD_DRAWN) {
+  const own = start && bendId ? start[bendId] : undefined;
+  if (!o.on || typeof passive !== 'function' || !Number.isFinite(own)) return own;
+  const drawn = passive(start)[bendId];
+  return Number.isFinite(drawn) && Math.abs(drawn) > Math.abs(own) ? drawn : own;
+}
+
+/**
+ * 25 November 2026 (FIX76, finding 7). BODY_SLIDE: the place a frame of the keys asks again when its answer was refused
+ * for taking the hand deeper into the trunk's keep-out or the head's column (ns-app handKeepOut). The place the keys
+ * ask for lies on their own line and may be clear of the body while the hand, a centimetre off that line, is at its
+ * surface: the answer then carried the hand 5 to 8 mm in, was refused, and the next frame asked the same. Held W on the
+ * right arm folded up beside the neck moved the hand 8 cm and then nothing, with the elbow at 128 degrees.
+ *   from   the hand now; to: where the refused answer put it; out: `to` taken out to the surface (handKeepOut(to));
+ *   way    the keys' own move this frame (all world m); cut: ns-app keyMoveCut.
+ * Returns the place to ask for, `out` moved clearM further out along the way it was taken out, when what is left of the
+ * move still goes the keys' way (cut > 0: at most keyFarDeg off it) and is more than minShare of it; else null: the
+ * move went straight into the body and the hand stops there, as before. Pure. */
+export const BODY_SLIDE = Object.freeze({ on: true, clearM: 0.003, minShare: 0.2 });
+export function keyBodySlide(from, to, out, way, cut, o = BODY_SLIDE) {
+  if (!o.on || !from || !to || !out || !way || typeof cut !== 'function') return null;
+  const n = sub(out, to), nl = len(n), wl = len(way);
+  if (!(nl > 1e-6) || !(wl > 1e-9)) return null;
+  const T = [out[0] + n[0] / nl * o.clearM, out[1] + n[1] / nl * o.clearM, out[2] + n[2] / nl * o.clearM], m = sub(T, from);
+  return len(m) > o.minShare * wl && cut(m, way) > 0 ? T : null;
+}
+
+/**
  * LIMB_PACE (the hunt, H1; the owner, section 185: "the limb keys never whip"; Message 186: A and D swing a limb about
  * the shoulder or hip with its bend unchanged). The keys move a limb's END (the hand, the ankle) at the keys' pace and
  * the cut of section 185 (ns-app LIMB_KEYS.view keyMost) kept only the end to it. Nothing kept the ELBOW or the KNEE:

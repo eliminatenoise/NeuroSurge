@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-25-body-update-76",
+  "version": "experimental-2026-11-25-body-update-77",
   "experimental": true,
-  "source": "Body update 76. A link that was passed on starts the game. From a second tester's play-through: the tutorial's ring for the chosen limb stands on that limb, a drag of the view starts nothing, the lost view is said at every reading level, and the tutorial's card shows what the hand does. With the pointer free the pointer is the aim. Full and Lite share the game.",
+  "source": "Body update 77. From a second tester's play-through: after a far drag the first S draws the limb in, the information card ends under the electrical map's card, and in the outside view the limb buttons stand beside your body. The shoulder and hip mark says what it is for in the tutorial. With the pointer free the pointer is the aim. Full and Lite share the game.",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -32,8 +32,8 @@
     },
     {
       "path": "DESIGN-DECISIONS.md",
-      "bytes": 1062476,
-      "sha256": "6954f63f99ec8ef82593ce5bd059f00b7123d64c9344368fb94b05830289ebcd"
+      "bytes": 1068010,
+      "sha256": "98985acc8c55543518f33032c577fcb4022e0aebb019e3ed4c297ce1f4f2ac8f"
     },
     {
       "path": "LAUNCHERS.md",
@@ -62,8 +62,8 @@
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 68734,
-      "sha256": "833e8dea065048a2b7fd4b2d7202a904a399ad24f57c6c5146b0d830e3671e99"
+      "bytes": 69273,
+      "sha256": "c007e80cb3a98dc77942637a7dfbbb6d367127e42135a199f4348abc51383fa0"
     },
     {
       "path": "README.md",
@@ -73,12 +73,12 @@
     {
       "path": "START.html",
       "bytes": 4507,
-      "sha256": "6db6ba34bf59bf6f9fff56fc4902d3f7a76f09570f022bf62b741c3495b83ad7"
+      "sha256": "2aebb476fc014b4d6ab96131ce9fb615f5d34ef97b8a7863bb4b909749f78e9f"
     },
     {
       "path": "index.html",
       "bytes": 3909,
-      "sha256": "d53b0e1e7cb0fc904b50cc40f5d1f7131f353c16b946f1f15f517b48ad4a6626"
+      "sha256": "b983b997fc30b35d90749f41c8dd764758ef3fd05b5a77962e21f1558fe3a53b"
     },
     {
       "path": "inputs/FULLBODY-MESH-MANIFEST.json",
@@ -3977,8 +3977,8 @@
     },
     {
       "path": "scene/example/quiet.css",
-      "bytes": 40637,
-      "sha256": "1ea6a453cde8a2d6eca392032e8aeccc8b3d0a56b2a4d0dccec0fd832faf37a2"
+      "bytes": 42263,
+      "sha256": "fdcf8a19f77c307fbb13b4761323d573bb5cc466efa42daa3282211e81d08678"
     },
     {
       "path": "scene/src/ns-actions.mjs",
@@ -3987,8 +3987,8 @@
     },
     {
       "path": "scene/src/ns-app.mjs",
-      "bytes": 1214174,
-      "sha256": "fc9bb14162a8bed3aec7450cd88111162e379cc9845c2c3634ef978c8b1b12a5"
+      "bytes": 1221104,
+      "sha256": "1d8cfe13a36d1fd865a48dc7eceb31df1298c638c81855d68524c17ab74d0214"
     },
     {
       "path": "scene/src/ns-area-halo.mjs",
@@ -4182,8 +4182,8 @@
     },
     {
       "path": "scene/src/ns-guide-cues.mjs",
-      "bytes": 22520,
-      "sha256": "f97c3a8209a008f19e9f3645aad6a507a308c672ef0b26abebd3fe726774ba0c"
+      "bytes": 22768,
+      "sha256": "f8215285be58480b8d902ad8ab7902be04331322db1cfab12c64d8219084f17e"
     },
     {
       "path": "scene/src/ns-guide.mjs",
@@ -4197,8 +4197,8 @@
     },
     {
       "path": "scene/src/ns-limb-pace.mjs",
-      "bytes": 78607,
-      "sha256": "d5cfb5a9aa3c729e09dcbb114018f4758cde27d98c373e56270cb37de574698f"
+      "bytes": 82198,
+      "sha256": "73274213c7e5eb85cc1f965f708e86cc9f284c2ff8444c08026318acd720ed14"
     },
     {
       "path": "scene/src/ns-links.mjs",
@@ -4316,9 +4316,14 @@
       "sha256": "48454f6a03e7f0ae64ec9f6b6d278264ea2598d510d6846c00e34c7850fbf9bd"
     },
     {
+      "path": "scene/src/ns-rows-place.mjs",
+      "bytes": 4740,
+      "sha256": "26ce4ee2614606337de6cfa1424016955ab8e89067df8f8e2c0203af55e64690"
+    },
+    {
       "path": "scene/src/ns-scene-three.mjs",
-      "bytes": 1399558,
-      "sha256": "c2a6afd423e65c9771bf1b706e57ccbd192839cc57aa52058c09ad4a710cfbc9"
+      "bytes": 1402201,
+      "sha256": "92a04354a1a24d5d8c62ea05611b9af7c16305fbcae6b50beef1ba50f6b20d64"
     },
     {
       "path": "scene/src/ns-see.mjs",
@@ -4327,8 +4332,8 @@
     },
     {
       "path": "scene/src/ns-text.mjs",
-      "bytes": 156256,
-      "sha256": "1d44c54a1b10a74b1cccebd61f1497c7ebf19126b5988faccc94d6f183d2db3f"
+      "bytes": 156687,
+      "sha256": "e0557f4d285199278cea8b77363ec5bf4cc2ebb6529823a0921571534e284cc1"
     },
     {
       "path": "scene/src/ns-vessels.mjs",
@@ -4467,8 +4472,8 @@
     },
     {
       "path": "tests/browser-emap.mjs",
-      "bytes": 13610,
-      "sha256": "2651aacb764140ddd725acc77036ee514e09c5420a35f2cab65e97554a1aff11"
+      "bytes": 19070,
+      "sha256": "35bf8b7aae0b3e615ac73386810a35f1278ff45fc86fbe6e81cfeebe4119bc95"
     },
     {
       "path": "tests/browser-free-aim.mjs",
@@ -4477,8 +4482,8 @@
     },
     {
       "path": "tests/browser-hud-clear.mjs",
-      "bytes": 42022,
-      "sha256": "97a56f6c5166d0c6f857febdb814d2e00ad4f922d050b477dd0b3fff6416c2da"
+      "bytes": 46023,
+      "sha256": "0359bfc2de4d2f56d64ffcf265ca1f8c7e89ed39179482e43e2af1477c12603b"
     },
     {
       "path": "tests/browser-keyboard-aim.mjs",
@@ -4494,6 +4499,11 @@
       "path": "tests/browser-limb-ring.mjs",
       "bytes": 6211,
       "sha256": "dde5b73c5abbbdd21a37df3b59d594078a156576b9deb11bca563bad1e9ccd80"
+    },
+    {
+      "path": "tests/browser-limb-stuck.mjs",
+      "bytes": 7260,
+      "sha256": "067b7bcdfed83fbf40acc11fa2d8e87408217da5af210b3481332fecb0e93edf"
     },
     {
       "path": "tests/browser-limb-touch.mjs",
@@ -4651,6 +4661,21 @@
       "sha256": "a260c84e3ff2e08f681728bc0bdc0eb529a2f3b7440b457ce85f63f202b770ee"
     },
     {
+      "path": "tests/fix76-cards.test.mjs",
+      "bytes": 2701,
+      "sha256": "939d99a874b784fff2a357dadd03c775f44cc2cd5885e95ee97177a19c9cb05d"
+    },
+    {
+      "path": "tests/fix76-limbs.test.mjs",
+      "bytes": 4961,
+      "sha256": "926464eb721b3d695e60a5a9969effcb2e654764895de4bd393c9d9dd59e95bd"
+    },
+    {
+      "path": "tests/fix76-rows.test.mjs",
+      "bytes": 5019,
+      "sha256": "f434b0fd2275b0da68841c7d769b7e1647c684c840a18b789bec5277a50765f4"
+    },
+    {
       "path": "tests/flat-view.test.mjs",
       "bytes": 11868,
       "sha256": "3a85923489ca0e17cf852d9069ce5a95e30a14601a5ff1bf5c9357c143bf3698"
@@ -4697,8 +4722,8 @@
     },
     {
       "path": "tests/hud74.test.mjs",
-      "bytes": 26734,
-      "sha256": "f3e5fe44368c02540345bcb0ad6e17bcd927c4236542a61e1aefddaf0e16cb7c"
+      "bytes": 26945,
+      "sha256": "ced30ee98961c3a33dd0187cf2317346e17a9330cb640579fff5d00b810237d9"
     },
     {
       "path": "tests/info-settle.test.mjs",
@@ -4717,8 +4742,8 @@
     },
     {
       "path": "tests/limb-cue.test.mjs",
-      "bytes": 4057,
-      "sha256": "6406be1c9d6e06a93e2038cafd6f182e916bad658aa7be821681cd376b77608b"
+      "bytes": 4885,
+      "sha256": "1c67729fb0fd300e1955830e5ac93ad5ba38c87ca67948de21c866015f634467"
     },
     {
       "path": "tests/limb-details.test.mjs",

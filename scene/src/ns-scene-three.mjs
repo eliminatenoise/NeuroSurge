@@ -3836,6 +3836,23 @@ export function caveatsToDrop(bottoms, limit, overflows = true) {
  * "Game rule" line, 5 the first sentence. The title, the key and the strip part always stay; the text keeps its size.
  * on false: no fit (as before). */
 export const KEY_CARD_FIT = Object.freeze({ on: true, max: 5 });
+/**
+ * 25 November 2026 (FIX76; a hunt of Body update 74, finding 3). INFO_UNDER_MAP: the information card ends under the
+ * Electrical map's card. Both stand at the right edge, the map's card from the top and the information card from the
+ * bottom corner, each with its own greatest height, and nothing told one of the other: at 800 by 600 with the map on
+ * and the full reading level they shared 150 by 249 px (the information card's title lay under the map's honesty line),
+ * and at 1280 by 720 the grip card of Space shared 236 by 55 px with it at the short level. Now the map card's foot is
+ * measured where the HUD's boxes are read and written on the information card as --ns-emap-foot (CSS px from the top of
+ * the card's own box); quiet.css takes it into the card's greatest height in wide windows (the card is fitted again, so
+ * a key's card gives up whole parts and an area's card scrolls from its title), and leaves the map's More detail out
+ * in a wide window under 901 px, where both cannot be whole: the map's card is a legend and gives way first.
+ * PURE: the foot to write (whole px), or null when the map's card is not drawn. rect: its box; boxTop: the top of the
+ * information card's containing box (both in the page's px). */
+export const INFO_UNDER_MAP = Object.freeze({ on: true });
+export function emapFootPx(rect, boxTop = 0, o = INFO_UNDER_MAP) {
+  if (!o.on || !rect || !(rect.width > 0) || !(rect.height > 0) || !Number.isFinite(rect.bottom)) return null;
+  return Math.round(rect.bottom - (Number.isFinite(boxTop) ? boxTop : 0));
+}
 /** PURE (KEY_CARD_FIT): the first stage at which the card no longer runs over. overAt(stage): how far the card's words
  * run over its box at that stage (CSS px; the caller sets the stage on the card and measures). Returns 0..max (max when
  * even that runs over: nothing more to give up). */
@@ -12612,6 +12629,21 @@ export function createScene({
    * opened card (key R) always has every part. Tried again only when the card's content, the view's size or the card's
    * mode changed: the mark's own write makes the HUD boxes be read once more, not this. */
   const INFO_TRIM_MAX = 4;
+  /** INFO_UNDER_MAP: the map card's foot written on the information card (only when it changed). */
+  let emapFoot = null;
+  function noteEmapFoot() {
+    const p = info && info.panel, parent = overlay && overlay.parentNode;
+    if (!p || !p.style || typeof p.style.setProperty !== 'function' || !parent || typeof parent.querySelector !== 'function') return;
+    const card = parent.querySelector('.ns-emap-card');
+    let foot = null;
+    if (card && !card.hidden && typeof card.getBoundingClientRect === 'function') {
+      const box = p.offsetParent && typeof p.offsetParent.getBoundingClientRect === 'function' ? p.offsetParent : parent;
+      foot = emapFootPx(card.getBoundingClientRect(), box.getBoundingClientRect().top);
+    }
+    if (foot === emapFoot) return;
+    emapFoot = foot;
+    if (foot === null) p.style.removeProperty('--ns-emap-foot'); else p.style.setProperty('--ns-emap-foot', `${foot}px`);
+  }
   function fitInfoCard() {
     const p = info && info.panel;
     if (!p || p.hidden || typeof p.setAttribute !== 'function' || typeof p.getAttribute !== 'function') return;
@@ -12619,7 +12651,7 @@ export function createScene({
     const root = typeof p.closest === 'function' ? p.closest('.ns-app') : null;
     const open = Boolean(info.more && info.more.open) || Boolean(root && root.getAttribute('data-ns-unfold') === 'true');
     // (UI3, INFO_WHOLE: and whether the brain is in view; the body views lay the card out with other clamps)
-    const sig = `${cssW}x${cssH}|${info.grewN | 0}|${open ? 1 : 0}|${INFO_WHOLE.on ? brainInViewAttr : ''}`;
+    const sig = `${cssW}x${cssH}|${info.grewN | 0}|${open ? 1 : 0}|${INFO_WHOLE.on ? brainInViewAttr : ''}|${emapFoot === null ? '' : emapFoot}`; // (INFO_UNDER_MAP: and the map card's foot)
     if (sig === info.fitSig) return;
     info.fitSig = sig;
     // 24 November 2026 (KEY_CARD_FIT): a key's card (the grip, a reach key) has its own stages, at every reading level:
@@ -12656,6 +12688,7 @@ export function createScene({
   }
   function readHudRectsNow(key) {
     hudRectCache = [];
+    try { noteEmapFoot(); } catch { /* the card keeps the foot it had */ }
     try { fitInfoCard(); } catch { /* the card keeps its last mark */ }
     const parent = overlay && overlay.parentNode;
     if (!parent || typeof parent.querySelectorAll !== 'function' || typeof parent.getBoundingClientRect !== 'function') return hudRectCache;

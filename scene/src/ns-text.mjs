@@ -1799,11 +1799,15 @@ export const GUIDE = deepFreeze({
     limb: "Body part",
     shoulder: "Shoulder aim",
     hip: "Hip aim",
+    // 25 November 2026 (DESIGN-DECISIONS section 214; a tester: "the Shoulder aim / Hip aim mark is never explained"):
+    // while the tutorial's two limb-key steps show, the mark says what it is for. Afterwards it keeps its short name.
+    shoulderTeach: "Look up or down: the arm follows",
+    hipTeach: "Look up or down: the leg follows",
     guide: "View tutorial",
     resume: "Resume tutorial",
     restart: "Restart tutorial",
     limits: "The colours link motor areas to movements in this game. On the simplified map, a ring marks a motor area and a small square marks its related body part when both are visible.",
-    jointHelp: "The shoulder or hip guide marks a fixed height one quarter of the way down the view. It is a screen reference for the wrist or ankle.",
+    jointHelp: "The shoulder or hip guide marks a fixed height one quarter of the way down the view. It is a screen reference for the wrist or ankle: when you look up or down, the chosen arm or leg rises or falls at its shoulder or hip.",
     directions: "F opens the movement directions.",
     camera: "C opens the camera controls.",
   },

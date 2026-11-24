@@ -201,9 +201,76 @@ try {
   const end = await inspect();
   assert.equal(end.attr, 'off');
   assert.equal(end.emap.error, null);
+
+  // 25 November 2026 (FIX76; a second play-through of update 74, finding 3): the information card and the map's card
+  // share no px, and the information card's title is in sight. At 800x600 with the full reading level they shared 150
+  // by 249 px (the title under the map's honesty line), in the eye view and outside; at 1280x720 the grip card of Space
+  // shared 236 by 55 px with the map's card at the short level. Each size in a fresh page, the map on: an area pointed
+  // at and Space holding the brain in the eye view, an area pointed at from outside, each at every reading level.
+  const cardsApart = [];
+  for (const [width, height] of (process.env.NS_CARD_SIZES || '800x600,1024x768,1280x720').split(',').map(v => v.split('x').map(Number))) {
+    const tag = `${width}x${height}`;
+    const p2 = await browser.newPage({ viewport: { width, height }, reducedMotion });
+    p2.setDefaultTimeout(WAIT);
+    p2.on('pageerror', error => errors.push(`${tag}: ${String(error)}`));
+    await p2.addInitScript(q => { try { localStorage.setItem('neurosurge.settings.v1', JSON.stringify({ quality: q })); } catch { /* the default then */ } }, quality);
+    await p2.goto(`http://${host}/scene/example/preview.html`, { waitUntil: 'domcontentloaded' });
+    await p2.waitForFunction(() => ['playing', 'error'].includes(document.querySelector('#ns-app')?.dataset.nsPhase));
+    await p2.waitForTimeout(1200);
+    for (let i = 0; i < 9; i++) { await p2.keyboard.press('Enter'); await p2.waitForTimeout(250); } // (the tutorial, skipped)
+    await p2.keyboard.press('KeyM');
+    await p2.waitForFunction(() => { const c = document.querySelector('.ns-emap-card'); return window.__nsQA.inspect().emap.on === true && c && c.getClientRects().length > 0; });
+    await p2.waitForTimeout(800);
+    const boxes = () => p2.evaluate(() => {
+      const vis = e => { if (!e || e.hidden || !e.getClientRects().length) return null; const cs = getComputedStyle(e); if (cs.visibility === 'hidden' || Number(cs.opacity) < 0.05) return null; const r = e.getBoundingClientRect(); return r.width > 1 && r.height > 1 ? [r.left, r.top, r.right, r.bottom] : null; };
+      return { read: document.querySelector('#ns-app').getAttribute('data-ns-read'), map: vis(document.querySelector('.ns-emap-card')), info: vis(document.querySelector('.ns-infopanel')), title: vis(document.querySelector('.ns-infopanel .ns-infopanel-title')),
+        name: (document.querySelector('.ns-infopanel .ns-infopanel-title') || {}).textContent || '' };
+    });
+    const frontAt = async (x, y) => { await p2.mouse.move(x, y); await p2.waitForTimeout(60); return p2.evaluate(() => { const c = window.__nsQA.inspect().controlTargets; return c ? { front: c.front || '', arrow: c.arrow === true } : { front: '', arrow: false }; }); };
+    const find = async (re, y0, y1) => { for (let y = Math.round(height * y0); y <= height * y1; y += 16) for (let x = Math.round(width * 0.22); x <= width * 0.78; x += 16) { const f = await frontAt(x, y); if (!f.arrow && re.test(f.front)) return [x, y]; } return null; };
+    const levels = async what => {
+      const seen = [];
+      for (let i = 0; i < 3; i++) {
+        await p2.waitForTimeout(500);
+        const b = await boxes();
+        seen.push(b.read);
+        if (b.map && b.info) {
+          const ox = Math.min(b.map[2], b.info[2]) - Math.max(b.map[0], b.info[0]), oy = Math.min(b.map[3], b.info[3]) - Math.max(b.map[1], b.info[1]);
+          assert.ok(!(ox > 0.5 && oy > 0.5), `${tag}, ${what}, reading "${b.read}": the information card "${b.name}" [${b.info.map(Math.round)}] and the map's card [${b.map.map(Math.round)}] share ${Math.round(ox)} by ${Math.round(oy)} px`);
+        }
+        if (b.info) {
+          assert.ok(b.title, `${tag}, ${what}, reading "${b.read}": the information card shows its title`);
+          assert.ok(b.title[1] >= b.info[1] - 1 && b.title[1] >= 0 && b.title[3] <= Math.min(height, b.info[3]) + 1, `${tag}, ${what}, reading "${b.read}": the title "${b.name}" is in sight [${b.title.map(Math.round)} in ${b.info.map(Math.round)}]`);
+        }
+        cardsApart.push({ size: tag, what, read: b.read, map: b.map && b.map.map(Math.round), info: b.info && b.info.map(Math.round) });
+        await p2.keyboard.press('KeyR');
+      }
+      assert.deepEqual([...seen].sort(), ['more', 'off', 'read'], `${tag}, ${what}: every reading level was looked at`);
+    };
+    const area = await find(/^brain:area:(?!.*(scan|tongue))/, 0.06, 0.55);
+    assert.ok(area, `${tag}: a motor area to point at`);
+    await p2.waitForTimeout(700);
+    await levels('an area pointed at');
+    const glass = await find(/^brain:(glass|outline)/, 0.14, 0.7);
+    assert.ok(glass, `${tag}: bare brain to take hold of`);
+    await p2.waitForTimeout(400);
+    await p2.keyboard.down('Space');
+    await p2.waitForTimeout(700);
+    await levels('Space holding the brain');
+    await p2.keyboard.up('Space');
+    await p2.waitForTimeout(900);
+    await p2.keyboard.press('KeyE');
+    await p2.waitForFunction(() => { const q = window.__nsQA.inspect().camera.pose; return q.thirdPerson && !q.moving; });
+    await p2.waitForTimeout(500);
+    const areaOut = await find(/^brain:area:(?!.*(scan|tongue))/, 0.06, 0.55);
+    assert.ok(areaOut, `${tag}: a motor area to point at from outside`);
+    await p2.waitForTimeout(700);
+    await levels('outside, an area pointed at');
+    await p2.close();
+  }
   assert.deepEqual(errors, []);
   console.log(JSON.stringify({ reducedMotion, raw, quality: end.quality, standIn: on.emap.standIn, lines: on.emap.lines, vertices: on.emap.vertices, buildMs: on.emap.build.ms, slices: on.emap.build.slices, slow: on.emap.slow,
-    pictureChange: Number(changed.toFixed(2)), pictureRestored: Number(restored.toFixed(2)), volley, errors, chromium: browser.version() }));
+    pictureChange: Number(changed.toFixed(2)), pictureRestored: Number(restored.toFixed(2)), volley, cardsApart: cardsApart.filter(c => c.map && c.info).length, errors, chromium: browser.version() }));
 } finally {
   await browser?.close();
   await new Promise(resolve => server.close(resolve));

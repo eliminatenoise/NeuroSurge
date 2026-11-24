@@ -347,6 +347,11 @@ body:has(.ns-keys.ns-ctl) .ns-shell-root .ns-shell-toast { opacity: 0; }
 .ns-limbs { position: absolute; left: 50%; bottom: 34px; transform: translateX(-50%); display: flex; gap: 6px; padding: 6px 8px; border-radius: 12px; background: rgba(4, 7, 11, 0.82); border: 1px solid rgba(255, 255, 255, 0.16); pointer-events: none; z-index: 6; white-space: nowrap; }
 .ns-limbs-chip { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 3px 9px 3px 4px; border-radius: 8px; color: #9fb0c0; font: 600 12px/1.2 system-ui, -apple-system, "Segoe UI", Arial, sans-serif; background: transparent; border: 1px solid transparent; pointer-events: auto; cursor: pointer; touch-action: manipulation; }
 .ns-limbs-chip:focus-visible { outline: 2px solid #7cc4ff; outline-offset: 2px; }
+/* 25 November 2026 (FIX76; a hunt of update 74, finding 9; ns-rows-place ROWS_OUTSIDE): in the outside view the row of
+   buttons stands beside your head and trunk; where that strip is narrower than the row, each button has two lines, as
+   in a narrow window (the rule below at 680 px). */
+.ns-limbs.ns-limbs-tight { gap: 4px; }
+.ns-limbs-tight .ns-limbs-chip { flex-direction: column; gap: 2px; padding: 3px 5px; }
 .ns-limbs-key { display: inline-block; min-width: 20px; padding: 2px 0; text-align: center; border-radius: 5px; background: #1a2430; border: 1px solid #5a6a7a; color: #dfe9f3; font: inherit; font-weight: 700; }
 .ns-limbs-chip[data-on="true"] { color: #10161d; background: #ffd66b; border-color: #fff0b8; }
 .ns-limbs-chip[data-on="true"] .ns-limbs-key { background: #10161d; border-color: #10161d; color: #ffd66b; }
@@ -454,6 +459,18 @@ body:has(.ns-keys.ns-ctl) .ns-shell-root .ns-shell-toast { opacity: 0; }
   .ns-emap-card { top: 64px; right: 8px; width: min(230px, calc(100vw - 16px)); padding: 9px 10px; font-size: 12px; }
   .ns-emap-title { font-size: 14px; }
   .ns-app[data-ns-read="more"] .ns-emap-more { max-height: 30vh; }
+}
+/* 25 November 2026 (FIX76; a hunt of update 74, finding 3; ns-scene-three INFO_UNDER_MAP). The information card ends
+   under the map's card: its greatest height takes the map card's measured foot (--ns-emap-foot, written on the card)
+   with 8 px between them, at every reading level; never under 96 px, the room of its title and a few lines. In a wide
+   window under 901 px both cannot be whole at the full level (800 by 600: they shared 150 by 249 px), so the map's
+   card, a legend, gives way first: it leaves its More detail out there. Upright windows keep their own layout. */
+@media (min-aspect-ratio: 1/1) {
+  .ns-app[data-ns-emap="on"] .ns-infopanel { max-height: min(calc(100% - 30px - var(--ns-gap, 12px)), var(--ns-info-col-maxvh, 66vh), max(96px, calc(100% - var(--ns-emap-foot, 0px) - 24px))) !important; }
+  .ns-app[data-ns-emap="on"]:not([data-ns-unfold="true"]):not([data-ns-read="read"]) .ns-infopanel:not(:has(.ns-infopanel-detail[open])) { max-height: min(var(--ns-info-short-maxvh, 48vh), max(96px, calc(100% - var(--ns-emap-foot, 0px) - 24px))) !important; }
+}
+@media (max-width: 900px) and (min-aspect-ratio: 1/1) {
+  .ns-app[data-ns-read="more"] .ns-emap-more { display: none; }
 }
 
 /* 25 November 2026 (DESIGN-DECISIONS section 209; a hunt of update 73, findings 4 and 5): a card is not the picture.

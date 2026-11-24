@@ -53,3 +53,14 @@ test('every tutorial step done with the pointer has a hand picture, a step done 
   for (const name of new Set(Object.values(GESTURES))) assert.ok(css.includes(`.ns-prompt[data-ns-gesture="${name}"] .ns-prompt-count::after{background-image:url("data:image/svg+xml,`), `guide-cues.css draws "${name}"`);
   assert.doesNotMatch(css.slice(css.indexOf('data-ns-gesture')), /[<>#]/, 'the pictures are written so that a style sheet can carry them');
 });
+
+// 25 November 2026 (section 214): the aim mark says what it is for while the tutorial's limb-key steps show
+const { GUIDE } = await import('../scene/src/ns-text.mjs');
+test('the shoulder and hip mark has teaching words for the tutorial, short enough for one line, and its help says what the look does', () => {
+  assert.equal(GUIDE.cue.shoulderTeach, 'Look up or down: the arm follows');
+  assert.equal(GUIDE.cue.hipTeach, 'Look up or down: the leg follows');
+  for (const w of [GUIDE.cue.shoulderTeach, GUIDE.cue.hipTeach]) assert.ok(w.length <= 34, `${w.length} characters: one line of the mark's words (208 px at most)`);
+  assert.match(GUIDE.cue.jointHelp, /when you look up or down, the chosen arm or leg rises or falls/);
+  assert.equal(GUIDE.cue.shoulder, 'Shoulder aim');
+  assert.equal(GUIDE.cue.hip, 'Hip aim');
+});

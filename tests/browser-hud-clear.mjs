@@ -508,6 +508,46 @@ try {
     await page.mouse.up();
     await page.waitForFunction(() => /^8\//.test((document.querySelector('.ns-prompt-count') || {}).textContent || ''), null, { timeout: 8000 }).catch(() => {});
     assert.match(await stepNow(), /^8\/\d/, `${tag}: a drag from the Brain ring turns the brain and the tutorial goes on to step 8`);
+    // ---- 25 November 2026 (FIX76; a second play-through of update 74, finding 9) ----
+    // In the outside view your own head and trunk are at the bottom middle of the picture, where the limb buttons and
+    // the hint stand: at 800x600 the two rows covered 64 % of them (69 % at 1280x720, 61 % at 1600x900). While a strip
+    // beside your head and trunk is free the two rows stand in it: no px shared with the game's own box of your head
+    // and trunk, the buttons 6 px clear of the hint (section 207), the hint above the foot line (210), nothing on a
+    // card; and back in the eye view both rows are where they were.
+    {
+      const rows = () => page.evaluate(() => {
+        const box = sel => { const e = document.querySelector(sel); if (!e || e.hidden || !e.getClientRects().length) return null; const cs = getComputedStyle(e); if (cs.visibility === 'hidden' || Number(cs.opacity) < 0.05) return null; const r = e.getBoundingClientRect(); return [r.left, r.top, r.right, r.bottom]; };
+        const q = window.__nsQA.inspect().limbs.rows;
+        return { bar: box('.ns-limbs'), hint: box('.ns-shell-toast'), foot: box('.preview-note'), info: box('.ns-infopanel'), guide: box('.ns-quiet > .ns-prompt'), panels: [...document.querySelectorAll('.ns-hud .ns-panel')].map(e => (e.hidden || !e.getClientRects().length ? null : (r => [r.left, r.top, r.right, r.bottom])(e.getBoundingClientRect()))).filter(Boolean), body: q.body, strip: q.strip };
+      });
+      await page.mouse.move(width - 46, Math.round(height * 0.42));
+      await advance(8);
+      const eye = await rows();
+      assert.ok(eye.bar && eye.hint, `${tag}: the limb buttons and the hint show in the eye view`);
+      assert.equal(eye.strip, null, `${tag}: the eye view moves nothing`);
+      await page.keyboard.press('e');
+      await page.waitForFunction(() => { const p = window.__nsQA.inspect().camera.pose; return p.thirdPerson && !p.moving; });
+      await page.waitForFunction(() => window.__nsQA.inspect().limbs.rows.body !== null, null, { timeout: 5000 }).catch(() => {});
+      await page.waitForTimeout(400);
+      await advance(6);
+      const out = await rows();
+      assert.ok(out.body, `${tag}: your head and trunk are in the outside picture`);
+      assert.ok(out.strip, `${tag}: a strip beside your head and trunk takes the two rows (${JSON.stringify(out.body)})`);
+      assert.ok(out.bar && out.hint, `${tag}: both rows show from outside`);
+      for (const [name, b] of [['buttons', out.bar], ['hint', out.hint]]) {
+        assert.equal(area(b, out.body), 0, `${tag}: the ${name} [${b.map(Math.round)}] keep off your head and trunk [${out.body}]`);
+        assert.ok(b[0] >= -0.5 && b[1] >= -0.5 && b[2] <= width + 0.5 && b[3] <= height + 0.5, `${tag}: the ${name} are inside the window [${b.map(Math.round)}]`);
+        for (const c of [out.info, out.guide, ...out.panels]) assert.equal(area(b, c), 0, `${tag}: the ${name} [${b.map(Math.round)}] lie on no card [${c && c.map(Math.round)}]`);
+      }
+      assert.ok(out.hint[1] - out.bar[3] >= 5.5, `${tag}: the buttons stand 6 px clear of the hint (${(out.hint[1] - out.bar[3]).toFixed(1)} px)`);
+      if (out.foot && out.hint[0] < out.foot[2] && out.hint[2] > out.foot[0]) assert.ok(out.foot[1] - out.hint[3] >= 3.5, `${tag}: the hint stands above the foot line (${(out.foot[1] - out.hint[3]).toFixed(1)} px)`);
+      one.rowsOutside = { body: out.body, strip: out.strip, bar: out.bar.map(Math.round), hint: out.hint.map(Math.round) };
+      await page.keyboard.press('e');
+      await page.waitForFunction(() => { const p = window.__nsQA.inspect().camera.pose; return p.firstPerson && !p.moving; });
+      await advance(8);
+      const back = await rows();
+      for (const k of ['bar', 'hint']) assert.ok(back[k] && back[k].every((v, i) => Math.abs(v - eye[k][i]) <= 0.5), `${tag}: back in the eye view the ${k === 'bar' ? 'buttons' : 'hint'} are where they were (${back[k] && back[k].map(Math.round)} / ${eye[k].map(Math.round)})`);
+    }
     await page.close();
   }
   assert.deepEqual(report.errors, []);

@@ -113,6 +113,7 @@ import * as BodyArmBridge from './ns-body-arm-bridge.mjs';
 import * as NsCollide from './ns-collide.mjs';
 import * as NsGrasp from './ns-grasp.mjs';
 import * as NsPace from './ns-limb-pace.mjs'; // 22 November 2026 (LIMBS2): the limbs' pace, light at a range end, pushes
+import { ROWS_OUTSIDE, ballsBox, rowsBesideBody } from './ns-rows-place.mjs'; // 25 November 2026 (FIX76): the two rows beside your trunk in the outside view
 import * as NsContact from './ns-contact.mjs'; // 18 November 2026 (package CONTACT): limbs push limbs
 import { seeHiddenEntry, seeTakesGhost, seeLimbOfGroup } from './ns-see.mjs'; // 18 November 2026 (SEE): hidden limbs
 import { createFrameTimer } from './ns-perf.mjs'; // 18 November 2026 (performance): frame time by part, inspect().perf
@@ -183,10 +184,11 @@ export const GUIDE_KEY_MOVE = Object.freeze({ on: true, minM: 0.03 });
  *   offPx      and beside each, in CSS px
  *   checkFrames  a place found is asked again this often; while none is found one place is tried each frame
  *   ringPx     the ring's own reach: on the first pass a place counts only if the limb is also taken this far to each side
+ *   idleFrames after two rounds of every place without one, a place is tried only every so many frames
  * limbCueRecipes() lists them in the order tried: the hand or foot itself first.
  */
 export const LIMB_CUE = Object.freeze({ on: true, along: Object.freeze([1, 0.88, 0.76, 0.64, 0.5, 0.38, 0.26]),
-  offPx: Object.freeze([[0, 0], [12, 0], [-12, 0], [0, 12], [0, -12]].map(v => Object.freeze(v))), checkFrames: 12, ringPx: 6 });
+  offPx: Object.freeze([[0, 0], [12, 0], [-12, 0], [0, 12], [0, -12]].map(v => Object.freeze(v))), checkFrames: 12, ringPx: 6, idleFrames: 6 });
 export function limbCueRecipes(o = LIMB_CUE) {
   const out = [{ end: true, s: 1, dx: 0, dy: 0 }];
   for (const s of o.along) for (const [dx, dy] of o.offPx) out.push({ end: false, s, dx, dy });
@@ -9220,6 +9222,58 @@ export function start(params = {}) {
         }
         return toastSpot;
       }
+      /** 25 November 2026 (FIX76; a hunt of update 74, finding 9; ns-rows-place ROWS_OUTSIDE): the strip beside your head
+       * and trunk for the two rows while the view is outside (key E) and at rest, or null. Your head's and trunk's box is
+       * the box of the balls that fill them (TRUNK_KEEP_OUT) as the camera draws them; the cards are the status card and
+       * the colour key (as drawn) and the information card (its corner). While the camera is on its way between the two
+       * views the rows keep the place they had. */
+      let rowsOutNow = null, rowsOutBody = null, rowsOutAt = -Infinity, rowsOutFor = '';
+      function rowsOutside(sz) {
+        if (!ROWS_OUTSIDE.on || !cam || cam.view === 'first' || !(sz.width >= sz.height)) { rowsOutNow = null; rowsOutBody = null; rowsOutFor = ''; return null; }
+        if (cam.progress !== 1 || !camBodyToWorld || !canSolveLimbs() || !sceneFn('projectWorld')) return rowsOutNow;
+        // (asked again at most every everyMs, and at once for another window size: the rows need not follow every frame)
+        const W = sz.width, H = sz.height, balls = [], nowMs = clockMs(), forKey = `${W}x${H}`;
+        if (forKey === rowsOutFor && nowMs - rowsOutAt < ROWS_OUTSIDE.everyMs) return rowsOutNow;
+        rowsOutFor = forKey; rowsOutAt = nowMs;
+        try {
+          // (each ball's middle and three points on it, through the camera as it draws: the eye view's own maths, viewFrameOf,
+          // does not know the outside camera's stand-off)
+          const segs = segsNow(), pts = {};
+          TRUNK_KEEP_OUT.forEach((b, i) => {
+            const M = segs[b.seg];
+            if (!M) return;
+            const c = worldOf(camBodyToWorld, NsCollide.apply(M, b.at[0], b.at[1], b.at[2]));
+            pts[`c${i}`] = c; pts[`x${i}`] = [c[0] + b.r, c[1], c[2]]; pts[`y${i}`] = [c[0], c[1] + b.r, c[2]]; pts[`z${i}`] = [c[0], c[1], c[2] + b.r];
+          });
+          const q = callScene('projectWorld', pts) || {};
+          TRUNK_KEEP_OUT.forEach((b, i) => {
+            const c = q[`c${i}`];
+            if (!c || c.front !== true) return;
+            let r = 0;
+            for (const k of ['x', 'y', 'z']) { const e = q[`${k}${i}`]; if (e) r = Math.max(r, Math.hypot((e.x - c.x) * W, (e.y - c.y) * H)); }
+            balls.push({ x: c.x * W, y: c.y * H, r });
+          });
+        } catch { return rowsOutNow; }
+        rowsOutBody = ballsBox(balls, W, H);
+        const taken = [];
+        try { for (const r of typeof hud.cardRectsPx === 'function' ? hud.cardRectsPx() : []) taken.push(r); } catch { /* no card boxes */ }
+        try { const r = infoPanelRect({ width: W, height: H }); if (r && Number.isFinite(r.x0)) taken.push(r); } catch { /* no information card */ }
+        rowsOutNow = rowsBesideBody({ W, H, body: rowsOutBody, taken });
+        return rowsOutNow;
+      }
+      /** ROWS_OUTSIDE: the limb buttons' bar put in that strip (its side and the two-line form), or back at its own place.
+       * Returns what it did as a word for clearHint's key, so the bar is measured against the hint again when it moved. */
+      let limbBarKey = '';
+      function placeLimbBar(bar, rows) {
+        const key = rows ? `${rows.side},${rows.bar.left},${rows.bar.right},${rows.tight ? 1 : 0}` : '';
+        if (key === limbBarKey || !bar || !bar.style) return key;
+        limbBarKey = key;
+        const st = bar.style;
+        if (!rows) { st.left = ''; st.right = ''; st.transform = ''; }
+        else { st.left = Number.isFinite(rows.bar.left) ? `${rows.bar.left}px` : 'auto'; st.right = Number.isFinite(rows.bar.right) ? `${rows.bar.right}px` : 'auto'; st.transform = 'none'; }
+        if (bar.classList && typeof bar.classList.toggle === 'function') bar.classList.toggle('ns-limbs-tight', Boolean(rows && rows.tight));
+        return key;
+      }
       let muscleTapNote = null; // { text, untilT } the plain line about the last tapped muscle (simulated seconds)
       const rotationSeen = { state: null, until: -Infinity }; // R558: the forearm line shows only around a change
       let crossPick = null; // R558 (hunt 2): the muscle under the crosshair (what is seen there: controlTargets' front)
@@ -9806,7 +9860,9 @@ export function start(params = {}) {
         const whole = r => { const at = screenOf(r), d = LIMB_CUE.ringPx; return Boolean(at) && takesAt(at.x, at.y) && takesAt(at.x + d, at.y) && takesAt(at.x - d, at.y) && takesAt(at.x, at.y + d) && takesAt(at.x, at.y - d); };
         if (!busy) {
           if (st.found) { if (frames - st.checkedAt >= LIMB_CUE.checkFrames) { st.checkedAt = frames; if (!takes(st.found)) { st.found = null; st.idx = 0; } } }
-          if (!st.found) {
+          // (after two rounds of every place with none found, the limb is behind something for now: one try every
+          // LIMB_CUE.idleFrames frames, not one a frame)
+          if (!st.found && (st.idx < 2 * LIMB_CUE_RECIPES.length || frames % LIMB_CUE.idleFrames === 0)) {
             const n = LIMB_CUE_RECIPES.length, r = LIMB_CUE_RECIPES[st.idx % n], strict = st.idx < n;
             st.idx++; st.tries++;
             if (strict ? whole(r) : takes(r)) { st.found = r; st.checkedAt = frames; }
@@ -10319,6 +10375,9 @@ export function start(params = {}) {
             // put the hand at its place round a shoulder one frame behind: the drawn hand was then up to 98 mm off the place
             // the solve had reached (4 mm), and caught up in 59 and 71 mm frames as the turn slowed)
             if (trunkStale) Object.assign(start, trunkDrawn);
+            // (25 November 2026, FIX76, ns-limb-pace HOLD_DRAWN: the knee as drawn. After a drag had lifted the thigh, the
+            // solve started 15 to 19 cm from the foot on screen and S, A and D moved nothing; finding 7 of the hunt of update 74)
+            if (c.bend) start[c.bend] = NsPace.holdBendAsDrawn(start, c.bend, mods.body.passiveKneeAngles);
             const asDrawn = q => { let t = q; if (typeof mods.body.passiveKneeAngles === 'function') t = mods.body.passiveKneeAngles(t); if (typeof mods.body.softExtensionAngles === 'function') t = mods.body.softExtensionAngles(t); return segmentsFor(t); };
             // (one step a frame while the limb is following closely; the drawn pose's own segments serve as the start
             // when the activity's angles are the drawn ones)
@@ -10396,7 +10455,22 @@ export function start(params = {}) {
                 const swEnd = swingPts ? NsPace.limbSwingMove(swingPts, pts.end, rt, ax, sp, pace) : null;
                 const way = swEnd || limbKeyMove(pts.end, pts.root, rt, ax, az, sp);
                 for (let i = 0; i < 3; i++) way[i] -= pts.end[i];
+                const atBody0 = holdDbg.atBody || 0;
                 ({ r, offWay } = keyTake(r, way, wantMm));
+                // (25 November 2026, FIX76, ns-limb-pace keyBodySlide: an answer refused because it takes the hand deeper into
+                // your trunk or the head's column is asked again for the place it reached, taken out to the surface: the hand
+                // slides over it while what is left still goes the keys' way. Finding 7 of the hunt of update 74: the first
+                // W on the folded right arm stopped beside the neck after 8 cm for as long as the key was held)
+                if (offWay && (holdDbg.atBody || 0) > atBody0 && !swEnd) {
+                  const eW = worldOf(camBodyToWorld, r.endMm), T1 = NsPace.keyBodySlide(pts.end, eW, handKeepOut(eW), way, keyMoveCut);
+                  if (T1) {
+                    const want1 = NsCollide.apply(Bi, T1[0], T1[1], T1[2]);
+                    const r1 = NsGrasp.solveLimb({ rig: bodyRig, segmentsFor: asDrawn, targets: start, limb, targetMm: want1, limits: NsGrasp.holdLimits(limbLimits(), limb, bodyPosed), opts: NsGrasp.LIMB_HOLD_TRACK,
+                      project, memo: null, startSegments: drawnStart && !spin ? segsNow() : null, spin: Boolean(spin) });
+                    const k1 = keyTake(r1, way, want1);
+                    if (!k1.offWay) { r = k1.r; offWay = false; holdDbg.atBody = atBody0; holdDbg.bodySlide = (holdDbg.bodySlide || 0) + 1; }
+                  }
+                }
                 // (second pass: a swing that waits, the folded arm hanging and brought across, which the combined-range rule
                 // allows no room for that low, falls back for the frame to the turn of the shoulder-to-hand line, so A still
                 // brings the folded arm across the chest)
@@ -10544,8 +10618,8 @@ export function start(params = {}) {
             // (LIMBS5 pass 3, HOLD_BODY pinSkipMm: held as near as its joints allow, more than waitMm short, while the trunk carries it)
             h.pin = !keyed && !carried && trunkCarries && !beyond && !inner && !offWay && (HOLD_BODY.pinSkipMm > 0 || HOLD_BODY.pinFollow) && r.errorMm > HOLD.waitMm ? { end: worldOf(camBodyToWorld, r.endMm), place: T.slice() } : null;
             holdInfo = { limb, errorMm: Math.round(r.errorMm * 10) / 10, it: r.iterations, joints: r.joints, inner, beyond, offWay, slowed: r.slowed || null,
-              dbg: { keyed, carried, folded: r.folded, refused: holdDbg.refused || 0, waitFrames: h.waitFrames, gapMm: Math.round(gap * 1000), tRootMm: Math.round(Math.hypot(T[0] - pts.root[0], T[1] - pts.root[1], T[2] - pts.root[2]) * 1000), endRootMm: Math.round(Math.hypot(pts.end[0] - pts.root[0], pts.end[1] - pts.root[1], pts.end[2] - pts.root[2]) * 1000), held, blocked: Boolean(contact.bodyBlocked || contact.selfBlocked), atBody: holdDbg.atBody || 0, depth: holdDbg.depth || null, chase: Boolean(h.chase), probes: holdDbg.probes || 0, probeIn: holdDbg.probeIn || null, probeErr: holdDbg.probeErr === undefined ? null : holdDbg.probeErr, pair: holdDbg.pairPart || null, slid: holdDbg.slid || 0, blockWait: holdDbg.blockWait || 0, aheadCut: holdDbg.aheadCut || 0, aheadWait: holdDbg.aheadWait || 0, swing: holdDbg.swing || 0, swingBack: holdDbg.swingBack || 0, across: spun ? (spun.back ? 'back' : 'across') : null } };
-            holdDbg.refused = 0; holdDbg.atBody = 0; holdDbg.depth = null; holdDbg.pairPart = null; holdDbg.slid = 0; holdDbg.blockWait = 0; holdDbg.aheadCut = 0; holdDbg.aheadWait = 0; holdDbg.swing = 0; holdDbg.swingBack = 0;
+              dbg: { keyed, carried, folded: r.folded, refused: holdDbg.refused || 0, waitFrames: h.waitFrames, gapMm: Math.round(gap * 1000), tRootMm: Math.round(Math.hypot(T[0] - pts.root[0], T[1] - pts.root[1], T[2] - pts.root[2]) * 1000), endRootMm: Math.round(Math.hypot(pts.end[0] - pts.root[0], pts.end[1] - pts.root[1], pts.end[2] - pts.root[2]) * 1000), held, blocked: Boolean(contact.bodyBlocked || contact.selfBlocked), atBody: holdDbg.atBody || 0, depth: holdDbg.depth || null, chase: Boolean(h.chase), probes: holdDbg.probes || 0, probeIn: holdDbg.probeIn || null, probeErr: holdDbg.probeErr === undefined ? null : holdDbg.probeErr, pair: holdDbg.pairPart || null, slid: holdDbg.slid || 0, blockWait: holdDbg.blockWait || 0, aheadCut: holdDbg.aheadCut || 0, aheadWait: holdDbg.aheadWait || 0, swing: holdDbg.swing || 0, swingBack: holdDbg.swingBack || 0, bodySlide: holdDbg.bodySlide || 0, across: spun ? (spun.back ? 'back' : 'across') : null } };
+            holdDbg.refused = 0; holdDbg.atBody = 0; holdDbg.depth = null; holdDbg.pairPart = null; holdDbg.slid = 0; holdDbg.blockWait = 0; holdDbg.aheadCut = 0; holdDbg.aheadWait = 0; holdDbg.swing = 0; holdDbg.swingBack = 0; holdDbg.bodySlide = 0;
             if (inner || offWay) { if (keyed) T = pts.end.slice(); }
             else if (!beyond) pts.end = worldOf(camBodyToWorld, r.endMm);
           }
@@ -12075,6 +12149,8 @@ export function start(params = {}) {
           hold: limbHold ? { limb: limbHold.limb, world: r3(limbHold.world), x: limbHold.x, y: limbHold.y, dist: limbHold.dist, ok: limbHold.ok, stuck: Boolean(limbHold.stuck),
             keyU: r3(limbHold.keyU || null), keyLen: Math.round((limbHold.keyLen || 0) * 1000) / 1000, waitFrames: limbHold.waitFrames || 0 } : null,
           lastSolve: holdInfo, holdFrames: { frames: holdDbg.frames || 0, near: holdDbg.near || 0, solves: holdDbg.solves || 0 }, blocked: contact.bodyBlocked ? (contact.last || true) : null,
+          // (FIX76, ROWS_OUTSIDE, for checks: your head's and trunk's box in the outside view and the strip the two rows took)
+          rows: { body: rowsOutBody ? [rowsOutBody.x0, rowsOutBody.y0, rowsOutBody.x1, rowsOutBody.y1].map(Math.round) : null, strip: rowsOutNow ? { side: rowsOutNow.side, x0: Math.round(rowsOutNow.x0), x1: Math.round(rowsOutNow.x1), tight: rowsOutNow.tight } : null },
           push: { pushes: limbPush.pushes, last: limbPush.last, offPush: limbPush.offPush, pairs: [...limbPush.pen].map(([k, v]) => [k, Math.round(v * 1000)]),
             block: limbPush.block ? { mover: limbPush.block.mover, other: limbPush.block.other, penMm: Math.round(limbPush.block.pen * 1000) } : null, blocked: limbPush.blocked, back: [...limbPush.back.keys()] }, // (LIMBS2: LIMB_BLOCK, PUSH_BACK)
           leftHand: hd ? { besideShoulderM: r3(hd.rel), elbowDeg: fit && fit.solution ? Math.round(fit.solution.elbowFlexRad / DEG * 10) / 10 : null,
@@ -14119,9 +14195,12 @@ export function start(params = {}) {
               jointAimY: (1 - LIMB_AIM_Y_NDC) / 2 });
           }
         }
-        if (shell && typeof shell.placeToast === 'function') shell.placeToast(toastSpotFor(size), `${size.width}x${size.height}`, size.width >= size.height); // (FOOT_LINE: above the page's foot line)
+        // (25 November 2026, FIX76, ns-rows-place ROWS_OUTSIDE: in the outside view the hint and the limb buttons stand beside
+        // your head and trunk where a strip is free there; null: their usual places)
+        const rowsOut = rowsOutside(size);
+        if (shell && typeof shell.placeToast === 'function') shell.placeToast(rowsOut ? rowsOut.hint : toastSpotFor(size), `${size.width}x${size.height}`, size.width >= size.height); // (FOOT_LINE: above the page's foot line)
         // (24 November 2026, HINT_ROW: the limb buttons stand clear of the hint while it shows)
-        if (shell && typeof shell.clearHint === 'function' && limbHud && limbHud.box) shell.clearHint(limbHud.box, `${size.width}x${size.height}`);
+        if (shell && typeof shell.clearHint === 'function' && limbHud && limbHud.box) shell.clearHint(limbHud.box, `${size.width}x${size.height}|${placeLimbBar(limbHud.box, rowsOut)}`);
         // (section 211: nor while the pointer is parked on a card or outside the window, aimStep `away`: the card keeps the
         // area that moved last, not the one that happens to lie under the mark in the middle)
         updateInfo(inputs.binding, out, { travelling: (aimNow.pointer === true && aimNow.travelling === true) || aimNow.away === true });

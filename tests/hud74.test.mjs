@@ -56,7 +56,9 @@ test('the shell measures the hint as placed against the foot line, and the limb 
   assert.match(app, /placeToast: \(spot, key = '', wide = false\) => \{/);
   assert.match(app, /raise = hintOverFoot\(toast\.getBoundingClientRect\(\), foot\.getBoundingClientRect\(\)\);/);
   assert.match(app, /const foot = FOOT_LINE\.on && wide && !toast\.hidden && doc && typeof doc\.querySelector === 'function' \? doc\.querySelector\(FOOT_LINE\.selector\) : null;/, 'a wide window only: an upright one places the hint by its top');
-  assert.match(app, /shell\.placeToast\(toastSpotFor\(size\), `\$\{size\.width\}x\$\{size\.height\}`, size\.width >= size\.height\);/);
+  // (25 November 2026, FIX76: in the outside view the spot is the strip beside your head and trunk, ns-rows-place; the
+  // window's size and whether it is wide are passed as before)
+  assert.match(app, /shell\.placeToast\(rowsOut \? rowsOut\.hint : toastSpotFor\(size\), `\$\{size\.width\}x\$\{size\.height\}`, size\.width >= size\.height\);/);
   assert.match(app, /const k = `\$\{key\}\|\$\{toast\.hidden \? '' : toast\.textContent\}\|\$\{toastSpotKey\}\|\$\{toastRaisePx\}\|\$\{bar \? 1 : 0\}`;/, 'clearHint measures again after a raise');
   assert.match(read('scene/example/quiet.css'), /\.preview-note, \.preview-note\[class\] \{\n\s*position: fixed; left: 10px; bottom: 6px;/, 'the foot line the selector names');
 });
