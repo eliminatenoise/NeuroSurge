@@ -90,8 +90,10 @@ export function bindJointView({host,onPose=()=>{},embedded=false,readRig=null,on
     const collapsed=embedded && value;
     const hidesFocus=collapsed && el('.joint-inputs').contains(document.activeElement);
     if (collapsed !== node.classList.contains('joint-compact')) {
-      if (collapsed) sizeButton.before(saveTake,stopButton);
-      else startButton.after(saveTake,stopButton);
+      if (collapsed) {
+        stopDictation();
+        sizeButton.before(saveTake,stopButton);
+      } else startButton.after(saveTake,stopButton);
     }
     node.classList.toggle('joint-compact',collapsed);
     sizeButton.textContent=value?'Controls':'Compact';
@@ -609,10 +611,11 @@ export function bindJointView({host,onPose=()=>{},embedded=false,readRig=null,on
     if(!embedded && e.code==='KeyC'){e.preventDefault();el('[data-start]').focus();}
   }
   document.addEventListener('visibilitychange',visibility);window.addEventListener('pagehide',leave);window.addEventListener('keydown',keys);
+  window.addEventListener('blur',stopDictation);
   if (embedded) window.addEventListener('keydown',closeFocusedMirror,true);
   const params=new URLSearchParams(location.search);
   if(params.get('goal')==='above_shoulder' && ['left_hand','right_hand'].includes(params.get('effector')))goalField.value='Raise my '+params.get('effector').split('_')[0]+' hand above my shoulder';
   changeSource();if(embedded)node.hidden=true;
   return {askTouch: browserModel ? null : askTouch,open(){node.hidden=false;compact(false);el('[data-start]').focus();},run(intent,words){node.hidden=false;goalField.value=words||('Raise my '+intent.side+' hand above my shoulder');runGoal(intent);},stop,close,get active(){return active;},get visible(){return !node.hidden;},
-    dispose(){touch?.clear();stop();document.removeEventListener('visibilitychange',visibility);window.removeEventListener('pagehide',leave);window.removeEventListener('keydown',keys);window.removeEventListener('keydown',closeFocusedMirror,true);node.remove();}};
+    dispose(){touch?.clear();stop();document.removeEventListener('visibilitychange',visibility);window.removeEventListener('pagehide',leave);window.removeEventListener('blur',stopDictation);window.removeEventListener('keydown',keys);window.removeEventListener('keydown',closeFocusedMirror,true);node.remove();}};
 }

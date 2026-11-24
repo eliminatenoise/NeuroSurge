@@ -21,6 +21,8 @@ Press **C** to open the Movement mirror. Set **Body follows** to the arm, knee o
 
 Choose **Save take** to keep up to eight seconds of visible movement in this tab. To see it again, choose **Open Command box**, or close the mirror and press **F**. Type **replay my take**. The camera estimates movement from images. Electrical activity in the game is simulated.
 
+Choose **Dictate locally** in the Movement mirror to enter a goal by voice. This needs a browser with on-device speech. If you leave the game window or hide the mirror controls, dictation stops and any late words are dropped. The text already in the box stays there. Open the controls and choose **Dictate locally** again to start a new dictation.
+
 ## Keep and replay a take
 
 Press **F** to open the Command box and expand **Named takes**. Enter a name and choose **Save last take**. Choose **Download** next to that name to keep a copy as a take file. The file stores the movement readings and their times. Your pictures, video and audio stay out of the file.

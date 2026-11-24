@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-24-take-sequences",
+  "version": "experimental-2026-11-24-offline-dictation",
   "source": "Full and Lite start with a free pointer. Drag on empty space to look or choose Capture mouse from the Escape menu. Both editions share a motor strip and mirror body, and include the current trunk and limb movement. The offline bundle includes motion commands, the shoulder and hip tutorial and an opt-in video recorder. It can replay takes from video or timed pictures. The Movement mirror can run NeuroTranslate point and next-unit forecasts in the browser and compare a point with the nearest tracked frame on the source clock. In the Movement mirror, the limbs that follow the source are independent of the point being forecast. The connected Movement mirror saves recent selected poses for replay through the Command box. Named takes can be saved to a file, opened again and replayed in order.",
   "experimental": true,
   "incomplete_acceptance": true,
@@ -104,13 +104,13 @@
     },
     {
       "path": "README.md",
-      "bytes": 3976,
-      "sha256": "5312fccc4ac245592e45cfd785edfafcff18d21f15faaf17706ec53e14f6fe1e"
+      "bytes": 3971,
+      "sha256": "6356b46aa861794933a3c0742b8cf0b8423fc0ad6314d5f211ef0f40bafa4d20"
     },
     {
       "path": "START.html",
-      "bytes": 6230,
-      "sha256": "7934998ac21420dab068bd4ab060bad0138179f58d7894777e4e162bffdaf4d2"
+      "bytes": 6225,
+      "sha256": "8525d8c34c7b2c94e03feec1ad46b32c06819287413cf4ddd6f8c93621fa9426"
     },
     {
       "path": "assets/hand-search/CDLA-Permissive-2.0.txt",
@@ -284,13 +284,13 @@
     },
     {
       "path": "lite/OFFLINE-TECHNICAL.md",
-      "bytes": 2952,
-      "sha256": "e0a043e3de54ab20f51ccfaba4de138dd216ee20790a5193324c7be8af70308f"
+      "bytes": 3206,
+      "sha256": "d21b346fcbc3bbb01e92633ebbcbd60a2e8e42dd8f311b448daeecbc8d3184f1"
     },
     {
       "path": "lite/OFFLINE.md",
-      "bytes": 4197,
-      "sha256": "a5f9db2747d9fcd6e12af72501c2eed658cc182fe64504bd9d3e6ec060c5f0d9"
+      "bytes": 4546,
+      "sha256": "9f8deaf29e253c9583f28eada0d81170374359ab5035dd101ab201fcb4b1b8c9"
     },
     {
       "path": "lite/Play NeuroSurge Lite on Linux.sh",
@@ -309,8 +309,8 @@
     },
     {
       "path": "lite/README.md",
-      "bytes": 1759,
-      "sha256": "d2d3bcddabf58fefa90f185b92410c4db6416a676a2656e31e6772b37a1c9083"
+      "bytes": 1754,
+      "sha256": "bf4c48c6136e4ec14130d955696bb2abf2e100bc7772444c7570615d2e690303"
     },
     {
       "path": "lite/asset-pin.mjs",
@@ -379,13 +379,13 @@
     },
     {
       "path": "lite/simple.html",
-      "bytes": 5240,
-      "sha256": "be187a4cd46027f0a55f3a429236972c6aadf994fe82cacb3b225aecae06273a"
+      "bytes": 5235,
+      "sha256": "aed9b5b50c4ed28f380c9764d98461e90e24461fc8ea3d7ed551c2574d355b38"
     },
     {
       "path": "lite/technical.html",
-      "bytes": 4055,
-      "sha256": "a07958a50134294041c84f0144fdc38b907a882f47b31a97ec9cb20df2315cd2"
+      "bytes": 4050,
+      "sha256": "072e99d81fc1d2c3b9ec1244317dcbbab9f4080c44be9ea87046922df420e348"
     },
     {
       "path": "media/game-view.webp",
@@ -4984,8 +4984,8 @@
     },
     {
       "path": "scene/src/joint/view.mjs",
-      "bytes": 35991,
-      "sha256": "feea6ad15bd2188e58b163ca8a261ee573c18a4cff7ca5d1d5dea154a60ac182"
+      "bytes": 36126,
+      "sha256": "ca6590048873db1e819e487fbab4aa5431c8d7cddbe68edd25cdcfd6c9e58c5a"
     },
     {
       "path": "scene/src/ns-action-chat.mjs",

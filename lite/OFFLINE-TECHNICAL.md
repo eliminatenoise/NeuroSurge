@@ -10,6 +10,8 @@ Press **C** for the Movement mirror and set **Body follows**. Camera access begi
 
 **Save take** retains up to eight seconds of pose estimates in tab memory. Choose **Open Command box** or press F after closing the mirror. Enter **replay my take**.
 
+**Dictate locally** uses the browser’s on-device speech support. Leaving the game window or hiding the mirror controls cancels the active request and discards late results. The draft remains in the field. Reopen the controls to start another request.
+
 **Timestamped stills** uses at least two local images with times within an eight-second span. Use **Track keyframes** and **Save take**. Replay uses those poses and animates between them.
 
 **Named takes** provides **Save last take**, **Download** and **Open a take file**. The version 1 JSON format contains timestamps, tracked joint angles, projected arm positions when available, tracking gaps and a name. It carries no media. Import asks for confirmation when a saved name matches one in use.

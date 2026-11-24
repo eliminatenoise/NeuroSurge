@@ -1,6 +1,6 @@
 # NeuroSurge Lite
 
-[Play Lite](index.html) · [Download the offline preview](https://github.com/eliminatenoise/NeuroSurge/releases/download/lite-take-sequences-2026-11-24/NeuroSurge-Lite.zip) · [Open NeuroSurge Full](../) · [Technical guide](technical.html) · [Simple guide](simple.html)
+[Play Lite](index.html) · [Download the offline preview](https://github.com/eliminatenoise/NeuroSurge/releases/download/lite-dictation-2026-11-24/NeuroSurge-Lite.zip) · [Open NeuroSurge Full](../) · [Technical guide](technical.html) · [Simple guide](simple.html)
 
 Both editions use the same game, 3D shapes and controls. Lite compresses the mesh packs without changing their decoded bytes. The five packs, index and body rig use 4,999,707 bytes in Lite and 5,995,969 bytes in Full. When the browser needs the local 142,385-byte Brotli module, the Lite total for those assets and the module is 5,142,092 bytes.
 
