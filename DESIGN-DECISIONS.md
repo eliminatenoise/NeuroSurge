@@ -8210,6 +8210,300 @@ before and after the plan views moved (`work/cam70/h1/`, `h4/`) and at 1280x720 
   rule is for landscape windows only), nor the Lite edition (it loads the same game code; not run here).
 - No person has played the combination.
 
+## 205. Nothing on the screen covers what it should not: the tutorial cue's words off the mirror body's head and neck and steadier during a look (not yet as steady as update 70 everywhere), its ring under no label, the mirror body's tips near their body from outside, and every arrow clear of the tutorial card (24 November)
+
+An independent check of Body update 70 (its three minors) found, at 1600x900, 1280x720, 1920x1080 and 800x600: the
+tutorial's first cue, "Motor area · Left toes", put its words under its ring whenever the ring was in the top 16 % of the
+picture, over the mirror body's neck (432 / 380 / 342 / 272 px2 of the box round the drawn head and neck bones'
+centres), and its ring lay partly under the "Left leg" label (252 / 352 / 630 px2; in the outside view 418 / 462 / 660,
+and under "Left arm" at 800x600); in the outside view the mirror body's up arrow lay across its face (390 / 216 / 288 /
+110 px2 of the same box); at 800x600 the brain's up arrow lay half under the tutorial card (715 px2). The owner's rules
+these break: "Light must never hide what it points at" (the light beams cut twice, "obstructing the view"), "Way too
+much text now" and the chunked, well separated words, and the arrows of Messages 55 and 56 (a tip over what the player
+aims at hides it and takes its clicks). Measured with `work/ui5/s-ui5.mjs` (High, the start view after the controls card,
+then E), before on update 70 (port 18930, `work/ui5/before/`) and after on this branch (`work/ui5/a13/`).
+
+**The cue's words take the nearest clear place round the ring (`placeCueWords`, `CUE_WORDS` in the new pure module
+`ns-cue-place.mjs`; `ns-guide-cues.mjs`; `guideCueKeepOut` and `HUD_CLEAR.cueWords` in `ns-scene-three.mjs`).** Every place
+on a grid round the ring (6 x 4 px) with 5 to 41 px of room to it is tried; of those inside the picture (under the limits
+line) and 3 px clear of every keep-out, the cheapest wins: its room, plus a quarter of a pixel per pixel off the ring's
+middle sideways, plus 2 under the ring (over it is the CSS's default); with none clear, the least covered (keep-outs
+weighted). The places are tried cheapest first and the first clear one ends the search, and the words' size comes from
+the font's own measure (a canvas), not from the page: the first version read the size from the page whenever the
+caption changed (as the look crosses the strip) and tested every place against every keep-out, and the frame table's
+look phase lost 4 to 5 frames a second (35.3 and 37.7 against 40.3 and 41.6). The game hands in the keep-outs: the mirror body's head and neck as drawn (`mirrorHeadBoxPx`: the box corners of
+your body's head and neck meshes, measured with the body as the mirror body's sample is, through the mirror body's matrix;
+padded 4 px, weight 6), the labels as laid out, the drawn arrows (weight 2) and the HUD's cards (weight 8). The words'
+size is measured once per caption, and the place worked out again only when the ring, the words or a keep-out moved.
+(The first pass also stopped the labels giving way to the words; the second pass undid that, below.) After, the words cover none of the head and neck, labels, arrows or cards at any of the four
+sizes, in the start view and from outside: at 1600x900 over the ring (683-815 x 61-79), at 1280x720 and 1920x1080 to its
+left, at 800x600 under it to the left (232-364 x 99-117). The "Belly and back" labels, left out while the words lay
+under the ring, are drawn again at 1600x900 and now also at 1280x720 (eight labels). Tried and dropped: four fixed places
+(over, under, left, right, with three alignments each), which at 800x600 had no clear one (the tutorial card on the
+left, the mirror body's up arrow over the ring, its head to the right and below).
+
+**Pass 2: the words keep their place during a look (`CUE_WORDS.keepBonus`, `keepBadFrac`, `keepBadPx`; `lagDx`, `lagDy`;
+`HUD_CLEAR.labelsYield`).** An independent check of the first pass recorded every frame of an 8 s look (mouse steps only,
+the first tutorial step, `work/ui5-check/s-chk.mjs`): placed afresh on every frame, the words moved against their ring 70
+/ 78 / 108 / 69 times (at most 216 px), their side changed 18 to 73 times, and they lay on a shown label in 27 to 70 of
+about 280 frames (update 70: 6 moves, at most 66 px, 1 frame or none). A label 1 px nearer turned the cheapest place
+from over the ring to under it (`work/ui5-check/flip.mjs`). Three causes, three changes. (1) The place the words have,
+kept as their offset from the ring, stays while it is inside the picture and clear of every keep-out (without the 3 px
+room: touching is not yet a hit), whatever is cheaper; with no clear place at all it stays unless another covers less by
+more than half the least covered one's score plus 400 weighted px2 (in the crowded corner at 800x600 the least covered
+place changed every frame). It is chosen afresh when hit, on a new step, caption or window size, or after the cue was
+hidden. (2) The labels and the arrows are laid out when the frame is drawn, after the HUD has placed the words, so during
+a look they are a frame behind (the probe saw the words kept 7 px over "Left leg" frame after frame): those boxes are
+moved by how far the ring moved since the last update. (3) The labels give way to the words again, as in update 70:
+with the first pass's rule a label's layout often jumped onto the words and moved them. The words still keep clear of
+the labels as laid out. Tried and dropped: the words keeping clear of each label's box at its anchor instead (a label
+pushed off its anchor by the bodies sits elsewhere; at 800x600 the words took the "Left arm" pair's place and both were
+drawn faded). Measured with the check's probe, before on update 70 (port 18930) and after (`work/ui5/p2/a4/`), at 1600x900
+/ 800x600: moves 11 / 20 (update 70: 6 / 6; the first pass: 70 / 69), the largest 171 / 156 px (66 / 66; 171 / 199), side
+changes 4 / 4 (6 / 6; 23 / 18), frames with the words on a shown label 0 / 0 (1 / 0; 27 / 28). The start view is as in
+the first pass (1600x900: over the ring, 683-815 x 61-79, eight labels; 800x600: under it to the left, 232-364 x 99-117,
+the arm labels not faded). The moves left are the tutorial card and the picture's edge, which do not move with the look:
+as the ring passes them the words are held still against them a frame at a time, then go to another side. The new
+look sweep in `browser-hud-clear` reads at 1600x900 / 1280x720 / 1920x1080 / 800x600: moves 11 / 11 / 12 / 20, the
+largest 171 / 195 / 186 / 156 px, side changes 4 / 2 / 7 / 4, frames on a shown label 0 / 0 / 1 / 0. At 1280x720 the
+two "Belly and back" labels give way to the words in the start view and are left out, as in update 70 (six labels; the
+first pass had eight).
+
+**Pass 2: the words keep to their ring's half of the brain (`CUE_WORDS.sameHalf`, `guideCueKeepOut` `half`, `HUD_CLEAR.cueHalf`).**
+The check saw "Left toes" from outside at 1280x720 lying across the right leg's areas. The game hands the words the
+brain's midline on the screen, taken front to back as the region labels' `side` line is; the words' whole box keeps to
+the ring's side of it (with no clear place, each pixel over it counts as covered). As pass 2 built it, the rule never
+acted: the line went through the strip's samples within 4 mm of the plane source x = the strip's middle, but the two
+halves stand 6 mm off the midline where the strip lies (`HEMI_GAP.eachMm`, `ns-brain-part.mjs`), so no sample was that
+near, the line was null on every frame, and the words still crossed the middle (the check of pass 2 found it; this
+section had called it done). The lead's fix (b9a4f48, `cueMidPoint`): the line goes through the point on that plane at
+the mean height and depth of all the strip's samples. Measured in pass 3 with the check's probe (its keep-out readback):
+the line is there in every recorded frame at 1600x900 and 800x600 (none null), upright at the picture's middle in the
+start view; the start words moved to its left at 1600x900 (665-797 x 61-79, 3 px short of it; pass 2: 683-815, over it by
+15 px) and stay under the ring to the left at 800x600 (214-346 x 99-117). With no clear place (the crowded top left at
+800x600) the words still cross it, in 11 of 280 frames of the look and 18 of 359 of the wide look, by up to 63 px.
+
+**Pass 3: the words stay steady beside things that do not move with the look (`CUE_WORDS.slide`, `nearFirst`, `holdPx`,
+`followPx`, `backFrames`, `keepAcross` in `ns-cue-place.mjs`; `ns-guide-cues.mjs`).** The check of pass 2: while the ring
+passed the tutorial card or the picture's edge, the words' kept place was hit on every frame and replaced by the cheapest
+clear place round the ring, so they crept along the card a grid step a frame and then jumped to another side (156 to 199
+px), and at 800x600 in a wider look they moved 56 times with 12 quick returns to the side just left (update 70: 18 and 0);
+the place was also forgotten on every caption change, which a wide look makes often (the ring going to another area).
+Four changes, each with its switch (all false: pass 2). (1) `slide`: a kept place that is hit first slides along its own
+side of the ring (over or under it: sideways; beside it: up or down) by the least shift that clears it, as long as the
+words stay on that side; against a card or the edge the words then stand still on the screen while the ring goes on. With
+no clear place at all, a kept place pushed past the picture's edge is slid back inside before it is weighed. (2)
+`nearFirst`: only when no slide clears it do the words change side, to the clear place nearest where they are on the
+screen (the kept offset less the ring's move since the last placement, unless the ring jumped more than `followPx` 24 px
+to another area), with `holdPx` 8 px more room where such a place is at most 8 px further; with no clear place, the
+nearest of the places that cover at most 400 weighted px2 more than the least covered one, not the least covered anywhere
+(at 800x600 that place changed every frame and the words followed it, up to 93 px a frame). (3) `backFrames`: the side
+just left is not taken again within 30 placements while another clear place exists. (4) `keepAcross`: a new caption keeps
+the place, with the words' edge nearer the ring where it was. The search's helpers moved to module scope, and the cue
+layer compares caption, size and step one by one, so a placement makes no closure, object or key string a frame (the
+check of pass 2 found three closures, an object and two strings per call). Measured with the check's probe (a copy,
+`work/ui5/p3/s-p3.mjs`, that runs the wide look on update 70 too and also counts a "jump": a move against the ring that
+also moves the words on the screen by more than 3 px), update 70 on port 18930 (`work/ui5/p3/before/`) against this branch
+(`work/ui5/p3/after3/`), at 1600x900 / 800x600. The 8 s look: jumps 6 / 8 (update 70: 6 / 6; every move of update 70 is a
+jump), the largest 28 / 60 px (54 / 58; its largest move 66 / 66), moves against the ring 7 / 19 (6 / 6), side changes 1 /
+0 (6 / 6), frames on a label 1 / 0 (1 / 0). The wide look (200 px left and 60 up, 400 right, back; about 9.5 s): jumps 12 /
+10 (14 / 18), the largest 102 / 82 px (80 / 77), moves 13 / 27 (14 / 18), side changes 1 / 2 (8 / 6), no quick return (0 /
+0). Pass 2 on the check's same paths: 11 / 20 and 22 / 56 moves, the largest 171 / 156 and 102 / 199 px. So the words now
+jump no more often than in update 70 except in the 800x600 look (8 against 6), and the jumps are smaller in the look; in the
+wide look one jump at each size is larger than update 70's largest (102 px at 1600x900 when the ring went to another area
+and the words could not keep their side there; 82 px at 800x600). At 800x600 the offset against the ring still changes
+more often than in update 70 (19 and 27 against 6 and 18): those extra moves are the words held still on the screen against
+the left edge or the card while the ring passes. Tried and dropped: a fixed `holdPx` room for every new place (it chose a
+place up to 100 px further than a nearer clear one); the least covered place anywhere when nothing is clear (above).
+
+**The cue's ring is an obstacle for the region labels (`HUD_CLEAR.ringLabels`, `readHudRectsNow`).** Section 204 had left it
+out on purpose ("keeping the label off it would push the leg pair away"). Measured: the leg pair moves aside and stays
+shown at all four sizes ("Left leg" 641-721 x 86-108 at 1600x900, beside the ring 734-764 x 87-117); no label touches a
+ring in the start view or from outside. The ring's place depends on the area only, so nothing goes back and forth.
+
+**From outside, the mirror body's tips keep off its own head where a place near the body allows it (`HUD_CLEAR.mirrorTipsOffHead`,
+`HUD_CLEAR.mirrorTipReach`, `outsideCompassAnchors`).** A mirror tip is not clear where it covers the head and neck as drawn
+from there (padded 4 px), and a moved tip stays on its own half of the body's box (the up tip above its middle). The first
+pass stopped there, and found no clear place near the head in that view: a map of the places round it (1600x900) showed the motor
+strip all round the head (the leg areas above it, the trunk's pale blue areas beside it), the brain's up tip above
+those and the mirror body's side tips below; the up tip now lies 190 to 230 px from the head: to the upper right at
+1600x900 (985-1046 x 291-318), upper left at 1280x720 and 800x600, beside the left shoulder at 1920x1080 (848-911 x
+478-505); at 800x600 the side tips also moved (12 and 60 px). Tried and dropped: the head kept out alone (the up tip went
+beside the legs, 346 px away); a place near the head over the strip, drawn faint (it lay on the toe areas, the tutorial's
+first target, and would take their clicks; outside-compass asserts no tip over the strip); the brain's up tip giving its
+place up (no place needed it: the others were taken by the strip or the tips' aiming views). The check rated the
+stranded tip major (at 800x600 over the black, almost touching the cue's words). Pass 2: a moved mirror tip stays inside
+the body's box grown by one tip size (the larger side of its box); where nothing there is clear off the head, it takes
+the place update 70 gave it, over the face, and the fit's report says so (`outside.tips[].onHead`). Measured at 1600x900
+and 800x600: no place near the body is clear off the head, and every tip is where update 70 has it (the mirror body's up
+tip over its face, 769-830 x 347-374 and 379-420 x 239-257; the brain's up tip back at 751-833 x 158-194 at 1600x900).
+Without the second search the tip kept its eye-view place, 101 to 129 px straight above the head. In `browser-hud-clear`
+the up tip is over the face (`onHead`) at 1280x720 too, and off the head, near the body, at 1920x1080.
+
+**Every arrow keeps clear of the tutorial card (`HUD_CLEAR.promptKeep`, `notePromptKeep`, `arrowObstacles`, `updateArrows`).**
+The card (the quiet layer's prompt, top left) is kept by both plans like the crosshair's box (`avoid`: every tip, also one
+on its side's middle and a rescued one), at the largest box it has had in the window, so a step with a shorter card does
+not let a tip back under the corner; the plans are made again when the card is first seen or grows over a shown tip
+(`promptPlanKey`). At 800x600 the brain's up tip now lies on the right of its frame's top (580-635 x 81-105, clear of the
+motor colours); at 1280x720 its tips moved too (the up tip 40 px down, the side tips 94 px out and 52 px down), clear of
+everything; at 1600x900 and 1920x1080 no tip moved. The arrow readback gives the card's box (`promptKeepPx`) and each
+rescued tip's move (`frame.spots[d].rescue`); `inspect().scene.mirror.onScreen.headPx` gives the head-and-neck box.
+
+**Checked (pass 3).** Unit tests `tests/ui5.test.mjs` 26 (6 new: the slide against the tutorial card, a pass past the card
+and back (one side change, no quick return, the largest move on the screen at most 40 px), the nearest place after a hit,
+the edge slide and the nearest of the least covered places with nothing clear, and the switches off giving pass 2's places;
+3 older ones restated, since a hit place now slides) and `tests/cam70.test.mjs` 8 pass. `browser-hud-clear` now also runs the
+check's wide look and limits, in both looks: jumps (at most 10 / 18), the largest jump (110 / 130 px), moves against the ring
+(25 / 40; pass 2 allowed 30 in the look only), side changes (6) and quick returns (none). Those limits are pass 3's own
+numbers with a little room, not update 70's. It passes; at 1600x900 / 1280x720 / 1920x1080 / 800x600 the look reads jumps
+6 / 8 / 7 / 8, the largest 28 / 6 / 98 / 60 px, moves 7 / 10 / 8 / 19, side changes 1 / 0 / 2 / 0, frames on a label 1 / 1 / 2 /
+0; the wide look jumps 11 / 11 / 3 / 12, the largest 102 / 121 / 116 / 82 px, moves 12 / 15 / 3 / 26, side changes 1 / 4 / 1 /
+2; no quick return anywhere. The browser runs of pass 3 are listed in its answer (`work/ui5/p3/chk/results.txt`).
+Pictures looked at: the start view's crop round the cue at 1600x900 and 800x600 before and after, and the wide look's left end
+at 800x600 after.
+
+**Checked (pass 2).** Unit tests `tests/ui5.test.mjs` 20 (8 new: the kept place, a 1 px label move no longer flipping
+the side, a simulated look (17 moves kept against 53 placed afresh), the frame-behind boxes, the crowded hold, the
+midline, the near-body rule and the cue layer's memory) and `tests/cam70.test.mjs` 8 pass. `tests/browser-hud-clear.mjs`
+now also sweeps the look as the check's probe does and counts the words' moves against their ring (at most 30), their
+side changes (at most 10) and frames on a shown label (at most 3), and from outside asserts every mirror tip near its body
+and off its head unless the fit reports `onHead`. The browser runs of pass 2 are listed in its answer
+(`work/ui5/p2/chk/results.txt`). Pictures looked at: the start view's crop round the cue at 1600x900 and 800x600 before and
+after, the outside view's crop and the picture after the look at 1600x900 after.
+
+**Checked (pass 1).** Unit tests: `tests/ui5.test.mjs` (12, new: the placement and the scene's rules), `tests/cam70.test.mjs` (8; the
+cue words' test restated), `ui3`, `load-guard`, `shader-safe`, `guide-order` pass. `tests/browser-hud-clear.mjs` (new): at
+the four sizes the first cue's words off the head and neck and off every shown label, its ring under no label, no drawn
+arrow under a HUD card, and from outside no mirror tip on its own head; it passes on this branch (it needs the new head
+readback, so it cannot run on update 70), twice. The start check (`h/lead/s-bootcase.mjs`) "ok":true at 1600x900.
+Browser tests startup, mirror-compass, brain-compass, keyboard-aim, space-aim and outside-compass (in a publish tree whose
+START.html is main's) pass (`work/ui5/chk/`; they ran before the last change, which only changes how the words' size is
+found and the search order; hud-clear ran after it). Frame table (`h/lead/s-perf2.mjs`; still / look / up-down / limb
+turn), this branch against update 70 in turns: with the final code 60.0 / 38.2 / 52.7 / 59.0 against 59.8 / 40.6 / 55.9 /
+54.8, and 60.1 / 40.6 / 53.9 / 58.4 (the next run); with the first version 59.8 / 35.3 / 57.5 / 56.9 against 60.0 / 40.3
+/ 53.8 / 56.3 and 60.1 / 37.7 / 53.6 against 60.1 / 41.6 / 57.8; with the cue's two switches off 60.0 / 39.2 / 54.7 /
+56.9. Pictures looked at: the start view at all four sizes before and after, the outside view
+at 1600x900 and 1920x1080 after, and crops (`work/ui5/cmp-*.png`).
+
+**Not done, or not right.**
+- From outside, at 1600x900 and 800x600 the mirror body's up arrow is over its face again, as in update 70 (pass 2's
+  near-body rule: no place near the body is clear off the head). Smaller tips there are not done (one set's tips are
+  drawn at one size); a real fix needs the outside view's arrows planned for that view.
+- (Pass 3) The words are not as steady as update 70 everywhere: at 800x600 they jump 8 times in the look (update 70: 6),
+  and in the wide look one jump is larger than update 70's largest (102 px at 1600x900, 82 at 800x600, against 80 and 77;
+  in `browser-hud-clear` 121 px at 1280x720 and 116 at 1920x1080, and 98 px in the 1920x1080 look). The large ones come
+  when the ring goes to another area and the words cannot keep their side there.
+  Held still on the screen against the card or the edge, their offset from the ring changes on most frames of that pass
+  (19 and 27 moves at 800x600 against 6 and 18), which the check's own count reads as moves. With no clear place they can
+  still cross the brain's midline (up to 63 px at 800x600). 1280x720 and 1920x1080 were measured only by `browser-hud-clear`.
+- After a look the words stay where they were last moved (at 1600x900 above the ring but to its left, 647-779, not where
+  they start, 665-797; after the first look, under it to the left); a given view can show different layouts.
+- With the labels giving way to the words again, a label can be pushed further from its area while the words show; the
+  words do not keep clear of motor colours beside the ring. At 1280x720 the "Belly and back" pair is left out of the
+  start view again (as update 70). 1280x720 and 1920x1080 were measured in pass 2 only by `browser-hud-clear`.
+- The head-and-neck box is taken from the box corners of the head's and neck's meshes as posed when the body was measured
+  (the start, or a reset); a neck turned later is not followed, and the box is generous (to the collar bones).
+- The words may cover part of the motor area beside the ring (at 1920x1080 the top of the purple leg block); motor colours
+  are not among their keep-outs.
+- At 1280x720 the words' place touches a label's 3 px margin (no overlap of the boxes themselves).
+- The arrows' tips moved at 1280x720 and 800x600 (above); the cards other than the tutorial card are kept as before (a moved
+  tip only). Upright windows, the Lite edition, reduced motion and a later tutorial step's card were not looked at.
+- The frame table's look phase with the final code read 38.2 and 40.6 against update 70's 40.6 (and 40.3, 41.6 in the
+  earlier pairs): within this machine's spread, but not shown to be equal; the cue's words are worked out again on every
+  frame of a look while the first cue shows (its ring and the labels move). The frame table was not run in pass 2 or 3.
+- The six browser tests ran before the last change (the words' size from the font, the search order); only hud-clear and
+  the unit tests ran after it.
+- No person has played it.
+
+## 206. With the pointer free, the pointer is the aim: a motor area you point at is named and moves its body part, and a click on it presses it (24 November)
+
+Since GitHub main's change of 24 November (`6674bff`, "Start NeuroSurge with drag-to-look controls") the game starts
+with the pointer free: a drag on empty space turns the view, and only "Capture mouse" on the pause page captures the
+pointer. The look's crosshair at the middle of the picture stayed the game's only aim. Played from the start on that
+build (1600x900, `lead/s-free71.mjs` and `s-free71b.mjs`, the pointer never captured):
+
+- the pointer resting on a motor area named nothing and started nothing (the gaze area stayed empty; the tip beside the
+  pointer read "Space holds the brain" on every one of 23 areas tried);
+- a click on a motor area did nothing (`trigger.seq` stayed 0 after clicks on the ring finger, elbow and knee areas),
+  although the pause page says "Click: press a motor area";
+- the first tutorial step, "Aim at a coloured area until its body part moves", could be done only by dragging the view
+  until the middle of the picture lay on an area, or with the arrow keys.
+
+The owner's words this breaks: "go back to activation simply by cursor highlight" (19 November), and of 23 November:
+"Currently the game is too hard to learn. It needs to be easy to learn, so that people know to naturally activate
+specific parts of the brain."
+
+**The rule (`FREE_AIM`, `aimStep` in `ns-app.mjs`).** While the game plays with the pointer free and over the picture,
+the pointer is the aim. The look's own classifier is asked along the ray through the pointer (the scene's new `rayAt`;
+`stepFrame`'s new inputs `aimRay` and `aimLook`), so what the pointer rests on is named, switched on and clicked exactly
+as what the crosshair rests on is with the pointer captured: the same areas and spots, the same movement per spot, the
+same "through your own body and the mirror body" rule. The frame's pick (`targetsAt`), the status line, the tip and a
+muscle's tap all use the aim's place. The last thing the player moved wins:
+
+- the pointer moves over the picture: the pointer is the aim;
+- a drag on empty space turns the look, an arrow key steps the look to an area, or Space takes hold of something: the
+  crosshair is the aim until the pointer next moves (a carry with Space turns the look with the pointer, as before);
+- the pointer is captured, or outside the picture: the crosshair is the aim.
+
+A key press acts at the aim too: Space takes what the pointer is on while the pointer aims, and what the crosshair is
+on after an arrow key (`pressPoint`; until now a free pointer always took it, wherever the mouse had been left).
+
+**The pointer switches an area on when it comes to rest there** (`FREE_AIM.restPx` 3, `restMs` 100). A pointer on its
+way somewhere crosses the strip all the time, and "at once" would fire every area on the way: a sweep across the strip
+in a third of a second started ten movements. While the pointer travels, what it crosses is named but recorded
+silently; the first frame it has stayed within 3 px for a tenth of a second meets the area as an arrival (the
+activity's `arrivedFrom`, the rule CARRY_ARRIVAL already uses), so the area it rests on switches on unless the pointer
+never left the area it started from. Measured: the same sweep starts 0 movements; a rest starts the area's movement
+about 0.1 s after the pointer stops; a click needs no rest and is followed by no second start. While a mouse button is
+down the pointer's aim is silent (a drag turns the brain or the view under it); the click at the release presses what is
+under the pointer. When the aim falls back to the crosshair without a look of the player's own (the pointer left the
+picture, Space was pressed), what lies at the crosshair is recorded silently.
+
+**What the look carries keeps the camera's look.** Only the classifier is asked along the pointer's ray. The gaze
+record's angles, the brain's grab, the mirror body's carry and the activity's look stay the camera's. A first version
+gave the pointer's ray to all of them: taking hold of the mirror body with the pointer 45 px above the crosshair moved
+it by that offset at once (its box from 336..567 to 374..621 px); with the look kept apart it stays where it was, as on
+the build before (`lead/s-free71g.mjs`, both builds side by side).
+
+**The tip and the mark.** Under the aiming pointer a motor area keeps its own tip, its name and the movement a rest or
+a click starts, beside the pointer. A named muscle or bone keeps its name with the Space line under it ("Space holds
+the mirror body"); the Space line alone is for a pointer on the brain's bare glass. The mark at the middle of the
+picture is drawn faint while the pointer aims and does not light up for what the pointer is on
+(`.ns-crosshair-away`); it still shows where the look points, where an arrow key aims and where the chosen limb goes
+with the view.
+
+**Words.** "Point at a motor area" where the game said "Rest your look on a motor area" (the instructions, the
+controls list, the pause page's first row), and the hint under the picture begins "Point at a coloured area". The two
+player guides say the same (the pointer picks; the mark in the middle picks while the mouse is captured, after an
+arrow key or during a drag).
+
+**Tests.**
+- `tests/free-aim.test.mjs` (12): `aimStep`'s rules: who aims, the rest and the arrival, a sweep, a click, a button
+  down, Space, the pointer leaving, the look's time.
+- `tests/browser-free-aim.mjs` (new, the game as it starts): a sweep starts nothing; a rest names the area beside the
+  pointer and starts its movement by the look; a click presses it; another area starts its own; an arrow key puts the
+  aim and the tip at the crosshair and the pointer takes it back; a drag on empty space turns the look; the pointer is
+  never captured.
+- `tests/capture-mouse.mjs`: the helper now waits until the GAME plays captured. The browser sets
+  `pointerLockElement` before it tells the page, and a mouse move in between was read as a free pointer's: that was
+  the timeout of `browser-brain-eyes` and `browser-limb-controls` on main and on update 71's first candidate.
+- `tests/browser-hud-clear.mjs`: its slow look took the pointer "by one click in the middle", which since drag-to-look
+  no longer captures: the mouse steps moved a free pointer, the look never turned, and both looks passed without
+  measuring anything. It now captures with the helper and asserts that the look turned.
+- `tests/browser-space-aim.mjs`: Space leaves the pointer as it was (free or captured); after a hold a free pointer is
+  the aim again and does not turn the camera, a drag on empty space does.
+- `tests/browser-player-focus.mjs`, `tests/words2.test.mjs`: the new words; main's sentence about the limb and the view.
+
+**Not done, or not right.**
+- The chosen limb still goes with the LOOK (a drag or the captured mouse), not with the pointer.
+- The 3D arrow tips take the pointer's hover and press as before; they were not changed.
+- A resting pointer waits a tenth of a second before its area moves; with the pointer captured the crosshair still
+  switches an area on at once, also while the view is dragged across the strip.
+- The tip beside the pointer can lie over neighbouring areas, as the crosshair's tip does.
+- Touch was not tried on a device: a tap arrives as a press and release at one place, which this rule reads as a click
+  on what is under it.
+- The outside view uses the same rule; it was played only briefly.
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**
@@ -8222,11 +8516,15 @@ before and after the plan views moved (`work/cam70/h1/`, `h4/`) and at 1280x720 
   follows the body or turns to a chosen limb, and Reset body leaves the view where it is; with a limb chosen a look up or
   down also moves that limb. Your own body is smaller in the start picture than before. The owner's Message 167 (the view
   shifts to a chosen limb and keeps it in the frame) and Message 179 ("a proper first person view") are not met by that
-  design. The tutorial's first cue lies over the mirror body's neck in the start picture, its ring partly under the
-  "Left leg" label, and at 1600x900 the "Belly and back" labels give way to its words while it shows (204).
-- In the outside view the mirror body's up arrow can lie across its face; at 800 by 600 the brain's up arrow is half
-  under the tutorial card; with the player camera the deep-shade case of the raised arm (50 to 59 contacts in shade) is
-  no longer in any view the shading check uses (6 to 31) (204).
+  design (204).
+- With the pointer free the pointer is the aim (206): the chosen limb still goes with the look (a drag or the captured
+  mouse), not with the pointer; a resting pointer waits a tenth of a second before its area moves, while the captured
+  crosshair still switches areas on at once, also during a drag across the strip; pointing was not tried on a touch screen.
+- In the outside view the mirror body's up arrow is kept near its body; no place there is clear of the strip and the
+  other arrows off its head at 1600x900 and 800x600, so it lies over the face there, as in update 70 (205). The tutorial
+  cue's words, steadier since pass 3 of 205, still jump 8 times in an 800x600 look (update 70: 6), one jump in a wide look
+  is larger than update 70's largest, and with no clear place they can cross the brain's midline (205). With the player camera the deep-shade case of the
+  raised arm (50 to 59 contacts in shade) is no longer in any view the shading check uses (6 to 31) (204).
 - Touching muscles: with the colour rule of 22 November (no pink, mauve or blood crimson) about 1 in 80 visible contacts between two muscles is drawn nearly equal and about 1 in 10 is weak (the lead's colours: 1 in 21 and 1 in 5); the darkest forearm flexors have the fewest colours; the left and right muscle of a pair share one colour at the midline; the pairs seen side by side, and the light on them, are known from eighteen views only (188); those views were made with the earlier camera and the table was not made again for the camera from main (its regeneration stops on it); the colour check passes on it, but its raised-arm view is no longer the deepest shade (24 in shade against 50 to 59), and no view of the raised arm from this camera was found that is that deep and passes; the start view's weak share is tight (11 of 93, the limit 12.09) (204).
 - Some motor areas cannot be aimed at until the brain is turned to one side; no view from above shows them. Section 13 counted four of the 44 areas the map had then. The map now has 54, and the count has not been redone (13, 55, 59).
 - The brain has its own proportions at the start look and stretches at steep looks (13).

@@ -61,7 +61,8 @@ test('H15: the full instructions are cut hard, and each control is said once', (
   assert.match(li, /Your view turns only when the hand or foot would leave the picture/);
   const full = SHELL.instructions.join('\n');
   assert.match(full, /the head and neck turn, and past their reach the eyes turn further/);
-  assert.match(full, /Rest your look on a motor area to move its body part\. Click to repeat the movement\./);
+  // (24 November 2026, FREE_AIM, section 206: the pointer is free at the start and is the aim: "Point at")
+  assert.match(full, /Point at a motor area to move its body part\. Click to repeat the movement\./);
   assert.doesNotMatch(full, /trunk bends|press a number (?:key|to choose)|press the numbers/i);
   const rows = SHELL.controls.map(r => r.join(' ')).join('\n');
   assert.match(rows, /past their reach your eyes turn further/);
@@ -103,7 +104,7 @@ test('H26: the tutorial\'s second step asks for an area that moves while the loo
   let v = guideView(g, 20);
   assert.equal(v.goalId, 'pressArea');
   assert.equal(v.text, GUIDE.partial.pressAreaStill);
-  assert.equal(quietPromptText(v, GUIDE.short), 'Nothing moves there: look at a colour');
+  assert.equal(quietPromptText(v, GUIDE.short), 'Nothing moves there: aim at a colour');
   assert.ok(GUIDE.short.byText[GUIDE.partial.pressAreaStill].length <= 48);
   // a click there moves nothing and does not count; the Tongue (an effector without a movement) the same
   g = guideStep(g, [{ type: 'activate', regionId: 'lh_scan_inferior', isLeftArm: false, kind: 'integration', moves: false, source: 'click' }], 21);

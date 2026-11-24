@@ -4225,6 +4225,49 @@ export const RELEASE_WARM = Object.freeze({ on: true, pitchDeg: Object.freeze([4
  * already planned on the start look (package LAYOUT). Not changed: a carried mirror body is still planned along the
  * placement direction (browser-keyboard-aim carries it until a tip is under the crosshair, on purpose). */
 export const PLAN_EYE_MIRROR = Object.freeze({ startLook: true });
+/** 24 November 2026 (round r33, package UI5; DESIGN-DECISIONS section 205). An independent check of Body update 70 found
+ * three things on the screen covering what they should not:
+ *  - the tutorial's first cue, "Motor area · Left toes": its words lay over the mirror body's neck in the start picture
+ *    at every window size (432 / 380 / 342 / 272 px2 of the neck's bones' box at 1600x900 / 1280x720 / 1920x1080 /
+ *    800x600), and its ring partly under the "Left leg" label (252 / 352 / 630 px2; in the outside view 418 / 462 /
+ *    660, and under "Left arm" at 800x600);
+ *  - in the outside view the mirror body's up arrow lay across its face (390 / 216 / 288 / 110 px2 of its head);
+ *  - at 800x600 the brain's up arrow lay half under the tutorial card (715 px2).
+ * The fixes, each with its switch (false: as in update 70):
+ *  - cueWords: the cue's words take the nearest clear place round the ring (ns-cue-place placeCueWords) and keep clear
+ *    of guideCueKeepOut(): the mirror body's head and neck as drawn (mirrorHeadBoxPx, padded by headPadPx, weight
+ *    headWeight), the region labels as laid out, the turn arrows as drawn and the HUD's cards (weight hudWeight); in
+ *    pass 1 the labels no longer gave way to the words (with each keeping off the other, at 800x600 the words took the
+ *    "Left arm" label's place before the labels were first laid out, and it stayed forced and faded); pass 2 has them
+ *    give way again (labelsYield, below);
+ *  - ringLabels: the cue's rings are obstacles for the region labels (like the small marks, SMALL_MARK): a label
+ *    gives way to a ring. (Section 204 had left the ring out on purpose: "it sits on the area the label names, and
+ *    keeping the label off it would push the leg pair away"; measured here, the pair moves aside and stays shown.)
+ *  - mirrorTipsOffHead: in the outside view's fit (outsideCompassAnchors) a mirror body's tip is not clear where it
+ *    covers the mirror body's own head and neck (padded by headPadPx), so it moves to the nearest clear place, as a tip
+ *    on a HUD card or a motor area already did, on its own half of the body's box (kept off the head alone, the up tip
+ *    went beside the legs). Nothing near the head is clear in that view (the strip all round it, the other tips), so
+ *    the up tip lies 190 to 230 px from the head. Tried and dropped: a place near the head over the strip, drawn faint
+ *    (on the toe areas, the tutorial's first target, whose clicks it would take); the brain's up tip giving its place up;
+ *  - promptKeep: the tutorial card (the quiet layer's prompt, top left) is a box the arrows' hit boxes keep clear of in
+ *    both plans (with the box kept free round the crosshair and the other set's tips), as the cards of the HUD already
+ *    were for a tip that moves; the largest box the card has had in this window is kept, so a shorter step's card does
+ *    not move a tip back under the corner. A card that grows over a tip that is shown makes both plans again (once).
+ * headPadPx: the room kept round the mirror body's head-and-neck box (CSS px).
+ * Pass 2 (24 November 2026, the check of pass 1):
+ *  - mirrorTipReach: from outside, a mirror body's tip that moves stays inside the body's box grown by one tip size
+ *    (the larger side of the tip's box); with no clear place there off the head it is placed again without the head
+ *    rule, as in update 70 (over the face; measured at 1600x900 and 800x600: every tip where update 70 has it; kept at
+ *    its eye-view place instead, the up tip lay 101 to 129 px above the head). Pass 1 let it go anywhere on its own half: the up tip lay 140 to 171 px from the head (1600x900,
+ *    1280x720, 800x600), on the far side of the brain or over the black, where it read as no one's. Not done: a
+ *    smaller tip in that place (the tips of one set are drawn at one size, ns-arrows3d facingArrowFrames);
+ *  - cueHalf: guideCueKeepOut hands the cue's words the brain's midline on the screen (keepOut.half), so they keep to
+ *    their ring's half of the brain (ns-cue-place CUE_WORDS.sameHalf);
+ *  - labelsYield: the region labels give way to the cue's words again (as update 70); the words, which keep their
+ *    place, still keep clear of the labels as laid out (false: pass 1, where the labels did not give way and the words
+ *    were chased round the ring by the labels' layout during a look). */
+export const HUD_CLEAR = Object.freeze({ cueWords: true, ringLabels: true, mirrorTipsOffHead: true, promptKeep: true, headPadPx: 4, headWeight: 6, hudWeight: 8,
+  mirrorTipReach: true, cueHalf: true, labelsYield: true });
 export const BRAIN_TIP_RULES = Object.freeze({ ends: Object.freeze({ ...NsArrows.FRAME_PAIR.ends, inwardMaxFrac: 1.6, inwardMaxFracBy: Object.freeze({ forward: NsArrows.FRAME_PAIR.inwardMaxFrac }), perpCost: 12 }) });
 /** R558 (issue hunt 2: in third person the mirror body hid behind your back while its four tips were drawn on your body,
  * the top one under the crosshair, so the first click there slid the mirror body away; looking down, the brain's bottom
@@ -7395,7 +7438,7 @@ export function createScene({
   // kept), mirrorTransform (det < 0). The scene keeps a DEFAULT state (placed when the body is posed; orbit from
   // setMirrorView), unless the integrator hands a whole ns-mirror state or transform (setMirrorView), which then wins.
   const mirror = {
-    enabled: true, ready: false, posed: false, body: null, samples: null, placement: null, state: null, orbit: { yaw: 0, pitch: 0, push: 0 },
+    enabled: true, ready: false, posed: false, body: null, samples: null, headSample: null, placement: null, state: null, orbit: { yaw: 0, pitch: 0, push: 0 },
     external: null, worldCentre: null, transform: null, serial: 0, planeSerial: 0, measured: null, lod: false, twins: 0, error: null,
     correction: null, pipelineMatrix: null, reachForemostM: null, // R558 (Message 12): the stop-at-contact correction, the placement before it, the body's reach
     reachSphere: null, // R558 (Message 45): your left hand's reach, { centre (world m), radiusM }: a turned mirror body stands back for its image
@@ -12662,6 +12705,12 @@ export function createScene({
         const r = e.getBoundingClientRect();
         if (r.width > 0 && r.height > 0) hudRectCache.push({ x0: r.left - o.left, y0: r.top - o.top, x1: r.right - o.left, y1: r.bottom - o.top, quiet: true, cue: true });
       }
+      // 24 November 2026 (round r33, UI5, HUD_CLEAR.ringLabels; the check of update 70: the first cue's ring lay partly
+      // under the "Left leg" label, 252 px2 at 1600x900): the cues' rings as drawn, labels only, like their words.
+      if (HUD_CLEAR.ringLabels) for (const e of parent.querySelectorAll('.ns-guide-cues .ns-guide-mark')) {
+        const r = e.getBoundingClientRect();
+        if (r.width > 0 && r.height > 0) hudRectCache.push({ x0: r.left - o.left, y0: r.top - o.top, x1: r.right - o.left, y1: r.bottom - o.top, quiet: true, cue: true, ring: true });
+      }
       // R3-scene: the far-right information panel (when showing; flagged `info`, the arrow plan reserves its whole
       // column instead) and the capture / drag-to-look toast are obstacles for the arrows and labels too.
       if (info && !info.panel.hidden && typeof info.panel.getBoundingClientRect === 'function') {
@@ -12689,6 +12738,100 @@ export function createScene({
     // every clear place stays faded under it instead of blinking out and back while the look crosses the strip.)
     for (const r of hudRectCache) { r.words = r !== tipZone; r.weight = LABEL_WORDS_WEIGHT; }
     return hudRectCache;
+  }
+  /** 24 November 2026 (round r33, UI5, HUD_CLEAR.cueWords): what the tutorial cue's words keep clear of (ns-cue-place
+   * placeCueWords), in CSS px of the picture: the mirror body's head and neck as drawn now (padded by headPadPx, weight
+   * headWeight), the region labels as laid out (with HUD_CLEAR.labelsYield they also give way to the words, as in
+   * update 70: layoutOverlay; pass 1 had them not give way), the turn arrows as
+   * drawn (weight 2), and the HUD's cards and lines as last read (weight hudWeight; not
+   * the cues' own words and rings, nor the tip beside the crosshair, which comes and goes with the look). Returns
+   * { key, boxes, half } (one object, its boxes reused; `key` changes when a box or the line does), or null (no
+   * picture, switch off). Pass 2 (the check of pass 1: from outside at 1280x720 "Left toes" lay across the right leg's
+   * areas): `half` is the brain's midline on the screen ({ x0, y0, dxdy }: x = x0 + (y - y0) dxdy, CSS px; or null),
+   * the line source x = the motor strip's middle, through the point on that plane at the mean height and depth of all
+   * the strip's samples (b9a4f48; pass 2 used the samples within 4 mm of the plane, of which there are none, so the line
+   * was null on every frame), taken along front-back as the region labels' `side` line is; the words keep to their ring's side of it
+   * (ns-cue-place CUE_WORDS.sameHalf). */
+  const cueKeep = { key: 0, boxes: [], half: null }, cueKeepPool = [], cueHeadSeen = new Float64Array(20).fill(NaN);
+  const cueHalf = { x0: 0, y0: 0, dxdy: 0 };
+  let cueHead = null, cueMidLocal = null;
+  // the brain-local point the cue's midline goes through: on the plane x = the strip's middle, at the mean height and
+  // depth of all the motor strip's samples, once per segmentation
+  function cueMidPoint() {
+    const P = motorSamplePoints();
+    if (!P) return null;
+    if (cueMidLocal && cueMidLocal.P === P) return cueMidLocal;
+    const mx = Number.isFinite(glowMid.x) ? glowMid.x : 0;
+    let n = 0, sy = 0, sz = 0;
+    // (24 November 2026, the UI5 check 2: the halves stand HEMI_GAP 6 mm off the midline where the strip lies, so no sample
+    // is near the plane x = mx; a point ON that plane is all the line needs: the mean height and depth of all samples)
+    for (let i = 0; i < P.length; i += 3) { sy += P[i + 1]; sz += P[i + 2]; n++; }
+    cueMidLocal = n ? { P, x: mx, y: sy / n, z: sz / n } : { P, x: mx, y: NaN, z: NaN };
+    return cueMidLocal;
+  }
+  function cueMidline() {
+    const c = HUD_CLEAR.cueHalf && brainTransformSet && brainGroup.visible ? cueMidPoint() : null;
+    if (!c || !Number.isFinite(c.y)) return null;
+    const mw = brainGroup.matrixWorld, vi = camera.matrixWorldInverse, pm = camera.projectionMatrix;
+    pv.set(c.x, c.y - 30, c.z).applyMatrix4(mw).applyMatrix4(vi);
+    if (!(pv.z < -camera.near)) return null;
+    pv.applyMatrix4(pm);
+    const ax = (pv.x + 1) * 0.5 * cssW, ay = (1 - pv.y) * 0.5 * cssH;
+    pv.set(c.x, c.y + 30, c.z).applyMatrix4(mw).applyMatrix4(vi);
+    if (!(pv.z < -camera.near)) return null;
+    pv.applyMatrix4(pm);
+    const bx = (pv.x + 1) * 0.5 * cssW, by = (1 - pv.y) * 0.5 * cssH;
+    if (!(Math.abs(by - ay) > 1e-3) || ![ax, ay, bx, by].every(Number.isFinite)) return null;
+    cueHalf.x0 = ax; cueHalf.y0 = ay; cueHalf.dxdy = (bx - ax) / (by - ay);
+    return cueHalf;
+  }
+  function guideCueKeepOut() {
+    if (!HUD_CLEAR.cueWords || !(cssW > 0 && cssH > 0)) return null;
+    let n = 0, h = 7;
+    // (lag, pass 2: a box laid out when the last frame was drawn, a frame behind during a look: ns-cue-place lagDx)
+    const put = (x0, y0, x1, y1, weight, lag = false) => {
+      if (!(Number.isFinite(x0) && Number.isFinite(y0) && Number.isFinite(x1) && Number.isFinite(y1)) || !(x1 > x0 && y1 > y0)) return;
+      let b = cueKeepPool[n];
+      if (!b) { b = { x0: 0, y0: 0, x1: 0, y1: 0, weight: 1, lag: false }; cueKeepPool[n] = b; }
+      b.x0 = x0; b.y0 = y0; b.x1 = x1; b.y1 = y1; b.weight = weight; b.lag = lag; n++;
+      h = (h * 31 + Math.round(x0) * 7 + Math.round(y0) * 13 + Math.round(x1) * 17 + Math.round(y1) * 19 + weight) % 2147483629;
+    };
+    // (the head's box is projected again only when the camera, the picture or the mirror body's place changed)
+    const ce = camera.matrixWorld.elements, cs = cueHeadSeen;
+    let same = cs[16] === mirror.serial && cs[17] === cssW && cs[18] === cssH && cs[19] === camera.fov;
+    for (let i = 0; same && i < 16; i++) if (cs[i] !== ce[i]) same = false;
+    if (!same) {
+      for (let i = 0; i < 16; i++) cs[i] = ce[i];
+      cs[16] = mirror.serial; cs[17] = cssW; cs[18] = cssH; cs[19] = camera.fov;
+      cueHead = mirrorHeadBoxPx(arrowCam());
+    }
+    const head = cueHead, hp = HUD_CLEAR.headPadPx;
+    if (head) put(head.x0 - hp, head.y0 - hp, head.x1 + hp, head.y1 + hp, HUD_CLEAR.headWeight);
+    // (the shown labels as laid out. Pass 2, HUD_CLEAR.labelsYield: the labels give way to the words again, as in update
+    // 70, so a label's layout no longer moves it onto the words and the words, which keep their place, are no longer
+    // chased round the ring during a look; pass 1's labels did not give way, and each jump of their layout onto the
+    // words moved them. Tried and dropped: every label's box at its anchor instead: a label pushed off its anchor by the
+    // bodies sits elsewhere, and at 800x600 the words took the "Left arm" pair's place and both were drawn faded.)
+    for (let i = 0; i < labelEls.length; i++) {
+      const L = labelEls[i], b = labelBoxes[i];
+      if (L && L.last && L.last.shown === true && b && b.w > 0 && b.h > 0) put(b.x - b.w / 2, b.y - b.h / 2, b.x + b.w / 2, b.y + b.h / 2, 1, true);
+    }
+    for (const set of [arrowSets.brain, arrowSets.mirror]) {
+      if (!set || !set.shown || !set.boxes) continue;
+      for (const d of ARROW_DIRS) { const b = set.boxes[d]; if (b) put(b.x0, b.y0, b.x1, b.y1, 2, true); }
+    }
+    for (const r of hudRectCache || []) if (!r.cue && r !== tipZone) put(r.x0, r.y0, r.x1, r.y1, HUD_CLEAR.hudWeight);
+    // (pass 2: the brain's midline, in the key; the boxes' list is the same array, refilled, not a new one a frame)
+    const half = cueMidline();
+    if (half) h = (h * 31 + Math.round(half.x0) * 7 + Math.round(half.y0) * 13 + Math.round(half.dxdy * 1000) * 3) % 2147483629;
+    const key = h * 64 + n;
+    if (key !== cueKeep.key || cueKeep.boxes.length !== n || cueKeep.half !== half) {
+      cueKeep.key = key; cueKeep.half = half;
+      const B = cueKeep.boxes;
+      B.length = n;
+      for (let i = 0; i < n; i++) B[i] = cueKeepPool[i];
+    }
+    return cueKeep;
   }
   /* ---- R5-scene (D16): 3D compass arrows: plan (ns-arrows3d), screen boxes, picks ---------------------------------- */
   // Saved brain carry/reference data still owns mirror BODY placement and range; compass planning uses the ACTIVE view.
@@ -12736,10 +12879,30 @@ export function createScene({
    * data-ns-alt, so an arrow does not jump when the hand pushes the card away), the other HUD cards, and the capture /
    * drag-to-look toast (measured, else its estimated bottom-centre box), so no arrow sits under them. */
   let arrowObsKey = '', arrowPanelObsKey = '', arrowScreenMaskKey = '', arrowMaskCameraKey = '';
+  // 24 November 2026 (round r33, UI5, HUD_CLEAR.promptKeep): the largest box the tutorial card has had in this window
+  // (CSS px), and its part of the plans' keys (promptPlanKey: set when the card is first seen, and again only when it
+  // grows over a tip that is shown, so the tips are not planned again for every step's card)
+  let promptKeep = null, promptKeepFor = '', promptPlanKey = '';
+  function notePromptKeep(r) {
+    const size = `${cssW}x${cssH}`;
+    if (promptKeepFor !== size) { promptKeep = null; promptKeepFor = size; promptPlanKey = ''; }
+    const was = promptKeep;
+    if (was && r.x0 >= was.x0 && r.y0 >= was.y0 && r.x1 <= was.x1 && r.y1 <= was.y1) return;
+    promptKeep = was ? { x0: Math.min(was.x0, r.x0), y0: Math.min(was.y0, r.y0), x1: Math.max(was.x1, r.x1), y1: Math.max(was.y1, r.y1) }
+      : { x0: r.x0, y0: r.y0, x1: r.x1, y1: r.y1 };
+    let under = !was;
+    for (const set of was ? [arrowSets.brain, arrowSets.mirror] : []) {
+      if (!set || !set.shown || !set.boxes) continue;
+      for (const d of ARROW_DIRS) { const b = set.boxes[d]; if (b && b.x0 < promptKeep.x1 && b.x1 > promptKeep.x0 && b.y0 < promptKeep.y1 && b.y1 > promptKeep.y0) under = true; }
+    }
+    if (under) promptPlanKey = [promptKeep.x0, promptKeep.y0, promptKeep.x1, promptKeep.y1].map(Math.round).join(',');
+  }
   function arrowObstacles() {
     const out = [], rects = readHudRects() || [];
     arrowPanelObsKey = rects.filter(r => r.info).map(r => `${r.x0},${r.y0},${r.x1},${r.y1}`).join(';');
+    if (promptKeepFor !== `${cssW}x${cssH}`) { promptKeep = null; promptKeepFor = `${cssW}x${cssH}`; promptPlanKey = ''; }
     for (const r of rects) {
+      if (HUD_CLEAR.promptKeep && r.prompt) notePromptKeep(r);
       if (r.info || r.orient || r.chip || r.quiet) continue;
       if (r.toast) continue;
       if (r.home) { out.push({ ...r.home }); if (r.alt) out.push({ ...r.alt }); } else out.push({ x0: r.x0, y0: r.y0, x1: r.x1, y1: r.y1 });
@@ -12750,7 +12913,9 @@ export function createScene({
     // off a motor area could otherwise land where the player aims)
     const ch = R5_BIGBRAIN.crosshairKeepPx;
     out.push({ x0: cssW / 2 - ch, y0: cssH / 2 - ch, x1: cssW / 2 + ch, y1: cssH / 2 + ch, crosshair: true });
-    arrowObsKey = out.map(r => `${Math.round(r.x0 / 8)},${Math.round(r.y0 / 8)},${Math.round(r.x1 / 8)},${Math.round(r.y1 / 8)}`).join(';');
+    // (UI5, HUD_CLEAR.promptKeep: the tutorial card, at the largest it has been here, whether it shows now or not)
+    if (HUD_CLEAR.promptKeep && promptKeep) out.push({ ...promptKeep, prompt: true });
+    arrowObsKey =out.map(r => `${Math.round(r.x0 / 8)},${Math.round(r.y0 / 8)},${Math.round(r.x1 / 8)},${Math.round(r.y1 / 8)}`).join(';');
     return out;
   }
   /** R558 (Message 7): the mirror body's on-screen box (CSS px) seen from a reference camera { yaw, pitch, position },
@@ -12773,6 +12938,30 @@ export function createScene({
       mirrorBoxWorld = { serial: mirror.serial, samples: mirror.samples, W };
     }
     const { xy, behind } = NsArrows.projectPointsPx(W, null, { width: cssW, height: cssH, fovYDeg: camera.fov, yaw: look.yaw, pitch: look.pitch, position: look.position || activePosition() });
+    return behind > 0 ? null : NsArrows.screenBoxOf(xy);
+  }
+  /** 24 November 2026 (round r33, UI5, HUD_CLEAR): the mirror body's head and neck on the screen (CSS px) seen from `cam`
+   * (an ns-arrows3d camera), from the box corners of your body's head and neck meshes as measured with the body
+   * (mirror.headSample, computeMirrorBody) through the mirror body's matrix: as drawn now (its slide in the outside view
+   * included), or with `ground` false without its moves along the ground, as mirrorBoxPx plans. Null when the mirror
+   * body is not shown or a point lies behind the camera. Its world points are worked out once per placement. */
+  let mirrorHeadWorld = null;
+  function mirrorHeadBoxPx(cam, ground = true) {
+    const S = mirror.headSample, T = mirror.transform;
+    if (!mirrorRoot.visible || !S || !T || !T.matrix || !cam) return null;
+    let W = mirrorHeadWorld && mirrorHeadWorld.serial === mirror.serial && mirrorHeadWorld.S === S && mirrorHeadWorld.ground === ground ? mirrorHeadWorld.W : null;
+    if (!W) {
+      const M = T.matrix, cc = T.carryCentre || T.centre;
+      const px = ground ? 0 : T.centre[0] - cc[0], py = ground ? 0 : T.centre[1] - cc[1], pz = ground ? 0 : T.centre[2] - cc[2];
+      W = new Float64Array(S.length);
+      for (let i = 0; i < S.length; i += 3) {
+        W[i] = M[0] * S[i] + M[4] * S[i + 1] + M[8] * S[i + 2] + M[12] - px;
+        W[i + 1] = M[1] * S[i] + M[5] * S[i + 1] + M[9] * S[i + 2] + M[13] - py;
+        W[i + 2] = M[2] * S[i] + M[6] * S[i + 1] + M[10] * S[i + 2] + M[14] - pz;
+      }
+      mirrorHeadWorld = { serial: mirror.serial, S, ground, W };
+    }
+    const { xy, behind } = NsArrows.projectPointsPx(W, null, cam);
     return behind > 0 ? null : NsArrows.screenBoxOf(xy);
   }
   // These metadata readers use retained scalar state only; no projection, bounds, matrix update, clock or GL work.
@@ -13143,6 +13332,9 @@ export function createScene({
     // and no tip is planned on the box round the crosshair of its reference view (a look at the start must not rest on an
     // arrow; with a literal mirror reflection the mirror body's head, and so its top side, is at eye level)
     const keepOut = hudObs.filter(r => !r.crosshair), crossBox = hudObs.find(r => r.crosshair) || null;
+    // (24 November 2026, UI5, HUD_CLEAR.promptKeep: the tutorial card is kept clear by every tip, also one on its side's
+    // middle, as the crosshair's box is: at 800x600 the brain's up arrow lay half under it)
+    const promptBox = hudObs.find(r => r.prompt) || null;
     const eye = referenceOriginSet ? referenceOrigin : [0, 0, 0];
     // 18 November 2026, late (package FLAT): the tips are planned in the view the player gets: the eye view's camera
     // stands behind and above the eye (ns-camera EYE_DOLLY), so the reference view is seen from there, not from the eye
@@ -13151,7 +13343,7 @@ export function createScene({
     const refAt = arrowRefAt;
     const U = tipBounds();
     const planFov = planLensFov(); // (the lens without the punch-in: a plan is not made again for a punch)
-    const view = `${cssW}x${cssH}|${planFov}|${eye[0]},${eye[1]},${eye[2]}|${planEye ? planEye.join(',') : ''}|${U.x0},${U.y0},${U.x1},${U.y1}`;
+    const view = `${cssW}x${cssH}|${planFov}|${eye[0]},${eye[1]},${eye[2]}|${planEye ? planEye.join(',') : ''}|${U.x0},${U.y0},${U.x1},${U.y1}|${promptPlanKey}`;
     const showB = Boolean(B.rig) && regionMode && brainTransformSet && Boolean(brainSupport) && brainGroup.visible;
     if (mirrorSamplesSeen !== mirror.samples) { mirrorSamplesSeen = mirror.samples; mirrorSamplesRev++; }
     const mirrorPlace = mirror.transform && mirror.samples && mirrorRoot.visible ? `${(mirror.transform.carryCentre || mirror.transform.centre).join(',')}|${mirror.transform.scale}|${mirrorSamplesRev}` : 'no-mirror';
@@ -13287,7 +13479,7 @@ export function createScene({
         if (!keptB) {
         bFromStart = useStartPlan(B, key);
         if (!bFromStart) {
-        const bAvoid = (crossBox ? [crossBox] : []).concat(mTop ? [mTop] : []);
+        const bAvoid = (crossBox ? [crossBox] : []).concat(mTop ? [mTop] : [], promptBox ? [promptBox] : []);
         // (22 November 2026, ARROW_REPLAN: the mirror body's tips where they stay, and the crosshair the player sees)
         if (mKeeps) for (const b of NsArrows.anchorBoxesPx(M.plan.anchors, { cam: refCam, sizePx: M.plan.sizes.sizePx })) bAvoid.push(b);
         const bLive = liveCrossFor(refCam, Array.from(centre));
@@ -13342,7 +13534,7 @@ export function createScene({
         const { start, look, refCam } = mirrorPlanCam(c);
         // the brain's tips come first: mirror tips that would overlap one move, as a pair, to the nearest clear place
         // (ns-arrows3d frameArrowSpots)
-        const avoid = (B.plan && B.plan.anchors ? NsArrows.anchorBoxesPx(B.plan.anchors, { cam: refCam, sizePx: B.plan.sizes.sizePx }) : []).concat(crossBox ? [crossBox] : []);
+        const avoid = (B.plan && B.plan.anchors ? NsArrows.anchorBoxesPx(B.plan.anchors, { cam: refCam, sizePx: B.plan.sizes.sizePx }) : []).concat(crossBox ? [crossBox] : [], promptBox ? [promptBox] : []);
         const mLive = liveCrossFor(refCam, Array.from(c), 'mirror'); // (22 November 2026, ARROW_REPLAN.liveCrosshair)
         if (mLive) avoid.push(mLive);
         // R558 (issue hunt 2, portrait: the panels cover the mirror body's lower half, and the frame fitted to the
@@ -13738,6 +13930,8 @@ export function createScene({
       if (!a) continue;
       q.rescue = `moved ${Math.round(best[0] - q.x)},${Math.round(best[1] - q.y)} px along its side${pass > 1 ? ' (your body in front: drawn over it)' : ''}`;
       q.x = best[0]; q.y = best[1]; plan.anchors[d] = a; moved++;
+      // (24 November 2026, UI5: the move in the arrow readback, frame.spots[d].rescue)
+      if (set.frameRecord && set.frameRecord.spots && set.frameRecord.spots[d]) set.frameRecord.spots[d].rescue = q.rescue;
     }
     if (moved) plan.frames = NsArrows.facingArrowFrames(plan.anchors, { cam, sizePx });
     set.rescued = moved;
@@ -13847,7 +14041,16 @@ export function createScene({
     // chest, hid it and took the presses meant for it.
     const mirrorKeep = mirrorBox && [mirrorBox.x0, mirrorBox.y0, mirrorBox.x1, mirrorBox.y1].every(Number.isFinite)
       ? { x0: mirrorBox.x0 - margin, y0: mirrorBox.y0 - margin, x1: mirrorBox.x1 + margin, y1: mirrorBox.y1 + margin } : null;
-    const clearFor = (tip, box) => clear(box) && !(tip.set === brain && mirrorKeep && overlaps(box, mirrorKeep));
+    // 24 November 2026 (round r33, UI5, HUD_CLEAR.mirrorTipsOffHead; the check of update 70: from outside the mirror
+    // body's up arrow lay across its face, 390 px2 of its head at 1600x900): the mirror body's own tips keep off its head
+    // and neck as drawn from here (the eye view's tips were planned round the whole body from another place, and seen
+    // from outside the up tip came down onto the face, which no rule here looked at).
+    const headBox = HUD_CLEAR.mirrorTipsOffHead && mirrorRoot.visible ? mirrorHeadBoxPx(ref) : null, hp = HUD_CLEAR.headPadPx;
+    const headKeep = headBox && [headBox.x0, headBox.y0, headBox.x1, headBox.y1].every(Number.isFinite)
+      ? { x0: headBox.x0 - hp, y0: headBox.y0 - hp, x1: headBox.x1 + hp, y1: headBox.y1 + hp } : null;
+    let headOff = true; // (pass 2: false while a mirror tip with no clear place near its body is placed as in update 70)
+    const clearFor = (tip, box) => clear(box) && !(tip.set === brain && mirrorKeep && overlaps(box, mirrorKeep))
+      && !(headOff && tip.set === mirrorSet && headKeep && overlaps(box, headKeep));
     // 20 November 2026 (hunt 6): the outside camera always looks through one point (camPose.centre), so the crosshair
     // can be put on a tip from one camera only: the one on the line from the tip back through that point, at the boom's
     // length, held inside the camera's reach (ns-camera followReach). Seen from that camera no other tip may lie on the
@@ -13906,11 +14109,19 @@ export function createScene({
       const x0 = set === mirrorSet && mirrorBox ? (mirrorBox.x0 + mirrorBox.x1 + sx * (mirrorBox.x1 - mirrorBox.x0)) / 2 : pos.x;
       const y0 = set === mirrorSet && mirrorBox ? (mirrorBox.y0 + mirrorBox.y1 + sy * (mirrorBox.y1 - mirrorBox.y0)) / 2 : pos.y;
       const at = NsArrows.frameAnchorFn(ref, anchor);
+      // (24 November 2026, UI5, HUD_CLEAR.mirrorTipsOffHead: a mirror body's moved tip stays on its own half of the
+      // body's box, the up tip above its middle and so on; kept off the head, the up tip otherwise went beside the legs)
+      const ownHalf = set === mirrorSet && mirrorBox && HUD_CLEAR.mirrorTipsOffHead ? [(mirrorBox.x0 + mirrorBox.x1) / 2, (mirrorBox.y0 + mirrorBox.y1) / 2] : null;
+      // (pass 2, HUD_CLEAR.mirrorTipReach: and inside the body's box grown by one tip size; none clear there: it stays)
+      const reachPad = ownHalf && HUD_CLEAR.mirrorTipReach ? 2 * Math.max(tip.hx, tip.hy) : NaN;
+      const reach = Number.isFinite(reachPad) ? { x0: mirrorBox.x0 - reachPad, y0: mirrorBox.y0 - reachPad, x1: mirrorBox.x1 + reachPad, y1: mirrorBox.y1 + reachPad } : null;
       let best = null, cost = Infinity;
       function consider(dx, dy) {
         const x = x0 + dx, y = y0 + dy, distance = Math.hypot(dx, dy);
         if (distance >= cost || opposite && sx * (x - opposite.pos.x) + sy * (y - opposite.pos.y) < 0) return;
+        if (ownHalf && sx * (x - ownHalf[0]) + sy * (y - ownHalf[1]) < 0) return;
         const moved = { x0: box.x0 + x - pos.x, x1: box.x1 + x - pos.x, y0: box.y0 + y - pos.y, y1: box.y1 + y - pos.y };
+        if (reach && (moved.x0 < reach.x0 || moved.y0 < reach.y0 || moved.x1 > reach.x1 || moved.y1 > reach.y1)) return;
         if (!clearFor(tip, moved)) return;
         const point = at ? at(x, y) : null;
         if (point && crowded(tip, point, placed)) return;
@@ -13918,13 +14129,19 @@ export function createScene({
       }
       // Search successive square perimeters, stopping once no further point could be nearer.
       const step = RESCUE_TIP.stepPx;
-      consider(0, 0);
-      for (let r = step; r <= RESCUE_TIP.maxSteps * step && r < cost; r += step) {
-        for (let v = -r; v <= r; v += step) {
-          consider(v, -r); consider(v, r);
-          if (Math.abs(v) < r) { consider(-r, v); consider(r, v); }
+      const search = () => {
+        consider(0, 0);
+        for (let r = step; r <= RESCUE_TIP.maxSteps * step && r < cost; r += step) {
+          for (let v = -r; v <= r; v += step) {
+            consider(v, -r); consider(v, r);
+            if (Math.abs(v) < r) { consider(-r, v); consider(r, v); }
+          }
         }
-      }
+      };
+      search();
+      // (pass 2, HUD_CLEAR.mirrorTipReach: no clear place off the head near the body; the place update 70 gave it,
+      // over the head, rather than one far from the body, which read as no one's)
+      if (!best && reach && headKeep) { headOff = false; search(); headOff = true; if (best) tip.onHead = true; }
       placed.push(tip);
       if (!best || !best.point) { occupied.push(box); return; }
       tip.anchor = best.point; tip.aim = undefined; tip.movedPx = Math.round(Math.hypot(best.x - pos.x, best.y - pos.y));
@@ -13946,7 +14163,7 @@ export function createScene({
       for (const tip of group) if (!tip.fixed) place(tip);
     }
     // what was checked and moved, for QA (inspect({ arrowTrace: true }).arrowTrace.value.outside)
-    outsideCompass.report = { aimed: Boolean(aimCam), ms: Math.round((nowMs() - fitT0) * 100) / 100, tips: tips.map(t => ({ tip: `${t.set.target}:${t.dir}`, kept: t.fixed, movedPx: t.movedPx ?? 0,
+    outsideCompass.report = { aimed: Boolean(aimCam), ms: Math.round((nowMs() - fitT0) * 100) / 100, tips: tips.map(t => ({ tip: `${t.set.target}:${t.dir}`, kept: t.fixed, movedPx: t.movedPx ?? 0, onHead: t.onHead === true,
       crowdedBy: t.crowdedBy || null, crowdedNow: aimCam ? (b => (b === t ? 'out of reach' : b ? `${b.set.target}:${b.dir}` : null))(crowded(t, t.anchor, tips)) : null })) };
     outsideCompass.key = key;
     outsideCompass.anchors = anchors;
@@ -14193,6 +14410,8 @@ export function createScene({
       brain: one(arrowSets.brain), mirror: one(arrowSets.mirror), stats: { ...arrowStats },
       // 20 November 2026 (hunts 6 and 9): the outside compass check as last made (retained data; null in the eye view)
       outside: outsideCompass && outsideCompass.report ? outsideCompass.report : null,
+      // 24 November 2026 (UI5, HUD_CLEAR.promptKeep): the tutorial card's box the tips keep clear of (CSS px), or null
+      promptKeepPx: promptKeep ? [promptKeep.x0, promptKeep.y0, promptKeep.x1, promptKeep.y1].map(v => Math.round(v)) : null,
       // R558 (hunt 2, FRAME_VIS): the last visibility decision (retained data only; nothing is recomputed here)
       visibility: { brain: { shown: arrowSets.brain.shown, hidden: arrowSets.brain.frameHidden, occluded: [...arrowSets.brain.occluded], ...(arrowSets.brain.vis ? copyCompassEvidence(arrowSets.brain.vis) : {}) },
         mirror: { shown: arrowSets.mirror.shown, hidden: arrowSets.mirror.frameHidden, occluded: [...arrowSets.mirror.occluded], ...(arrowSets.mirror.vis ? copyCompassEvidence(arrowSets.mirror.vis) : {}) },
@@ -14354,19 +14573,26 @@ export function createScene({
       mirror.resetPending = false;
       mirror.body = mirror.start.body;
       mirror.samples = mirror.body.sample;
+      mirror.headSample = mirror.start.headSample || null; // (UI5, HUD_CLEAR)
       mirror.ready = true;
       setMirrorPlane(mirror.start);
       return true;
     }
     mirror.resetPending = false;
     bodyGroup.updateMatrixWorld(true);
-    const bw = bodyGroup.matrixWorld, pts = [];
+    const bw = bodyGroup.matrixWorld, pts = [], head = [];
     const take = (mesh, matrix) => mirrorMeshCorners(mesh, matrix, (x, y, z) => pts.push(x, y, z));
     // Body records include face-layer primaries: their ghost/inset ancestry is not the anatomical world frame.
     // Match the in-place/mirror body route: local source-mm pose, THEN the canonical body mm-to-world-m parent.
-    for (const b of body) mirrorMeshCorners(b.mesh, b.mesh.matrix, (x, y, z) => {
-      pv.set(x, y, z).applyMatrix4(bw); pts.push(pv.x, pv.y, pv.z);
-    });
+    // (24 November 2026, UI5, HUD_CLEAR: the head's and the neck's meshes are also kept on their own, the same points,
+    // so the mirror body's head and neck can be found on the screen: mirrorHeadBoxPx)
+    for (const b of body) {
+      const inHead = b.anatomicalPart === 'face' || b.anatomicalPart === 'neck';
+      mirrorMeshCorners(b.mesh, b.mesh.matrix, (x, y, z) => {
+        pv.set(x, y, z).applyMatrix4(bw); pts.push(pv.x, pv.y, pv.z);
+        if (inHead) head.push(pv.x, pv.y, pv.z);
+      });
+    }
     eyeRig.updateMatrixWorld(true);
     for (const b of bones) { b.mesh.updateMatrixWorld(true); take(b.mesh, b.mesh.matrixWorld); }
     armSkinCpuAll(); bodyGpuCpuAll(); // 18 November 2026: the processor copies of the skins (GPU skin), before the corners are read
@@ -14377,8 +14603,10 @@ export function createScene({
       mirror.body = NsMirror.bodyBoundsFromPoints(Float64Array.from(pts), { forward: fwd });
     } catch (err) { mirror.error = String((err && err.message) || err); return false; }
     mirror.samples = mirror.body.sample;
+    mirror.headSample = head.length >= 3 ? Float64Array.from(head) : null;
     mirror.ready = true;
     setMirrorPlane(null, true);
+    if (mirror.start) mirror.start.headSample = mirror.headSample;
     return true;
   }
   /** R558: the drawn meshes of one body ('own': your body and arm; 'mirror': their twins) with the matrix from their
@@ -14658,6 +14886,9 @@ export function createScene({
         if (grid && grid.hits({ x0: x, y0: y, x1: x + 0.01, y1: y + 0.01 }) > 0) behindMotor++;
       }
       if (n) out.onScreen = { box: [Math.round(x0), Math.round(y0), Math.round(x1), Math.round(y1)], heightPx: Math.round(y1 - y0), heightFrac: Math.round(((y1 - y0) / cssH) * 1000) / 1000, topFrac: Math.round((y0 / cssH) * 1000) / 1000, bottomFrac: Math.round((y1 / cssH) * 1000) / 1000, coveredByBrain: Math.round((inBrain / n) * 1000) / 1000, behindMotor: grid ? Math.round((behindMotor / n) * 1000) / 1000 : null, samples: n };
+      // (24 November 2026, UI5, HUD_CLEAR: the head and neck as drawn now, the box the cue's words and, from outside, the
+      // mirror body's own tips keep clear of; CSS px)
+      if (out.onScreen) { const hb = mirrorHeadBoxPx(arrowCam()); out.onScreen.headPx = hb ? [hb.x0, hb.y0, hb.x1, hb.y1].map(v => Math.round(v)) : null; }
     }
     return out;
   }
@@ -14810,6 +15041,19 @@ export function createScene({
     if (!BRAIN_GAP.on || !brainGapUniform.value.w || !k || k.kind < 2) return null;
     const key = u.nsGapPart !== undefined ? u.nsGapPart : (u.nsGapPart = brainGapPartKey(h.object.name));
     return key && (!k.side || brainGapOpen(gapLocalOf(h)) > 0.5) ? key : null;
+  }
+  /** 24 November 2026 (ns-app FREE_AIM, section 206): the ray from the camera through CSS point (x, y), world metres:
+   * { origin: [x, y, z], dir: [x, y, z] (unit) } or null. The same ray controlLayersAt picks along, so that with a free
+   * pointer the look's own classifier can be asked about what is drawn under the pointer. */
+  const aimRayPoint = new THREE.Vector3(), aimRayDir = new THREE.Vector3();
+  function rayAt(x, y) {
+    if (!(cssW > 0 && cssH > 0 && Number.isFinite(x) && Number.isFinite(y))) return null;
+    camera.updateMatrixWorld(true);
+    aimRayPoint.set((x / cssW) * 2 - 1, 1 - (y / cssH) * 2, 0.5).unproject(camera);
+    aimRayDir.copy(aimRayPoint).sub(camera.position);
+    if (!(aimRayDir.lengthSq() > 0)) return null;
+    aimRayDir.normalize();
+    return { origin: [camera.position.x, camera.position.y, camera.position.z], dir: [aimRayDir.x, aimRayDir.y, aimRayDir.z] };
   }
   function controlLayersAt(x, y) {
     if (!(cssW > 0 && cssH > 0 && Number.isFinite(x) && Number.isFinite(y))) return null;
@@ -15896,7 +16140,11 @@ export function createScene({
       obst.push({ x0: cssW / 2 - 60, y0: cssH / 2 - 32, x1: cssW / 2 + 60, y1: cssH / 2 + 32 }); // crosshair + hover label zone
       if (reserveRight > 0) obst.push({ x0: cssW - reserveRight, y0: 0, x1: cssW, y1: cssH });
       if (reserveBottom > 0) obst.push({ x0: 0, y0: cssH - reserveBottom, x1: cssW, y1: cssH });
-      for (const r of hudRects) if (!(orientLive && r.orient)) obst.push(r);
+      // (24 November 2026, UI5, HUD_CLEAR.cueWords: the tutorial cue's words find their own place clear of the shown
+      // labels, guideCueKeepOut. With HUD_CLEAR.labelsYield (pass 2, on) the labels still give way to the words, as in
+      // update 70: the words keep their place, so a label's layout no longer chases them round the ring. Pass 1
+      // (labelsYield false) left the words out of the labels' obstacles; a cue's ring stays an obstacle either way)
+      for (const r of hudRects) if (!(orientLive && r.orient) && !(HUD_CLEAR.cueWords && !HUD_CLEAR.labelsYield && r.cue && !r.ring)) obst.push(r);
       if (orientLive) for (const r of orientLive) obst.push(r);
       if (arrowsShown && arrowLayout) for (const d of ARROW_DIRS) {
         const p = arrowLayout[d];
@@ -16817,6 +17065,7 @@ export function createScene({
     setQuality,
     brainCoversRect,
     motorCoversRect,
+    guideCueKeepOut, // (24 November 2026, UI5: what the tutorial cue's words keep clear of)
     qualityState,
     setBrainDistanceScale,
     // R5-scene (round 5: D16 arrows, D17 glow, D18 third person, D19 mirror body; round5/R5-scene-NOTES.md)
@@ -16832,7 +17081,7 @@ export function createScene({
     /** R5-mirror's name for it (round5/R5-mirror-NOTES.md 4.1: scene.setMirror(NM.mirrorTransform(state))). */
     setMirror: setMirrorView,
     mirrorState,
-    mirrorPartAt, graspTargetAt, controlLayersAt, reconcileMirrorCarry, setHeldItem, setLimbFlash, setPartGlows,
+    mirrorPartAt, graspTargetAt, controlLayersAt, rayAt, reconcileMirrorCarry, setHeldItem, setLimbFlash, setPartGlows,
     collisionItems, collisionStats, mirrorMatrices, setMirrorCorrection, setMirrorReach, // R558 (Message 12): keep the three items apart
     mirrorPlacementNow,
     bodyKeepOut,
@@ -17370,7 +17619,7 @@ export function createHud(hudRoot) {
   slots.limitsShort = essential;
 
   const cross = make('div', 'ns-crosshair', root);
-  let crossActive = false, crossHold = '';
+  let crossActive = false, crossHold = '', crossAway = false;
   make('span', 'ns-crosshair-h', cross);
   make('span', 'ns-crosshair-v', cross);
   // A2-render R1: label of the control region under the crosshair (explicit `hover` text, else derived from `gaze`).
@@ -17426,11 +17675,13 @@ export function createHud(hudRoot) {
           if (key === 'orientationLabels') orientText[k].long = v[k]; else orientText[k].short = v[k];
           showOrientText(k, orientText[k].shortWanted);
         }
-      } else if (key === 'crosshairActive' || key === 'crosshairHold') {
+      } else if (key === 'crosshairActive' || key === 'crosshairHold' || key === 'crosshairAway') {
         // R558 (Message 48): crosshairHold '' | 'empty' | 'item': a ring closes round the crosshair while Space grips
         // (white on nothing, the accent colour while something is held).
-        if (key === 'crosshairActive') crossActive = Boolean(v); else crossHold = v === 'item' || v === 'empty' ? v : '';
-        setClass(cross, `ns-crosshair${crossActive ? ' ns-crosshair-active' : ''}${crossHold ? ` ns-crosshair-grip${crossHold === 'item' ? ' ns-crosshair-holding' : ''}` : ''}`);
+        // 24 November 2026 (ns-app FREE_AIM, section 206): crosshairAway true while the free pointer is the aim: the mark
+        // at the middle of the picture is drawn faint.
+        if (key === 'crosshairActive') crossActive = Boolean(v); else if (key === 'crosshairAway') crossAway = v === true; else crossHold = v === 'item' || v === 'empty' ? v : '';
+        setClass(cross, `ns-crosshair${crossActive ? ' ns-crosshair-active' : ''}${crossAway ? ' ns-crosshair-away' : ''}${crossHold ? ` ns-crosshair-grip${crossHold === 'item' ? ' ns-crosshair-holding' : ''}` : ''}`);
       } else if (key === 'limitsShort') {
         const t = v === null || v === undefined || String(v).trim() === '' ? HUD_LIMITS_SHORT : String(v);
         if (essential.textContent !== t) essential.textContent = t; // never hidden: empty restores the default

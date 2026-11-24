@@ -182,6 +182,12 @@ try {
     await page.waitForFunction(() => !window.__nsQA.inspect().state.objectCarry.held);
     const displaced = await inspect();
     assert.notDeepEqual(displaced.mirrorCentre, before.mirrorCentre);
+    // 24 November 2026 (DESIGN-DECISIONS section 206): until main's drag-to-look start Space captured the pointer, so the
+    // move back below turned the look back and the keys that follow were pressed with the crosshair as the aim. Space
+    // now leaves the pointer free (the carry above turned the look with it all the same), and a free pointer's move
+    // back would turn nothing and would itself be the aim (FREE_AIM). The pointer is captured here, where the carry left
+    // it, so the same move back restores the look and the walk goes on with the crosshair, as this path always did.
+    await captureMouse(page, x + dx, y + dy);
     await page.mouse.move(...(returnPoint || [x, y]));
     return nextFrames(displaced.frames, 8);
   }

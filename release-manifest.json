@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-24-body-70-free-look",
+  "version": "experimental-2026-11-24-body-update-71",
   "experimental": true,
-  "source": "Full and Lite start with a free pointer. Drag on empty space to look or choose Capture mouse from the Escape menu. Both editions share a motor strip and mirror body, and include the current trunk and limb movement.",
+  "source": "Body update 71. With the pointer free, as the game starts, the pointer is the aim: a motor area it rests on is named and moves its body part, and a click presses it. Full and Lite share the game; drag on empty space to look or choose Capture mouse from the Escape menu.",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -32,8 +32,8 @@
     },
     {
       "path": "DESIGN-DECISIONS.md",
-      "bytes": 998138,
-      "sha256": "69e01a3c87d717a4c831c5670312a86a7dd53b50ff02c89fef01f892ff6fd21e"
+      "bytes": 1028708,
+      "sha256": "0e2a94809248cd9c7975d79f9a27603e1d88aa982951d0223180d0ca4c4bfbc3"
     },
     {
       "path": "LAUNCHERS.md",
@@ -47,13 +47,13 @@
     },
     {
       "path": "PLAYER-GUIDE-TECHNICAL.md",
-      "bytes": 2469,
-      "sha256": "c7096518c47f83b407323ca114119f8c52b212693e3e9d8619018fc3a6bc8325"
+      "bytes": 2756,
+      "sha256": "acde3a496542fb1859ef43def594de687491d6257ef00c78bb388036f301e63a"
     },
     {
       "path": "PLAYER-GUIDE.md",
-      "bytes": 4062,
-      "sha256": "9a51a96189ccb5b5ce7c7c9ada8ebd5845b66ff93bbef142842e85ae9ea1ec74"
+      "bytes": 4190,
+      "sha256": "078bc1f63e6332e6e20640c3c0838478de21467504a49b2d34b2e394a6fd11b3"
     },
     {
       "path": "PREVIEW-NOTES.html",
@@ -62,8 +62,8 @@
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 63255,
-      "sha256": "f96e25e437754c730ad7f64106566843a44234891b026c9fc9038af38e197f73"
+      "bytes": 64456,
+      "sha256": "f3c0b4f1928c8f4d052dfd3a22ef37ac7d749081c1daf765ea5b5475b260395a"
     },
     {
       "path": "README.md",
@@ -72,13 +72,13 @@
     },
     {
       "path": "START.html",
-      "bytes": 4510,
-      "sha256": "d91842a52bc81d1d4c08686aba1df048f46a42cdd343471cbdc211feba185674"
+      "bytes": 4507,
+      "sha256": "48950c3f0b06d21815ac04198931af955b437396894139ec9342b46f6be469a8"
     },
     {
       "path": "index.html",
-      "bytes": 3912,
-      "sha256": "8f748c2a4b5f809c4ecf3d808057d8705d50ea8de82250c8a8d8d40615fd5583"
+      "bytes": 3909,
+      "sha256": "39a931c752806f99f7496ed0eec66c1bc158920c2a0fbe4083b4a47101aab66e"
     },
     {
       "path": "inputs/FULLBODY-MESH-MANIFEST.json",
@@ -3932,8 +3932,8 @@
     },
     {
       "path": "scene/example/early-load.mjs",
-      "bytes": 6343,
-      "sha256": "3e78c34c509cee7cdc49e83a0eade2c977f90356bc7110be29d8a5a4c5af822e"
+      "bytes": 6414,
+      "sha256": "0a2877630baa7b317f8647e4607149c687bf576db8374ff6494fb0c1a89d6d01"
     },
     {
       "path": "scene/example/edition.mjs",
@@ -3947,8 +3947,8 @@
     },
     {
       "path": "scene/example/guide-cues.css",
-      "bytes": 2505,
-      "sha256": "4d85d0f7c1ab8d42291b93e1a4710086d46759a3db21ac8e99bef85b4c76ff34"
+      "bytes": 2824,
+      "sha256": "21d3a57f9910a643a835f33f084a8cb40cc79c7c8394e996cbb4a97e1852eb62"
     },
     {
       "path": "scene/example/index.html",
@@ -3962,8 +3962,8 @@
     },
     {
       "path": "scene/example/neurosurge.css",
-      "bytes": 56443,
-      "sha256": "477c7aea2722ede11848eab05cf091537d2ac91fa57b34836350db2d5eca5aba"
+      "bytes": 56709,
+      "sha256": "8e985797dea0fac5364caa5f465f5423fc6ce843675dd6e3b3cb634c5365ed78"
     },
     {
       "path": "scene/example/preview.css",
@@ -3987,8 +3987,8 @@
     },
     {
       "path": "scene/src/ns-app.mjs",
-      "bytes": 1168290,
-      "sha256": "2d9255ba580568e5f08e5b24de1addfca3cce43a5cfe37249f43f3b4e9cdf2b7"
+      "bytes": 1182390,
+      "sha256": "1da1cd9723562853d7ea67a96c633f3e003a50efc0c930287c575998ddf838af"
     },
     {
       "path": "scene/src/ns-area-halo.mjs",
@@ -4121,6 +4121,11 @@
       "sha256": "a8f0404281216340895dc35529f3e5ea4c9531c4a7c7bed6548b27651d5ec90a"
     },
     {
+      "path": "scene/src/ns-cue-place.mjs",
+      "bytes": 22098,
+      "sha256": "71d3d4776502ed120863cf659dd82020ca9c283478cfe2a1c4e6bddfb29618f1"
+    },
+    {
       "path": "scene/src/ns-dance.mjs",
       "bytes": 30503,
       "sha256": "d003b872124542dc715e0e93570ad5dfe0cbe27e972e65218c8b4e6c930e5101"
@@ -4177,8 +4182,8 @@
     },
     {
       "path": "scene/src/ns-guide-cues.mjs",
-      "bytes": 8921,
-      "sha256": "29d9d06d9573531ecb1cf2d1e198da558582a8450666fa35af232e6079f09cfa"
+      "bytes": 17211,
+      "sha256": "7cb1215c100299ae2c830b627bb8e4fb54d408fdfcf586785f1a31df6fc6c0ba"
     },
     {
       "path": "scene/src/ns-guide.mjs",
@@ -4312,8 +4317,8 @@
     },
     {
       "path": "scene/src/ns-scene-three.mjs",
-      "bytes": 1371833,
-      "sha256": "313230b7a100c57cb2f1269f1e186791e8e28f4aaf6903959fbca373cab7d264"
+      "bytes": 1393082,
+      "sha256": "41dd903fcafdf0be6c63e55b87c1e85b4ff304e545fd1c9de24da1f4f0f4c8e1"
     },
     {
       "path": "scene/src/ns-see.mjs",
@@ -4322,8 +4327,8 @@
     },
     {
       "path": "scene/src/ns-text.mjs",
-      "bytes": 153866,
-      "sha256": "f64765f5fef795e72a2f06d85a199803cb53b59319c30712e79b940fcb4f0b07"
+      "bytes": 154381,
+      "sha256": "04d59e9051c312e03aea0e2b1eb2e09c33e9383dac5660c85d187f3a9376e4dd"
     },
     {
       "path": "scene/src/ns-vessels.mjs",
@@ -4466,9 +4471,19 @@
       "sha256": "2651aacb764140ddd725acc77036ee514e09c5420a35f2cab65e97554a1aff11"
     },
     {
+      "path": "tests/browser-free-aim.mjs",
+      "bytes": 10409,
+      "sha256": "2f1807067e9076b340c2fc905a9668b47773278c1b8a8c6b46c4e3b0102032d0"
+    },
+    {
+      "path": "tests/browser-hud-clear.mjs",
+      "bytes": 16043,
+      "sha256": "7b709b9d8f1700bf8a3d37477ddde02a62af09bd580fc236f2b2a87f0dce00c5"
+    },
+    {
       "path": "tests/browser-keyboard-aim.mjs",
-      "bytes": 31417,
-      "sha256": "0cfd8c0bc857f9f0630197ff1df7be4c1f4c32a86039c1c6055200fa223bc3de"
+      "bytes": 32061,
+      "sha256": "cd5669d3683dac007611076954d37c12fa2a100d3f6ca4b5c908e12e3d23e7f0"
     },
     {
       "path": "tests/browser-limb-controls.mjs",
@@ -4502,8 +4517,8 @@
     },
     {
       "path": "tests/browser-player-focus.mjs",
-      "bytes": 11135,
-      "sha256": "84c55727d2ebc825bc1fe4160fdf5157eef7000d07f42b546cda9c9ca3ad480c"
+      "bytes": 11365,
+      "sha256": "4d678b6fcbc563a7550d7818232982ee1ab66ab74e81865f5cc206a441a96b22"
     },
     {
       "path": "tests/browser-punch-in.mjs",
@@ -4512,8 +4527,8 @@
     },
     {
       "path": "tests/browser-space-aim.mjs",
-      "bytes": 10498,
-      "sha256": "f1b1bcfb821b6102f0a9f3964a5a32553e60229c7a4d129583b91065e40fb052"
+      "bytes": 12566,
+      "sha256": "b5034540829d8388b0cf24f2019e8b8f0f8c8ac4a036716025764bbcad9f1df0"
     },
     {
       "path": "tests/browser-startup.mjs",
@@ -4527,8 +4542,8 @@
     },
     {
       "path": "tests/cam70.test.mjs",
-      "bytes": 9173,
-      "sha256": "5503f2ea7f532862c3a28161ce521be24c719bfc6851e510d3a028056313aab3"
+      "bytes": 9412,
+      "sha256": "00cbb7fcdd528b0d638b21a130917be40fd6270db9cf8a3d8f16306fa37118ea"
     },
     {
       "path": "tests/cancel-epoch.test.mjs",
@@ -4542,8 +4557,8 @@
     },
     {
       "path": "tests/capture-mouse.mjs",
-      "bytes": 435,
-      "sha256": "a16b38d61d0f6f9674d10486d763bbef1a4a26dd6307d05b8f8d5c52ac0155c4"
+      "bytes": 1064,
+      "sha256": "226cf001ca4bb65e574698341cbf98c1883ae2823e75dfbf02119891e17ba23c"
     },
     {
       "path": "tests/carry-release.test.mjs",
@@ -4631,6 +4646,11 @@
       "sha256": "17dfcb1b68d6165aa2c55d5b98ac29c5ed5025831e04f7fb9564f1e420d5b9a6"
     },
     {
+      "path": "tests/free-aim.test.mjs",
+      "bytes": 11230,
+      "sha256": "10939eac559524fc0899ec5806c46409fd0bd68af27f535e6335d58e3ade43fe"
+    },
+    {
       "path": "tests/guide-order.test.mjs",
       "bytes": 8343,
       "sha256": "8b655356181d7914e3db3bd49da05ab789029f5d238305cb6f4bf72db9c56465"
@@ -4657,8 +4677,8 @@
     },
     {
       "path": "tests/hud-words.test.mjs",
-      "bytes": 7806,
-      "sha256": "15bbe88da06c7bb740b32b35f7a8c1ffe6057cfdc181de0f8c04a96f1cea33e9"
+      "bytes": 7805,
+      "sha256": "b688a1d00f23e48f7a068f51f55668692140bdbee6b1bceb641b337cca1070e3"
     },
     {
       "path": "tests/info-settle.test.mjs",
@@ -4941,6 +4961,11 @@
       "sha256": "f500887e4bb177d16fc4475181b5dd4fa2e60b99678372555efcccadd21716e8"
     },
     {
+      "path": "tests/ui5.test.mjs",
+      "bytes": 24787,
+      "sha256": "815074a981fcb6767d8bddb32fffcb0fdf57511b04996c985592e67a83fb2d68"
+    },
+    {
       "path": "tests/vessels.test.mjs",
       "bytes": 11512,
       "sha256": "d0a39968efe31a0265fea3d601ca1dbf845cd3f74c761b3f40c398bc5b180089"
@@ -4957,8 +4982,8 @@
     },
     {
       "path": "tests/words2.test.mjs",
-      "bytes": 16322,
-      "sha256": "30eec2bb94546e39675ecf2d9739c6b80ac7e55b09d587119eb6497bf641123a"
+      "bytes": 16420,
+      "sha256": "60f597b5d008ea5a938035014d5b14193fa3c31590fb25741ddd40588b34b86f"
     },
     {
       "path": "tools/build-assembly-parts.mjs",

@@ -129,9 +129,11 @@ try {
   assert.doesNotMatch(fullInstructions, /trunk bends/);
   const fullControls = await shell.locator('.ns-shell-help').innerText();
   assert.match(fullControls, /past their reach your eyes turn further/);
-  assert.match(fullControls, /in the eye view the chosen limb goes with your view/);
+  // (24 November 2026: main's drag-to-look words: "As you look up or down in the eye view, the chosen limb goes with your view")
+  assert.match(fullControls, /in the eye view, the chosen limb goes with your view/);
   assert.doesNotMatch(fullControls, /trunk bends/);
-  assert.match(fullInstructions, /Rest your look on a motor area to move its body part. Click to repeat the movement./);
+  // (24 November 2026, FREE_AIM, section 206: the pointer is free at the start and is the aim: "Point at")
+  assert.match(fullInstructions, /Point at a motor area to move its body part. Click to repeat the movement./);
   assert.doesNotMatch(fullInstructions, /press a number (?:key|to choose)|press the numbers/i);
   await shell.getByRole('button', { name: 'Show the short instructions' }).click();
   await page.keyboard.press('Escape');

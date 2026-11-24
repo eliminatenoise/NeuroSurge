@@ -456,6 +456,9 @@ html, body {
 }
 .ns-crosshair-grip::before { inset: -3px; border-color: rgba(255, 255, 255, 0.8); box-shadow: 0 0 3px rgba(0, 0, 0, 0.9); }
 .ns-crosshair-holding::before { border-color: var(--ns-accent); }
+/* 24 November 2026 (ns-app FREE_AIM, section 206): while the free pointer is the aim the mark at the middle of the
+   picture is faint: it still shows where the look points, and no longer reads as the place a click acts on. */
+.ns-crosshair-away { opacity: 0.35; }
 
 /* Orientation labels: each extends AWAY from the band from its anchor (ns-scene-three ORIENTATION_ALIGN). */
 .ns-orient {

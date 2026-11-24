@@ -5,7 +5,7 @@
 ## Move a body part from the brain
 
 1. Open either edition in a desktop browser with a keyboard and mouse or trackpad. Press and hold on an empty part of the picture, then drag to look around. Let go to stop turning.
-2. Look at a coloured piece of the brain. The coloured pieces show the **motor strip**, a region of the brain that helps control movement. A label near the middle of the screen names the part the game will move. For example, a shoulder area moves the shoulder. Click on the area to repeat the move. Press **Left Arrow** or **Right Arrow** to aim at the next area in that direction.
+2. Point at a coloured piece of the brain and let the pointer rest there. The coloured pieces show the **motor strip**, a region of the brain that helps control movement. A label beside the pointer names the part, and that part of the body moves. For example, a shoulder area moves the shoulder. Click on the area to repeat the move. Press **Left Arrow** or **Right Arrow** to aim at the next area in that direction. The mark in the middle of the picture then does the pointing until you move the mouse again.
 3. Watch your body and the mirror body. Both make the same movement. The mirror body gives you another view of it. Press **E** to change between the eye view and the outside view. In the eye view, moving the mouse turns the camera from one fixed place. From outside, moving the mouse takes the camera around the body at a steady distance. The game leaves the view where you set it until you move it again.
 4. Press **Escape** to open the controls. Open **View tutorial** to follow the steps. The tutorial can mark a visible motor area and the part of the body it controls. You can resume or restart the tutorial in the same menu.
 

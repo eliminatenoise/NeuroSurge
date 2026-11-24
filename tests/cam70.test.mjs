@@ -111,7 +111,9 @@ test('the start check and mirror-compass look at the mirror body\'s tips against
   assert.match(ka, /assert\.ok\(inLimbBand\(end, BAND_SLACK\), `\$\{name\}: from the start view/, 'the band, not only the picture');
 });
 
-test('a guide cue\'s words are an obstacle for the region labels only (a label gives way to them)', () => {
+// (section 205, UI5: the words now find their own place clear of the labels, HUD_CLEAR.cueWords, and the labels no longer
+// give way to them; the words are still read with the HUD boxes and still kept out of the arrows' plan: tests/ui5.test.mjs)
+test('a guide cue\'s words are read with the HUD boxes and kept out of the arrows\' plan', () => {
   const r = sceneFn('readHudRectsNow(key)');
   const i = r.indexOf(".ns-guide-cues .ns-guide-mark-name");
   assert.ok(i > 0, 'the cue words are read with the HUD boxes');

@@ -79,7 +79,7 @@ test('H18: an area that moved nothing during the first tutorial step asks for an
   let v = guideView(g, 1);
   assert.equal(v.goalId, 'lookStrip');
   assert.equal(v.text, GUIDE.partial.lookStripStill);
-  assert.equal(quietPromptText(v, GUIDE.short), 'Nothing moved: look at another colour');
+  assert.equal(quietPromptText(v, GUIDE.short), 'Nothing moved: aim at another colour');
   // a click on an area that moves clears the hint (a click does not do this step), a look that moves does the step
   g = guideStep(g, [{ type: 'activate', regionId: 'rh_brow', isLeftArm: false, kind: 'effector', moves: true, source: 'click' }], 2);
   assert.equal(guideView(g, 2).text, GUIDE.goals.lookStrip);

@@ -11,6 +11,8 @@
 .ns-guide-mark[data-vertical="below"] .ns-guide-mark-name{top:calc(100% + 5px);bottom:auto}
 .ns-guide-mark[data-anchor="right"] .ns-guide-mark-name{left:50%;transform:none}
 .ns-guide-mark[data-anchor="left"] .ns-guide-mark-name{left:auto;right:50%;transform:none}
+/* 24 November 2026 (UI5): the words at the place the game worked out round the ring (ns-cue-place), clear of the mirror body's head and neck, the labels, the arrows and the cards */
+.ns-guide-mark[data-place] .ns-guide-mark-name{left:var(--ns-cue-x,50%);top:var(--ns-cue-y,auto);right:auto;bottom:auto;transform:none}
 .ns-guide-key{display:inline;color:inherit;background:#26323f;border:1px solid #a5bac9;border-radius:3px;padding:0 .15em;font:inherit;font-size:.94em;white-space:nowrap}
 .ns-guide-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 .ns-guide-actions{max-width:40rem;color:inherit;font:inherit}

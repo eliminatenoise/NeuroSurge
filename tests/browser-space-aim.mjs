@@ -92,20 +92,27 @@ try {
     }
     return start;
   }
-  async function hold(name, target) {
+  // 24 November 2026 (DESIGN-DECISIONS section 206): since main's drag-to-look start Space no longer captures the pointer
+  // ("Capture mouse" on the pause page is the only request): a hold and its release leave the pointer as it was, free
+  // (lock null) or captured ('ns-canvas'). Until then both asserted 'ns-canvas' always.
+  async function hold(name, target, lock = null) {
     await page.keyboard.down('Space');
     const visible = await hasTip(`Holding the ${name}`);
     assert.equal(await hasTip('Let go of Space.'), 'Let go of Space.');
     const held = await settled();
-    assert.equal(held.lock, 'ns-canvas');
+    assert.equal(held.lock, lock, 'Space leaves the pointer as it was');
     assert.equal(held.carry, target);
+    // Past the tap-to-keep threshold (ns-controls SPACE_GESTURE.tapMaxMs, 250 ms): a Space let go sooner is a TAP, which
+    // keeps the hold, and release() then waited five seconds for a hold that was meant to stay. On a quick machine the
+    // tip and six frames took less than that (seen in the publish tree on 24 November, the last hold of this file).
+    await page.waitForTimeout(320);
     return { ...held, visible };
   }
-  async function release() {
+  async function release(lock = null) {
     await page.keyboard.up('Space');
     await page.waitForFunction(() => !window.__nsQA.inspect().state.objectCarry.held, null, { timeout: 5000 });
     const after = await settled();
-    assert.equal(after.lock, 'ns-canvas');
+    assert.equal(after.lock, lock, 'letting go leaves the pointer as it was');
     assert.equal(after.carry, null);
     return after;
   }
@@ -145,11 +152,13 @@ try {
   if (process.env.NS_SPACE_SCREENSHOTS) await page.screenshot({ path: `${process.env.NS_SPACE_SCREENSHOTS}-aim.png` });
 
   const mirror = await hold('mirror body', 'mirror');
+  // (section 206, FREE_AIM: Space took what the POINTER was on, the mirror body; while Space holds, the crosshair is the
+  // aim: the look carries what is held)
   assert.equal(mirror.input.at, 'crosshair');
   // (24 November 2026: the crosshair stays on what the look was on when the outside view opened; with main's camera that
   // is the mirror body's trunk, until then it was the brain)
-  assert.equal(mirror.input.front, initial.input.front, 'auto-capture leaves the crosshair where the look was');
-  assert.deepEqual(mirror.look, initial.look, 'auto-capture must keep the camera direction');
+  assert.equal(mirror.input.front, initial.input.front, 'taking hold leaves the crosshair where the look was');
+  assert.deepEqual(mirror.look, initial.look, 'taking hold must keep the camera direction');
   if (process.env.NS_SPACE_SCREENSHOTS) await page.screenshot({ path: `${process.env.NS_SPACE_SCREENSHOTS}-hold.png` });
   await page.keyboard.down('w');
   await page.waitForFunction(z => window.__nsQA.inspect().state.objectCarry.mirror.centreWorldM[2] < z - 0.02,
@@ -159,8 +168,25 @@ try {
   assert.ok(dropped.centre[2] < mirror.centre[2] - 0.02);
   await page.mouse.move(visibleMirrorTorso[0] + 42, visibleMirrorTorso[1] - 25);
   const moved = await settled();
-  assert.notDeepEqual(moved.look, dropped.look, 'the camera must still follow the mouse after dropping');
+  // (section 206: after the hold the pointer is free as before it and is the aim again; moving it does not turn the
+  // camera, a drag on empty space does. Until main's drag-to-look start the hold had captured the pointer for good.)
+  assert.equal(moved.input.at, 'pointer', 'after the hold the pointer is the aim again');
+  assert.deepEqual(moved.look, dropped.look, 'a free pointer does not turn the camera');
   assert.deepEqual(moved.centre, dropped.centre, 'the dropped mirror stays where it was left');
+  {
+    const [bx0, by0, bx1, by1] = moved.mirrorBox || [0, 0, 0, 0];
+    const ex = bx1 < width - 160 ? Math.min(width - 40, Math.round(bx1 + 120)) : Math.max(40, Math.round(bx0 - 120)), ey = height - 60;
+    await page.mouse.move(ex, ey);
+    const empty = await settled();
+    if (empty.input.front === null && empty.input.at === 'pointer') {
+      await page.mouse.down();
+      for (let i = 1; i <= 8; i++) await page.mouse.move(ex - i * 10, ey - i * 3);
+      await page.mouse.up();
+      const dragged = await settled();
+      assert.notDeepEqual(dragged.look, dropped.look, 'a drag on empty space still turns the camera after dropping');
+      assert.deepEqual(dragged.centre, dropped.centre, 'and leaves the dropped mirror where it was');
+    }
+  }
 
   await openOutside();
   await page.mouse.move(...visibleMirrorTorso);
@@ -185,8 +211,8 @@ try {
   assert.equal(locked.carry, null, 'choosing Capture mouse does not take hold of the body');
   const onBrain = await lookAtBrain(visibleMirrorTorso);
   assert.ok(onBrain.look[1] >= locked.look[1], 'the look went up to the brain, or was on it');
-  const crosshairBrain = await hold('brain', 'brain');
-  await release();
+  const crosshairBrain = await hold('brain', 'brain', 'ns-canvas');
+  await release('ns-canvas');
 
   assert.deepEqual(errors, []);
   console.log(JSON.stringify({
