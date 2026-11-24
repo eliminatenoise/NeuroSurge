@@ -27,8 +27,16 @@ export const LOAD_WORDS = Object.freeze({
   failed: 'Loading did not finish.',
   stalled: 'Loading has stopped.',
   hint: 'Check your connection, then try again.',
-  again: 'Try again'
+  again: 'Try again',
+  // 25 November 2026 (section 212): the launcher refused the address (a value it does not know for `edition` or `case`)
+  refused: 'This address is not one the game knows.',
+  refusedHint: 'The game starts from its usual address.',
+  start: 'Start the game'
 });
+/** The launcher's own refusal of an address (scene/example/eye-view-r558.mjs throws an Error with this message). The
+ * guard then shows the 'address' panel: its button loads the page without the address's parameters, since loading the
+ * same address again, as "Try again" does, can only be refused again. */
+export const ADDRESS_REFUSED = 'Unsupported game edition or test case';
 
 /**
  * The failure panel: plain words, the reason in small print, and a "Try again" button that loads the page again.
@@ -40,10 +48,16 @@ export function showLoadFailure({ host, kind = 'failed', detail = '', win = glob
     panel.className = 'ns-load-fail';
     panel.dataset.kind = kind;
     panel.setAttribute('role', 'alert');
-    const h = doc.createElement('p'); h.className = 'ns-load-fail-title'; h.textContent = kind === 'stalled' ? words.stalled : words.failed;
-    const hint = doc.createElement('p'); hint.className = 'ns-load-fail-hint'; hint.textContent = words.hint;
-    const b = doc.createElement('button'); b.type = 'button'; b.className = 'ns-load-fail-again'; b.textContent = words.again;
-    b.addEventListener('click', () => { if (typeof onAgain === 'function') onAgain(); else { try { win.location.reload(); } catch { /* the browser's own reload still works */ } } });
+    const address = kind === 'address';
+    const h = doc.createElement('p'); h.className = 'ns-load-fail-title'; h.textContent = address ? words.refused : kind === 'stalled' ? words.stalled : words.failed;
+    const hint = doc.createElement('p'); hint.className = 'ns-load-fail-hint'; hint.textContent = address ? words.refusedHint : words.hint;
+    const b = doc.createElement('button'); b.type = 'button'; b.className = 'ns-load-fail-again'; b.textContent = address ? words.start : words.again;
+    b.addEventListener('click', () => {
+      if (typeof onAgain === 'function') onAgain();
+      // (the same page without its parameters; any other failure: the same address again)
+      else if (address) { try { win.location.assign(win.location.pathname); } catch { /* the visitor can still edit the address */ } }
+      else { try { win.location.reload(); } catch { /* the browser's own reload still works */ } }
+    });
     panel.append(h, hint, b);
     if (detail) { const d = doc.createElement('p'); d.className = 'ns-load-fail-detail'; d.textContent = String(detail).slice(0, 240); panel.appendChild(d); }
     host.appendChild(panel);
@@ -124,10 +138,10 @@ export function installLoadGuard({ win = globalThis.window, doc = globalThis.doc
     },
     takenOver() { st.taken = true; last = now(); if (watch) watch.news(); },
     advance() { last = now(); if (watch) watch.news(); },
-    fail(detail = '') {
+    fail(detail = '', kind = 'failed') {
       if (st.finished) return;
       st.failed = String(detail || 'failed'); st.finished = true;
-      quit(); freeze('failed'); show('failed', detail);
+      quit(); freeze('failed'); show(kind === 'address' ? 'address' : 'failed', detail);
     },
     finish() {
       if (st.finished && !st.failed) return;
@@ -147,7 +161,10 @@ export function installLoadGuard({ win = globalThis.window, doc = globalThis.doc
       return;
     }
     // a script that threw while the page's scripts were starting, before the launcher took over
-    if (t === win && !st.taken && ev.error) guard.fail(String(ev.error && ev.error.message || ev.message || ev.error));
+    if (t === win && !st.taken && ev.error) {
+      const said = String(ev.error && ev.error.message || ev.message || ev.error);
+      guard.fail(said, said === ADDRESS_REFUSED ? 'address' : 'failed');
+    }
   }
   try { win.addEventListener('error', onError, true); } catch { /* no events here */ }
   // every file the browser finishes is news (the game's scripts arriving one by one, before any of them runs)

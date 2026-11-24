@@ -15,6 +15,11 @@ const KEYS = {
   thirdPerson: /\bE\b/g,
   readInfo: /\bR\b/g
 };
+/** 25 November 2026 (DESIGN-DECISIONS section 213; a tester who followed only the rings: steps 2, 5 and 7 showed the
+ * same ring with no sign of whether to click or to drag). The hand's part of a step, drawn as a small picture under
+ * the step's number on the tutorial's card (guide-cues.css, `data-ns-gesture` on the card): point at it, click it,
+ * press and drag it, or carry it. A step done with keys has its key cards and no picture. */
+export const GESTURES = Object.freeze({ lookStrip: 'point', pressArea: 'click', dragLimb: 'drag', dragBrain: 'carry', orbit: 'drag' });
 let nextId = 0;
 
 function element(parent, tag, className, text) {
@@ -266,7 +271,18 @@ export function createGuideCues(host, { prompt: givenPrompt = null } = {}) {
     return own.place;
   }
   const scope = host.closest('.ns-app') || host;
+  // (section 213, GESTURES) the card that holds the prompt's words carries the step's hand picture as an attribute
+  let gestureCard = null, gestureNow = '';
+  function setGesture(name) {
+    const card = prompt && typeof prompt.closest === 'function' ? prompt.closest('.ns-prompt') : null;
+    if (card !== gestureCard && gestureCard && gestureCard.dataset) { try { delete gestureCard.dataset.nsGesture; } catch { /* gone */ } gestureNow = ''; }
+    gestureCard = card;
+    if (!card || !card.dataset || gestureNow === name) return;
+    if (name) card.dataset.nsGesture = name; else delete card.dataset.nsGesture;
+    gestureNow = name;
+  }
   function clearPrompt() {
+    setGesture('');
     if (prompt && prompt.querySelector('.ns-guide-key')) prompt.textContent = prompt.textContent;
     descriptionLink(prompt, description.id, false);
     lastStep = null;
@@ -297,6 +313,7 @@ export function createGuideCues(host, { prompt: givenPrompt = null } = {}) {
       descriptionLink(prompt, description.id, true);
       lastChild = prompt.firstChild;
     }
+    if (active) setGesture(GESTURES[step] || '');
     lastStep = step;
     const motor = AREA_STEPS.has(step) && validPoint(input.motor) ? input.motor : null;
     const limb = (motor || LIMB_STEPS.has(step)) && validPoint(input.limb) ? input.limb : null;

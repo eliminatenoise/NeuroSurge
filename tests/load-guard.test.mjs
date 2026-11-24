@@ -4,7 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { installLoadGuard, LOAD_STALL_MS, LOAD_QUIET_MS } from '../scene/src/ns-load-guard.mjs';
+import { installLoadGuard, LOAD_STALL_MS, LOAD_QUIET_MS, ADDRESS_REFUSED, LOAD_WORDS } from '../scene/src/ns-load-guard.mjs';
 
 function fakePage() {
   let t = 0, tick = null; const listeners = {}; const nodes = [];
@@ -90,6 +90,32 @@ test('a script that throws before the launcher has taken over is a failed load; 
   g.fail('HTTP 404 for a file');
   assert.equal(b.panels().length, 1);
   assert.ok(words(b.panels()[0])[3].includes('HTTP 404'));
+});
+
+test('an address the launcher refuses: its own panel, and the button loads the page without the parameters (section 212)', () => {
+  const p = fakePage(); let went = null;
+  p.win.location.pathname = '/scene/example/preview.html';
+  p.win.location.assign = to => { went = to; };
+  installLoadGuard({ win: p.win, doc: p.doc });
+  p.fire('error', { target: p.win, error: new Error(ADDRESS_REFUSED), message: 'Uncaught Error' });
+  assert.equal(p.panels().length, 1);
+  const panel = p.panels()[0], w = words(panel);
+  assert.equal(panel.dataset.kind, 'address');
+  assert.deepEqual(w.slice(0, 3), [LOAD_WORDS.refused, LOAD_WORDS.refusedHint, LOAD_WORDS.start]);
+  assert.doesNotMatch(w.slice(0, 3).join(' '), /connection|again/i, 'the same address again can only be refused again');
+  panel.children[2].on.click();
+  assert.equal(went, '/scene/example/preview.html');
+  assert.equal(p.win.reloaded, 0);
+  // the launcher throws exactly this, and no longer refuses a parameter it does not know
+  const launcher = fs.readFileSync(new URL('../scene/example/eye-view-r558.mjs', import.meta.url), 'utf8');
+  assert.match(launcher, /throw new Error\(ADDRESS_REFUSED\)/);
+  // a parameter the game does not know (fbclid, utm_source) is left alone; the scene's test switches are still refused
+  const rule = /const TEST_SWITCH = (\/.+\/i);/.exec(launcher);
+  assert.ok(rule, 'the launcher names the parameters it still refuses');
+  const refusedName = new RegExp(rule[1].slice(1, -2), 'i');
+  for (const k of ['fbclid', 'utm_source', 'utm_medium', 'gclid', 'ref', 'igshid', 'mc_cid', 'x', 'quality']) assert.equal(refusedName.test(k), false, k);
+  for (const k of ['qa', 'QA', 'nsQuality', 'nsBrainK', 'nsAnything']) assert.equal(refusedName.test(k), true, k);
+  assert.doesNotMatch(launcher, /k !== 'case' && k !== 'edition'/);
 });
 
 test('when the game is ready the guard is gone: no panel, no watching, nothing later', () => {

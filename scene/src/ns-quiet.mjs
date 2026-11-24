@@ -237,7 +237,8 @@ export function createQuietUi({ doc, root }) {
   // 24 November 2026 (section 207): the tutorial card's box in the layer's own CSS px, for the tip to keep off it
   let promptRect = null, promptRectKey = '';
   function promptBox(width, height) {
-    const k = prompt.hidden ? '' : `${promptText}|${countText}|${skipText}|${Math.round(width)}x${Math.round(height)}`;
+    // (25 November 2026, section 213: and the step's hand picture, ns-guide-cues GESTURES, which the card grows for)
+    const k = prompt.hidden ? '' : `${promptText}|${countText}|${skipText}|${Math.round(width)}x${Math.round(height)}|${(prompt.dataset && prompt.dataset.nsGesture) || ''}`;
     if (k === promptRectKey) return promptRect;
     promptRectKey = k; promptRect = null;
     if (k === '' || typeof prompt.getBoundingClientRect !== 'function' || typeof layer.getBoundingClientRect !== 'function') return null;

@@ -119,7 +119,11 @@ test('a look the player turns (a drag on empty space) puts the aim at the crossh
   ]);
   assert.equal(r[1].pointer, true);
   assert.equal(r[2].pointer, false, 'the look moved last');
-  assert.equal(r[2].silent, false, 'a look the player turned is a look: the crosshair may switch things on');
+  // (25 November 2026, section 213: it was not silent, "a look the player turned is a look", and a drag across the strip
+  // switched on what the mark crossed)
+  assert.equal(r[2].silent, true, 'while the button is down the mark starts nothing');
+  assert.equal(r[3].silent, true);
+  assert.equal(r[4].silent, false, 'the button is up');
   assert.equal(r[3].pointer, false);
   assert.equal(r[4].pointer, false, 'the released pointer has not moved since the look did');
   assert.deepEqual([r[4].x, r[4].y], [800, 450]);
@@ -348,4 +352,28 @@ test('with no place clear of every box the tip takes the place that covers least
   // a tie keeps the usual place
   const t = tipSides({ x: 400, y: 48, width: 800, height: 120, tipW: 100, tipH: 44, card: [{ x0: 0, y0: 0, x1: 800, y1: 120 }] });
   assert.deepEqual(t, { right: false, low: false });
+});
+
+test('a drag of the view with the free pointer: the middle mark has the aim and starts nothing until the button is up (section 213)', () => {
+  const frames = [{}, { pointer: at(1500, 300, 100), rest: 8 }, { down: true, pressSeq: 1 }];
+  // the drag: the pointer and the look both move, the button stays down; the mark crosses two areas
+  for (let i = 1; i <= 8; i++) frames.push({ pointer: at(1500 - i * 12, 300, 300 + i * 16), lookMs: 300 + i * 16, yaw: i * 0.02, gazeArea: i < 5 ? 'lh_neck' : 'lh_brow' });
+  frames.push({ down: false }, { rest: 12 });
+  const out = run(frames);
+  const drag = out.slice(3, 11), up = out[11], later = out[12];
+  for (const f of drag) {
+    assert.equal(f.pointer, false, 'the look moved last: the mark in the middle is the aim');
+    assert.equal(f.silent, true, 'and it switches nothing on while the button is down');
+    assert.equal(f.arrivedFrom, undefined);
+    assert.equal(f.away, false);
+  }
+  assert.equal(up.pointer, false);
+  assert.equal(up.arrivedFrom, undefined, 'letting go is no arrival: the area the mark stopped on stays off');
+  assert.equal(later.silent, false);
+  assert.equal(later.arrivedFrom, undefined);
+  // captured, or the rule off: as before
+  const cap = run([{}, { free: false, down: true, lookMs: 50, yaw: 0.1 }]);
+  assert.equal(cap[1].silent, false);
+  const off = run([{}, { on: false, down: true, lookMs: 50, yaw: 0.1 }]);
+  assert.equal(off[1].silent, false);
 });

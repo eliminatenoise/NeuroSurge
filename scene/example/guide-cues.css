@@ -27,3 +27,14 @@
 .ns-guide-actions :focus-visible{outline:3px solid #7cc4ff;outline-offset:2px}
 @media(prefers-reduced-motion:reduce){.ns-guide-cues,.ns-guide-cues *{animation:none!important;transition:none!important}}
 @media(forced-colors:active){.ns-guide-mark,.ns-guide-key{border-color:Highlight}.ns-guide-mark-name{color:CanvasText;background:Canvas}}
+
+/* 25 November 2026 (DESIGN-DECISIONS section 213, ns-guide-cues GESTURES): the hand's part of the step, as a small
+   picture under the step's number: a pointer (point at it), a mouse with its button lit (click it), the same with
+   arrows (press and drag), a four-way arrow (carry it). Pictures only: the step's words say the same. */
+.ns-prompt[data-ns-gesture] .ns-prompt-count{flex-direction:column;justify-content:center;gap:5px}
+.ns-prompt[data-ns-gesture] .ns-prompt-count::after{content:"";flex:none;width:26px;height:24px;background:no-repeat center/26px 24px}
+.ns-prompt[data-ns-gesture="point"] .ns-prompt-count::after{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 26 24' fill='none' stroke='%23ffe9a8' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M8 3v16l4.1-3.7 2.7 5.9 2.6-1.2-2.7-5.8H20z' fill='%23ffe9a8' stroke='none'/%3E%3C/svg%3E")}
+.ns-prompt[data-ns-gesture="click"] .ns-prompt-count::after{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 26 24' fill='none' stroke='%23ffe9a8' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='8' y='4' width='10' height='17' rx='5'/%3E%3Cpath d='M8 11h10M13 4v7'/%3E%3Cpath d='M13 4.4V11H8.4V9A4.6 4.6 0 0 1 13 4.4z' fill='%23ffe9a8' stroke='none'/%3E%3Cpath d='M5.2 5.2 3.4 3.4M4.2 9H1.8M9 2.4V.8'/%3E%3C/svg%3E")}
+.ns-prompt[data-ns-gesture="drag"] .ns-prompt-count::after{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 26 24' fill='none' stroke='%23ffe9a8' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='8' y='4' width='10' height='17' rx='5'/%3E%3Cpath d='M8 11h10M13 4v7'/%3E%3Cpath d='M13 4.4V11H8.4V9A4.6 4.6 0 0 1 13 4.4z' fill='%23ffe9a8' stroke='none'/%3E%3Cpath d='M5 13H1m0 0 2-2m-2 2 2 2M21 13h4m0 0-2-2m2 2-2 2'/%3E%3C/svg%3E")}
+.ns-prompt[data-ns-gesture="carry"] .ns-prompt-count::after{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 26 24' fill='none' stroke='%23ffe9a8' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M13 2v20M3 12h20M13 2l-3 3m3-3 3 3M13 22l-3-3m3 3 3-3M3 12l3-3m-3 3 3 3M23 12l-3-3m3 3-3 3'/%3E%3C/svg%3E")}
+@media(forced-colors:active){.ns-prompt[data-ns-gesture] .ns-prompt-count::after{forced-color-adjust:none}}

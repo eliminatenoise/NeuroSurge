@@ -14370,7 +14370,9 @@ export function createScene({
       // (section 211: nor on the tutorial's rings and marks, which keep their places (their words give way to the
       // captions, guideCueKeepOut; so only the marks are kept off here and the two never chase each other), nor on a
       // caption placed before this one)
-      for (const r of hudRectCache || []) if (r.cue && r.ring) tipBoxes.push(r);
+      // (section 213: nor under the tutorial's card, which is drawn over the captions: the caption of the brain's upper
+      // arrow ran 50 px under it at 1280x720, the mirror body's 54 px at 1024x768)
+      for (const r of hudRectCache || []) if ((r.cue && r.ring) || r.prompt) tipBoxes.push(r);
       for (const b2 of placed) tipBoxes.push(b2);
       const hitsBox = (x, y) => tipBoxes.some(b2 => x < b2.x1 + 2 && x + w > b2.x0 - 2 && y < b2.y1 + 2 && y + h > b2.y0 - 2);
       // just past the arrow's outer end along its compass direction; where the screen edge, the panel or another tip

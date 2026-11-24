@@ -8778,6 +8778,106 @@ none lies on another or on a mark, with no limb, a leg and an arm chosen. 825 un
   with the card as it is, 11 to 17 times in seven runs (the test's limit is 18).
 - The 3 cm rule is the tutorial's own: outside the tutorial nothing reads it.
 
+## 212. A link that was passed on starts the game (25 November)
+
+**The fault.** The launcher refused every address parameter except its own two (`edition`, `case`). Sites and
+programs that pass a link on add parameters of their own to it: `fbclid`, `utm_source`, `gclid` and others. A visitor
+who followed such a link to the game got the failure panel, "Loading did not finish. Check your connection, then try
+again", with "Unsupported game edition or test case" in small print, and "Try again" loaded the same address and was
+refused again. Found by the lead's own check of the published page, whose address carried an extra parameter; seen
+again with `?fbclid=...`, `?utm_source=...` and `?edition=lite&utm_source=...` on the local build.
+
+**The rule now** (`scene/example/eye-view-r558.mjs`, `edition.mjs`, `ns-load-guard.mjs`).
+- A parameter the game does not know is left alone, and the game starts, Full or Lite as the address asks. Nothing in
+  the game reads such a parameter, so the older rule stands: no coordinate or setting is taken from the address.
+- Still refused: the scene's test switches (`qa`, and every name that starts with `ns`; under `qa=1` the scene reads
+  `nsQuality` and `nsBrainK`, which draws the brain at another distance). This page has never offered them.
+- `edition=lite` is taken in capitals or not ("?edition=Lite" was refused).
+- A value the game does not know for `edition` or `case` is still refused, and the panel now says so: "This address is
+  not one the game knows. The game starts from its usual address", with a button "Start the game" that loads the page
+  without its parameters (`ADDRESS_REFUSED`, the guard's panel kind `address`).
+
+**Tests.** `tests/load-guard.test.mjs`: the refused address's panel and its button; which parameter names the
+launcher still refuses. `tests/browser-shared-link.mjs` (new): the game starts from `?fbclid=...`, from three such
+parameters together, from `?edition=lite&utm_source=...` (Lite) and from `?edition=Lite` (Lite); `?edition=mini`,
+`?case=nothing` and `?qa=1&nsBrainK=3` get the panel, and its button starts the Full game from the plain address.
+
+**Not done, or not right.**
+- The start page and the Lite pages read nothing from their address (checked in their source, not in a browser), so
+  a passed-on link to them was never refused.
+- The hosted Movement mirror preview in the NeuroTranslation repository carries its own copy of the launcher, with the
+  old rule (read on its main on 25 November); it refuses such links until that copy is renewed.
+
+## 213. A second play-through by a tester, of update 74: the limb's ring stands on the limb, a drag of the view starts nothing, the lost view is said at every reading level, and the tutorial's card shows what the hand does (25 November)
+
+A tester played Body update 74 where the first play-through had not gone: other window shapes, the outside view and
+the map in small windows, Shift, Space twice, far drags, the wheel, a player who follows only the pictures, Lite, and
+four plays of three minutes (`hunt74/FINDINGS.md`; scenarios and pictures beside it). Ten faults, each reproduced at
+least twice. No crash, nothing lit during a return, no muscle transparent, no drift over three minutes, Lite the same
+as Full in eight scenarios. This section is the faults fixed here, each reproduced by the lead first.
+
+**1. The ring that names the chosen limb stood on something else (`LIMB_CUE`).** The ring stood at the limb's wrist
+or ankle as projected, whatever was drawn in front there. In the tutorial's fifth step, "Drag a visible arm or leg",
+after S and A with the left leg chosen, "Your left leg" lay on your left arm (25 of 25 places of the ring took the
+arm), and at 800x600 partly on an arrow's tip: the drag the step asks for took the arm or turned the brain. The ring
+now goes to a place on the limb where the game's own pick says a press takes that limb: the hand or foot first, then
+seven places from the wrist or ankle up toward the body, each also 12 px to each side; one place is tried a frame and
+a place found is asked again every 12 frames. On the first pass the whole ring must lie on the limb (its middle and
+four places 6 px out). Until a place is found, and when none is, the ring is where it was. Seen with keys 2, 3 and 4
+at 1280x720 and key 2 at 800x600, 1024x768 and 1600x900: a press in the ring's middle takes the chosen limb, for the
+legs 23 to 25 of 25 places of the ring do, and a drag from the ring moves that limb 24 to 30 cm and completes the
+step.
+
+**2. A view turned away from everything said nothing at the full reading level, and with a limb chosen (`LOOK_LOST`,
+209).** The words of section 209 are a tip, and the tip layer is off at the full level, where the tutorial's last
+step (R) leaves the player: the empty picture had only "Looking at: empty space". And at the short level with a limb
+chosen by its key the middle of the empty picture read "Left leg · W A S D and your look move it". The lost view's
+words now show in the middle at every reading level, and before the chosen limb's line. Seen at the full level, at
+the short level after key 2, and with the reading off: after drags to the side, and after a look straight down and
+straight up.
+
+**3. A drag of the view switched on the areas it carried the middle mark across.** Section 206 kept this ("a look the
+player turned is a look") and listed it as not right. Twelve drags on empty space started 5 movements in the eye view,
+one drag of 150 ms two of them. While the free pointer drags the view the mark names what it crosses and starts
+nothing, and letting go is no arrival (`aimStep`: silent while the button is down). The same twelve drags, eye view
+and outside: 0 movements. With the pointer captured nothing changes.
+
+**4. Arrow captions ran under the tutorial's card.** The caption of an arrow pointed at keeps off the other arrows
+and the labels, not the card drawn over it: "Turn the brain: show more of its back" lay 50 px under the card at
+1280x720, the mirror body's "see it from above" 54 px at 1024x768 (34 such places in the tester's logs). The card is
+now among the boxes a caption keeps off; the same walk of every arrow at each step gives none under the card at
+either size.
+
+**5. The tutorial's card shows what the hand does (`GESTURES`).** The tester followed only the pictures: steps 2, 5
+and 7 showed the same ring with no sign of whether to click or to drag, and step 6 a Space key with nothing for
+carrying. The card now has a small picture under the step's number for every step done with the pointer: a pointer
+(step 1, point at it), a mouse with its button lit (step 2, click), the same with arrows to both sides (steps 5 and
+7, press and drag), a four-way arrow (step 6, carry). Steps done with keys keep their key cards and have no picture.
+The pictures are decoration for a reader of the screen; the step's words say the same.
+
+**Tests.** `tests/limb-cue.test.mjs` (new): the places tried and the point of a limb for each; which steps have a
+picture and that each is drawn. `tests/free-aim.test.mjs`: the middle mark is silent during a drag of the view, and
+letting go is no arrival. `tests/browser-limb-ring.mjs` (new): after S and A with a leg chosen, at 1280x720 and
+800x600 with keys 2 and 3, a press in the ring's middle takes that leg, and a drag from the ring moves it and
+completes the step (on update 75 the first of these fails: the ring is on the left arm). 831 unit tests, 21 browser
+tests.
+
+**Not done, or not right** (the tester's other findings, and what this section leaves).
+- After a limb is dragged far up and let go, the first S moves it 0.0 cm (the game's own flag reads stuck), while W,
+  A, D and a second S move it: both legs and the right arm (finding 7; reproduced, not yet understood).
+- At 800x600 with the map on and the full cards, the information card lies on the map's card (finding 3). In a
+  window of 700 by 900 the hint lies on the grip card's title and the map's card on the status card (finding 5).
+- While Space grips, a click on an area presses nothing or the area under the middle mark; with Shift held a click on
+  an area presses nothing while the tip names its movement (finding 8).
+- In the outside view the limb buttons and the hint lie on your own head and trunk (finding 9). A pinch is left to
+  the browser (finding 10).
+- A caption of an arrow pointed at can still lie on a mark's words or on a label for a few pixels (5 places in the
+  walk above).
+- Nothing on the playing screen shows the arrow keys, E after the tutorial, Shift, two taps of Space or the double
+  click; the pause page lists them. The "Shoulder aim" and "Hip aim" marks are not explained in the game.
+- The limb's ring tries places on a straight line from shoulder or hip to elbow or knee to wrist or ankle; a limb
+  wholly behind another has no such place, and the ring is then at the wrist or ankle as before.
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**
