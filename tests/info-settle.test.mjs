@@ -54,6 +54,39 @@ check('another area takes the card only after the look has rested on it', () => 
   assert.equal(later.since, 1, 'the arrival time is kept while the look stays on the area');
 });
 
+check('a pointer on its way takes no card: not the first area with no card yet, not an area it stays over while moving', () => {
+  // (25 November 2026, section 211) `moving` = the free pointer is the aim and has not come to rest
+  let s = infoSettleStep(null, { regionId: A, t: 5, moving: true });
+  assert.equal(s.settled, false, 'no card yet is no reason to take an area a moving pointer crosses');
+  assert.ok(Object.hasOwn(s.crossed, A));
+  // moving over the same area for longer than the rest time: still not taken, the rest counts from the last move
+  s = infoSettleStep(s, { regionId: A, t: 5 + REST, moving: true });
+  s = infoSettleStep(s, { regionId: A, t: 5 + 3 * REST, moving: true });
+  assert.equal(s.settled, false);
+  assert.equal(s.since, 5 + 3 * REST);
+  // the pointer rests: taken at once with no card yet
+  const rested = infoSettleStep(s, { regionId: A, t: 5 + 3 * REST + 0.02 });
+  assert.equal(rested.settled, true);
+  // with a card kept, the rest time runs from the last frame the pointer moved in
+  s = infoSettleStep(null, { regionId: B, t: 0, keptId: A, moving: true });
+  s = infoSettleStep(s, { regionId: B, t: 1, keptId: A, moving: true });
+  s = infoSettleStep(s, { regionId: B, t: 1 + REST / 2, keptId: A });
+  assert.equal(s.settled, false);
+  s = infoSettleStep(s, { regionId: B, t: 1 + REST, keptId: A });
+  assert.equal(s.settled, true);
+});
+
+check('a moving pointer leaves the kept card\'s area, a taken area and a clicked area as they were', () => {
+  let s = infoSettleStep(null, { regionId: A, t: 0, keptId: A, moving: true });
+  assert.equal(s.settled, true, 'the kept card\'s own area');
+  s = infoSettleStep(null, { regionId: B, t: 0 });
+  s = infoSettleStep(s, { regionId: B, t: 0.5, keptId: A, moving: true });
+  assert.equal(s.settled, true, 'an area already taken stays taken while the pointer moves inside it');
+  assert.equal(s.since, 0);
+  s = infoSettleStep(null, { regionId: C, t: 0, keptId: A, clickedId: C, moving: true });
+  assert.equal(s.settled, true, 'a click means the area');
+});
+
 check('a sweep that rests nowhere changes nothing, and its crossed areas are remembered while they glow', () => {
   let s = infoSettleStep(null, { regionId: A, t: 0 });
   s = infoSettleStep(s, { regionId: B, t: 2.0, keptId: A, pulseId: B });

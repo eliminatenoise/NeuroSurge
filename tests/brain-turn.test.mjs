@@ -99,6 +99,17 @@ test('the arrows still bring round the side they stand on; with the turn the upp
   assert.match(NT.ARROWS.brain.tip.left, /on your left/);
 });
 
+test('the shorter captions of the tutorial\'s turn step say the same as the usual ones, without "Turn the brain:"', () => {
+  // (25 November 2026, section 211: that step shows all four at once and its own line says what turns)
+  for (const d of ['forward', 'back', 'left', 'right']) {
+    const full = NT.ARROWS.brain.tip[d], short = NT.ARROWS.brain.tipShort[d];
+    assert.ok(full.startsWith('Turn the brain: '), full);
+    const rest = full.slice('Turn the brain: '.length);
+    assert.equal(short, rest[0].toUpperCase() + rest.slice(1), `${d}: the same words after the colon`);
+    assert.ok(short.length <= 36, `${d}: ${short.length} characters`);
+  }
+});
+
 test('the labels of the brain\'s sides and ends name the brain\'s own half and extend away from the brain', () => {
   assert.match(NT.ORIENTATION.right, /right half/);
   assert.match(NT.ORIENTATION.left, /left half/);

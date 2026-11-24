@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-25-body-update-74",
+  "version": "experimental-2026-11-25-body-update-75",
   "experimental": true,
-  "source": "Body update 74. Twelve faults found by a tester playing update 73 as a new player are fixed: a view turned away from everything says so and can be reset, arrow keys work during a neck or trunk movement, the cards take the pointer. With the pointer free the pointer is the aim. Full and Lite share the game.",
+  "source": "Body update 75. The things updates 73 and 74 listed as seen and not fixed: the information card names only an area that moved, a key that moves nothing ticks no tutorial step, a pointer parked on a card leaves no tip in the middle, and the captions and tips keep off each other. With the pointer free the pointer is the aim. Full and Lite share the game.",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -32,8 +32,8 @@
     },
     {
       "path": "DESIGN-DECISIONS.md",
-      "bytes": 1045568,
-      "sha256": "4324f023a283a90e9ce47df742bf8c6d3752cf504243d964c97408654ca9904d"
+      "bytes": 1053571,
+      "sha256": "ee23959fdd055878b055b8d7ea9a622c4b8dc20fb1717b76c592bc4426ffa195"
     },
     {
       "path": "LAUNCHERS.md",
@@ -62,8 +62,8 @@
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 66575,
-      "sha256": "07ca41c179602d741bd7cebd8cacd207a040cd250ac7f434ee4c9c996ce70393"
+      "bytes": 67492,
+      "sha256": "778e960e16d3cd94ce378576531501b2c8a5ea3c4dc2082a6ee6b0e8fbf04e83"
     },
     {
       "path": "README.md",
@@ -73,12 +73,12 @@
     {
       "path": "START.html",
       "bytes": 4507,
-      "sha256": "d2ef3c480d4d08ed82c994e90f1c67a7227f21d24410892b930a4d01419d42c4"
+      "sha256": "9e5adad8ac692b4de212405e56da1a413415e927fe34bcd6e077540c799a736f"
     },
     {
       "path": "index.html",
       "bytes": 3909,
-      "sha256": "474cca489c3c0cab318676a34959a9863583e62dbd7b38412038016923205988"
+      "sha256": "9d1549f8999b4b0e4267d8ef0202599fd2600037237aeaf23c5858336ee2df58"
     },
     {
       "path": "inputs/FULLBODY-MESH-MANIFEST.json",
@@ -3977,8 +3977,8 @@
     },
     {
       "path": "scene/example/quiet.css",
-      "bytes": 40030,
-      "sha256": "f4929fbf222ad26b56d50a0ddd2ec164b17974769ebe2f71ff167da04c1d6908"
+      "bytes": 40637,
+      "sha256": "1ea6a453cde8a2d6eca392032e8aeccc8b3d0a56b2a4d0dccec0fd832faf37a2"
     },
     {
       "path": "scene/src/ns-actions.mjs",
@@ -3987,8 +3987,8 @@
     },
     {
       "path": "scene/src/ns-app.mjs",
-      "bytes": 1201005,
-      "sha256": "16d9a6eed0ad9330ace3814770fdcec10a5b2e9dc977d80352bcd7735254802b"
+      "bytes": 1206849,
+      "sha256": "67a56ddfb5ce2037ba74ef8644196585e171b048656f8606b5cfe5d24c421561"
     },
     {
       "path": "scene/src/ns-area-halo.mjs",
@@ -4282,8 +4282,8 @@
     },
     {
       "path": "scene/src/ns-quiet.mjs",
-      "bytes": 20145,
-      "sha256": "466968f28f38e2075b8c1fdfebaf5885bc9f88cb6ee571b0dca7b57a07bf2e1f"
+      "bytes": 22119,
+      "sha256": "7e941134692eeabfcc6ac7cb49b233a71fb2c3c77de372fa87b3f22a3f0d7839"
     },
     {
       "path": "scene/src/ns-raw-look.mjs",
@@ -4317,8 +4317,8 @@
     },
     {
       "path": "scene/src/ns-scene-three.mjs",
-      "bytes": 1397762,
-      "sha256": "8fbb4ae24faabd6ccf522bd370506f132b8d42b5d977ec4b346fa18f1bdbe5c3"
+      "bytes": 1399339,
+      "sha256": "8d1075b1305446985391e4c56ba9ec5d412379de2b6c47e9eec57567cd75f868"
     },
     {
       "path": "scene/src/ns-see.mjs",
@@ -4327,8 +4327,8 @@
     },
     {
       "path": "scene/src/ns-text.mjs",
-      "bytes": 155793,
-      "sha256": "f4af350baeb444551f60bf8eac9cb7a80eba33cad47ac8e00f7e5db7f9b60f8b"
+      "bytes": 156256,
+      "sha256": "1d44c54a1b10a74b1cccebd61f1497c7ebf19126b5988faccc94d6f183d2db3f"
     },
     {
       "path": "scene/src/ns-vessels.mjs",
@@ -4442,8 +4442,8 @@
     },
     {
       "path": "tests/brain-turn.test.mjs",
-      "bytes": 29606,
-      "sha256": "091d8c8e2cb178b92c880be57e00647ca41150f32cf29434a1d2056dca65e6b2"
+      "bytes": 30268,
+      "sha256": "86e8e8277f99926a409077faba44104b6f88b9d57219d43e789237203095deb7"
     },
     {
       "path": "tests/browser-arm-collar.mjs",
@@ -4472,8 +4472,8 @@
     },
     {
       "path": "tests/browser-free-aim.mjs",
-      "bytes": 15083,
-      "sha256": "a31e770dfa1da73d6a5744c74fe9ec710c7d88c4f0e17ebac4b7083ce68fc6e2"
+      "bytes": 18553,
+      "sha256": "9c11baf3de2a3b0c3ef92f876f5db0d34b4f1b4fc4ccac38947216a092411b68"
     },
     {
       "path": "tests/browser-hud-clear.mjs",
@@ -4534,6 +4534,11 @@
       "path": "tests/browser-startup.mjs",
       "bytes": 6569,
       "sha256": "87feee77da8a863f10f582fe7981f3e404262e590c520f0ee1a915b0d74b4468"
+    },
+    {
+      "path": "tests/browser-step7-captions.mjs",
+      "bytes": 5761,
+      "sha256": "22ab1fc0f6bb82414e959eca18690e113e9369b0da1152681c4ebb9ba2d2aa83"
     },
     {
       "path": "tests/bulk.test.mjs",
@@ -4647,8 +4652,8 @@
     },
     {
       "path": "tests/free-aim.test.mjs",
-      "bytes": 20408,
-      "sha256": "aa40e4fe9fab0d5a6fed29a5d7f7e1d394708de0a96356879106304735067f60"
+      "bytes": 24861,
+      "sha256": "8951b366a4ee699b3f852978b5244085a567d7d758ac337f95a2c0292608f1f2"
     },
     {
       "path": "tests/guide-order.test.mjs",
@@ -4687,8 +4692,8 @@
     },
     {
       "path": "tests/info-settle.test.mjs",
-      "bytes": 8985,
-      "sha256": "3f0fa9c5f5d047897a89256b4080edce1280e1479ce47f4938c1f5d53b4511c4"
+      "bytes": 11031,
+      "sha256": "aebb947a4c984ff49babd416014c9cc0d06459d7711ef072f1f5e1fbfc791305"
     },
     {
       "path": "tests/joints.test.mjs",

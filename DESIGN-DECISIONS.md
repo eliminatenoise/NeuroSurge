@@ -8692,6 +8692,92 @@ steps 6 and 7, Space and a drag advancing those steps, the grip card at both rea
 - `tests/browser-hud-clear.mjs` at 1024x768 (not one of its default sizes) reads 15 to 23 jumps in its wide look
   against a limit of 18.
 
+## 211. What updates 73 and 74 left open: the card names only what moved, a key that moves nothing ticks no step, a parked pointer names nothing, and captions and tips that keep off each other (25 November)
+
+Sections 208 to 210 each ended with a list of things seen and not fixed. This section is those, each reproduced first
+in the browser (scenarios and logs under `r75/` in the lead's scratch folder).
+
+**1. The information card named areas the pointer only crossed (`infoSettleStep` `moving`).** A pointer on its way
+starts no movement (206: it must rest 0.1 s), but the card took an area after the look had been on it for the
+activity's rest time, counted from when the pointer entered the area, moving or not, and took the first area at once
+when there was no card yet. Seen: the pointer rested on the left ankle's area (it moved, the card said "Left ankle"),
+then went through 43 other areas at 6 px a frame without stopping. No movement started, and the card showed 24 of those
+areas in turn and ended on "Tongue", marked "Last area shown". While the free pointer is the aim and has not come to rest, the rest
+does not count and "no card yet" takes nothing; the kept card's own area, an area already taken and a clicked area stay
+as they were. After the change the same sweep leaves "Left ankle" on the card throughout.
+
+**2. A key that moved nothing ticked the tutorial's reach step (`GUIDE_KEY_MOVE`).** Every limb starts reached out, at
+W's far end. Section 209 changed the step's words to "Press S to draw it in", but 0.5 s of W still ticked the step's
+first half, for a leg or the right arm because every frame the joints changed at all counted, for the left arm because
+its own report adds up the path the hand has gone (a few millimetres of jitter at the range's end pass its 2 mm). A
+key now counts once the limb's end is 3 cm from where it was when that key went down, the same for all four limbs. S
+moves a limb about 50 cm a second, so it counts after two or three frames. Seen with each limb chosen: 1.5 s of W
+leaves the step as it was; A, then 0.35 s of S complete it. The short line for the missing half says "Now S to draw it
+in" (it said "Now S or W").
+
+**3. A pointer parked on a card, or outside the window, still had a tip in the middle of the picture (`aimStep`
+`away`).** Over a card the pointer is not on the picture (209) and the mark in the middle has the aim back. It starts
+nothing there (the hand-over is silent), but its tip showed: with the pointer on the limb buttons, "Throat (swallow) ·
+Swallow" stood in the middle of the picture, and the card changed to the throat's area, which had not just moved.
+`away` is true while the pointer was the last thing the player moved and is not on the picture. Then no tip is shown
+at the mark (what Space holds, and a lost brain or view, are still said), the mark stays faint, and the card keeps the
+area that moved last. An arrow key or a drag of the view makes the mark the aim again, with its tip.
+
+**4. The captions of the tutorial's seventh step lay on each other.** "Drag the brain to turn it" shows a caption by
+each of the brain's four arrows. Each was placed without regard to the others or to the tutorial's marks: at 800x600
+and 1024x768 the two side captions overlapped by 25 and 31 px and lay on the shoulder or hip mark. A caption now keeps
+off the captions placed before it and off the tutorial's rings and marks (the marks' words already give way to the
+captions, so the two never chase each other). While the step shows all four, the captions drop their first three
+words ("Show more of its back", not "Turn the brain: show more of its back": the step's own line says what turns),
+which makes the side captions 205 and 213 px wide instead of 287 and 295. Seen at 800x600, 1024x768 and 1600x900 with
+no limb, a leg and an arm chosen and after a turn of the view: no caption on another or on a mark. An arrow pointed at
+outside that step keeps its full caption.
+
+**5. The pointer's tip.**
+- *Squeezed to a word a line near the right edge.* The tip's width followed the room to the right of its point, and
+  the tip was moved to the left of the point only afterwards. It is now as wide as its words ask for, up to its
+  maximum, wherever it stands (`width: max-content`).
+- *Past the left edge.* An area of the brain's right half opens its tip to the left of the point from 0.3 of the
+  width on; at 800x600 with the pointer at x 188 to 244 such a tip ran up to 12 px out of the window. A tip that does
+  not fit on the left and fits on the right opens to the right (and the same upward and downward).
+- *On the words of the tutorial's marks.* In the 800x600 tutorial 38 of 214 pointer tips lay on "Hip aim". Those words
+  are now among the boxes the tip keeps off (`tipCards`).
+- *Nowhere clear.* When no place is clear of every box the tip took its usual place whatever lay there, and with the
+  marks' words added that put it back under the tutorial's card at the top left. It now takes the place inside the
+  picture that covers least; a card drawn over the tip counts four times as much as words the tip is drawn over.
+Seen on a grid of 532 pointer places at 800x600, the pointer resting 0.17 s at each: in step 1, 1 of 203 tips touches
+a mark's words (14 by 18 px, between the tutorial's card and those words), and none is outside the window, squeezed or
+under a card; in step 4, with a leg chosen, none of 214 has any of these faults (38 lay on "Hip aim" before). The
+boxes the tip keeps off are read every 120 ms (250 before): the first mark's ring goes to another area as the pointer
+nears, and with the older reading 5 tips lay on words that had just moved.
+
+**6. The pause page.** The limb buttons showed faintly through the foot of the pause page at 800x600. They are
+hidden while that page is open.
+
+**Tests.** `tests/info-settle.test.mjs`: a moving pointer takes no card, with and without one kept; the kept, taken
+and clicked areas stay. `tests/free-aim.test.mjs`: `away` (on a card, outside the window, ended by a key; not while
+captured, busy or with the rule off); the tip toward the left edge; the least-covering place.
+`tests/brain-turn.test.mjs`: the shorter captions say the same as the usual ones. `tests/browser-free-aim.mjs` (11): a
+sweep through eleven other areas starts nothing and leaves the card on the area that moved; parked on the limb buttons
+the pointer leaves no tip in the middle and the mark stays faint; an arrow key brings the mark's tip back.
+`tests/browser-step7-captions.mjs` (new): at 800x600 and 1024x768 the seventh step's captions use the shorter words and
+none lies on another or on a mark, with no limb, a leg and an arm chosen. 825 unit tests and 19 browser tests.
+
+**Not done, or not right.**
+- Area cards at the full reading level at 800x600 still cut their two honesty lines after three rows each.
+- Reset body still leaves the view where it is (204); with the picture empty the tip of section 209 names Reset
+  brain view.
+- A keyboard-only player still has no key that presses the aimed area again, and a click on one of your own limbs
+  still shows the card of the area's first movement (208).
+- At 800x600 the tutorial's card still lies on the upper end of the left arm's strip while the tutorial runs: on a
+  5 px grid 18 of 24 pointer places of the hand's area are under it, 10 of 16 of the little finger's, 5 of 7 of the
+  forearm's, 12 of 26 of the wrist's, and less of four more; the arrow keys reach them. Tried and dropped: a narrower
+  card (222 px with 14 px type, no area under it; 244 px with 13 px type, at most 7 of 23 places of one area). With
+  either, the words of the tutorial's first mark, which keep off the card and off the labels that move into the room
+  the card leaves, jumped 23 to 26 times during the wide look of `tests/browser-hud-clear.mjs` in three runs of five;
+  with the card as it is, 11 to 17 times in seven runs (the test's limit is 18).
+- The 3 cm rule is the tutorial's own: outside the tutorial nothing reads it.
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**

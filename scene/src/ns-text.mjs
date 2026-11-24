@@ -1336,6 +1336,10 @@ export const VIEW = deepFreeze({
 export const ARROWS = deepFreeze({
   brain: {
     tip: { forward: 'Turn the brain: show more of its back', back: 'Turn the brain: show more of its front', left: 'Turn the brain: show more of the side on your left', right: 'Turn the brain: show more of the side on your right' },
+    // 25 November 2026 (section 211): while the tutorial's step "Drag the brain to turn it" shows all four captions at
+    // once, the step's own line already says what turns; without the first three words the two side captions fit beside
+    // each other in an 800 px window.
+    tipShort: { forward: 'Show more of its back', back: 'Show more of its front', left: 'Show more of the side on your left', right: 'Show more of the side on your right' },
     label: {
       forward: 'Turn the brain about its own centre so more of its back faces you. Click for a small turn. Hold to keep turning. It turns in place.',
       back: 'Turn the brain about its own centre so more of its front faces you. Click for a small turn. Hold to keep turning. It turns in place.',
@@ -1773,7 +1777,7 @@ export const GUIDE = deepFreeze({
       "Drag the brain to turn it.": "Drag the brain to turn it",
       "Press E to look at your body from behind, then press E again to return.": "Press E to see your body from behind",
       'Good! Now try A or D to swing it left or right.': 'Now A or D',
-      'Good! Now try S to draw it in, or W to reach it out.': 'Now S or W',
+      'Good! Now try S to draw it in, or W to reach it out.': 'Now S to draw it in',
       'That movement is already there. Press another number from the card.': 'Already there: press another number',
       'Nothing moved there. Aim at another coloured area: a part moves.': 'Nothing moved: aim at another colour',
       'Nothing moves there. Aim at a coloured area that moves a part, then click it.': 'Nothing moves there: aim at a colour',

@@ -5378,6 +5378,12 @@ export const ARROW_TIP_FALLBACK = Object.freeze({
   forward: 'Tilt the mirror body: see it from above', back: 'Tilt the mirror body: see it from below',
   left: 'Turn the mirror body: left side toward you', right: 'Turn the mirror body: right side toward you'
 });
+/** 25 November 2026 (section 211): a brain arrow's shorter caption for the tutorial step that shows all four at once
+ * (ns-text ARROWS.brain.tipShort), else its usual caption. */
+export function arrowTipShortText(dir, text = NsText) {
+  const o = text && text.ARROWS && text.ARROWS.brain && text.ARROWS.brain.tipShort;
+  return o && typeof o[dir] === 'string' && o[dir] ? o[dir] : arrowTipText('brain', dir, text);
+}
 export function arrowTipText(target, dir, text = NsText) {
   const A = text && text.ARROWS;
   const pick = o => (o && typeof o[dir] === 'string' && o[dir] ? o[dir] : null);
@@ -6781,7 +6787,7 @@ export function createScene({
       e.setAttribute('aria-hidden', 'true');
       e.hidden = true;
       e.textContent = arrowTipText(target, d);
-      arrowTips[`${target}:${d}`] = { el: e, left: '', top: '', shown: false };
+      arrowTips[`${target}:${d}`] = { el: e, left: '', top: '', shown: false, words: e.textContent };
     }
   }
   const labelEls = [];
@@ -14333,6 +14339,10 @@ export function createScene({
   /** Plain captions: the hovered arrow's; every brain arrow's while the "Try this" goal is 'orbit'. */
   function layoutArrowTips(reserveRight, reserveBottom, topPx) {
     arrowBoxes();
+    // (25 November 2026, section 211: the captions placed so far in this pass; a later one keeps off them. At 800x600
+    // and 1024x768 the two side captions of the tutorial's step 7 lay 25 and 31 px over each other.)
+    const placed = [];
+    const allShown = guideGoalAttr === 'orbit';
     for (const [k, T] of Object.entries(arrowTips)) {
       const [target, d] = k.split(':');
       const set = arrowSets[target], box = set.shown ? set.boxes[d] : null;
@@ -14342,7 +14352,11 @@ export function createScene({
       const e = NsArrows.COMPASS_SCREEN[d], gap = R5_SCENE.arrowCaptionPx;
       // 20 November 2026 (hunt 7): the caption's own width, measured once each time it comes up (it does not wrap; the
       // estimate capped at 260 px let the 295 px "... the side on your right" run 31 px past an 800 px window's edge).
-      if (!T.shown) { T.el.hidden = false; T.shown = true; const m = T.el.offsetWidth; T.w = m > 0 ? m : null; }
+      // (section 211: the shorter words while the step shows every brain arrow's caption; measured again when they change)
+      const words = allShown && target === 'brain' ? arrowTipShortText(d) : arrowTipText(target, d);
+      const reworded = T.words !== undefined && T.words !== words;
+      if (T.words !== words) { T.el.textContent = words; T.words = words; }
+      if (!T.shown || reworded) { T.el.hidden = false; T.shown = true; const m = T.el.offsetWidth; T.w = m > 0 ? m : null; }
       const w = T.w || Math.min(260, 7.2 * T.el.textContent.length + 18), h = ARROW_CAPTION_H;
       // just past the arrow's outer end, along its compass direction
       const xMax = Math.max(4, cssW - reserveRight - w - 4), yMax = Math.max(topPx, cssH - reserveBottom - h - 4);
@@ -14353,6 +14367,11 @@ export function createScene({
       // nor on the region labels shown last frame or the orientation labels.
       for (let i = 0; i < labelEls.length; i++) { const L = labelEls[i], b = labelBoxes[i]; if (L.shownNow && b && !b.skip) tipBoxes.push({ x0: b.x - b.w / 2, y0: b.y - b.h / 2, x1: b.x + b.w / 2, y1: b.y + b.h / 2 }); }
       if (orientLive) for (const r of orientLive) tipBoxes.push(r);
+      // (section 211: nor on the tutorial's rings and marks, which keep their places (their words give way to the
+      // captions, guideCueKeepOut; so only the marks are kept off here and the two never chase each other), nor on a
+      // caption placed before this one)
+      for (const r of hudRectCache || []) if (r.cue && r.ring) tipBoxes.push(r);
+      for (const b2 of placed) tipBoxes.push(b2);
       const hitsBox = (x, y) => tipBoxes.some(b2 => x < b2.x1 + 2 && x + w > b2.x0 - 2 && y < b2.y1 + 2 && y + h > b2.y0 - 2);
       // just past the arrow's outer end along its compass direction; where the screen edge, the panel or another tip
       // leaves no room there: under the arrow (above it for the bottom arrow), then beside it, never on top of a tip
@@ -14374,6 +14393,7 @@ export function createScene({
         }
         return best;
       })();
+      placed.push({ x0: x, y0: y, x1: x + w, y1: y + h });
       const l = px(x), t = px(y);
       if (T.left !== l) { T.el.style.left = l; T.left = l; }
       if (T.top !== t) { T.el.style.top = t; T.top = t; }

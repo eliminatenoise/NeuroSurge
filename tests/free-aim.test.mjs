@@ -279,3 +279,73 @@ test('the aim says while the pointer travels (the Space line alone waits for a r
   assert.equal(out.at(-1).travelling, false, 'rested');
   assert.equal(out[0].travelling, false, 'the crosshair never travels');
 });
+
+// 25 November 2026 (section 211): the pointer parked on a card or outside the window after it was the aim
+test('away: the pointer moved last and is off the picture; an arrow key or a look ends it', () => {
+  const [start, on, parked, stays, key, back] = run([
+    {},
+    { pointer: at(550, 120, 100), rest: 8 },
+    { pointer: null },             // onto a card: the picture's element is left
+    { rest: 30 },
+    { lookMs: 900, yaw: 0.2 },     // an arrow key steps the look
+    { pointer: at(600, 300, 1500) }
+  ]);
+  assert.equal(start.away, false, 'before the pointer ever moved the mark in the middle is the aim');
+  assert.equal(on.away, false);
+  assert.equal(parked.pointer, false);
+  assert.equal(parked.away, true);
+  assert.equal(parked.silent, true, 'the mark takes the aim back silently');
+  assert.equal(stays.away, true, 'for as long as nothing else is moved');
+  assert.deepEqual([stays.x, stays.y], [W / 2, H / 2]);
+  assert.equal(key.away, false, 'the look moved last: the mark is the aim');
+  assert.equal(back.away, false);
+  assert.equal(back.pointer, true);
+});
+
+test('away: not while captured, not while Space or a drag has the pointer, not with the rule off', () => {
+  const [, , captured] = run([{}, { pointer: at(550, 120, 100), rest: 8 }, { pointer: null, free: false }]);
+  assert.equal(captured.away, false);
+  const [, , busy] = run([{}, { pointer: at(550, 120, 100), rest: 8 }, { busy: true }]);
+  assert.equal(busy.away, false);
+  const [, , off] = run([{}, { pointer: at(550, 120, 100), rest: 8, on: false }, { pointer: null, on: false }]);
+  assert.equal(off.away, false);
+  // outside the window's picture counts like a card
+  const [, , out] = run([{}, { pointer: at(550, 120, 100), rest: 8 }, { pointer: at(-5, 300, 400) }]);
+  assert.equal(out.pointer, false);
+  assert.equal(out.away, true);
+});
+
+test('a tip that opens to the left of its point must fit there: else it opens to the right (section 211)', () => {
+  // an area of the brain's right half asks for the left side from 0.3 of the width on; at x 244 of 800 a 223 px tip does not fit
+  const a = tipSides({ x: 244, y: 124, width: 800, height: 600, side: 'left', tipW: 223, tipH: 68 });
+  assert.equal(a.right, false);
+  // where it fits on the left it stays there
+  const b = tipSides({ x: 300, y: 124, width: 800, height: 600, side: 'left', tipW: 223, tipH: 68 });
+  assert.equal(b.right, true);
+  // fits on neither side: the usual side, as before
+  const c = tipSides({ x: 244, y: 124, width: 400, height: 600, side: 'left', tipW: 223, tipH: 68 });
+  assert.equal(c.right, true);
+  // near the bottom a tip opens upward unless it would run past the top and fits below
+  const d = tipSides({ x: 100, y: 60, width: 800, height: 80, tipW: 100, tipH: 50 });
+  assert.equal(d.low, true, 'fits neither above nor below: the usual one');
+  const e = tipSides({ x: 100, y: 75, width: 800, height: 100, tipW: 100, tipH: 60 });
+  assert.equal(e.low, true, 'no room below either');
+  // without a size nothing changes
+  const f = tipSides({ x: 244, y: 124, width: 800, height: 600, side: 'left' });
+  assert.equal(f.right, true);
+});
+
+test('with no place clear of every box the tip takes the place that covers least; a card weighs more than words (section 211)', () => {
+  // the usual place lies under a card (weight 4); the only other place inside the picture lies on a few words (weight 1)
+  const cardBox = { x0: 16, y0: 14, x1: 240, y1: 106, weight: 4 }, words = { x0: 232, y0: 111, x1: 364, y1: 129 };
+  const r = tipSides({ x: 330, y: 48, width: 800, height: 600, side: 'left', tipW: 223, tipH: 44, card: [cardBox, words] });
+  // left of the point: x 85..308, y 66..110 (under the card); right of it: x 352..575, y 66..110 (clear of both)
+  assert.equal(r.right, false);
+  // nothing clear: both sides blocked by cards of equal weight -> the smaller overlap wins
+  const big = { x0: 0, y0: 0, x1: 320, y1: 200, weight: 4 }, small = { x0: 340, y0: 60, x1: 380, y1: 120, weight: 4 };
+  const q = tipSides({ x: 330, y: 48, width: 800, height: 140, side: 'left', tipW: 223, tipH: 44, card: [big, small] });
+  assert.equal(q.right, false, 'the right side covers 28 x 44 px of the small card, the left side 223 x 44 px of the big one');
+  // a tie keeps the usual place
+  const t = tipSides({ x: 400, y: 48, width: 800, height: 120, tipW: 100, tipH: 44, card: [{ x0: 0, y0: 0, x1: 800, y1: 120 }] });
+  assert.deepEqual(t, { right: false, low: false });
+});

@@ -29,7 +29,10 @@
 
 /* The tip: what is under the crosshair. A motor area shows its name and its numbered movements, like a key's legend. */
 .ns-tip {
-  position: absolute; left: 50%; top: 50%; box-sizing: border-box; max-width: min(300px, 44vw);
+  /* width: max-content (25 November 2026, section 211): the tip is as wide as its words ask for, up to max-width,
+     wherever it stands. Without it the room right of its point set the width, and near the right edge the tip was
+     squeezed to a word a line before it was moved to the left of the point. */
+  position: absolute; left: 50%; top: 50%; box-sizing: border-box; width: max-content; max-width: min(300px, 44vw);
   padding: 7px 11px 8px; border-radius: 10px;
   background: rgba(7, 11, 16, 0.86); border: 1px solid rgba(190, 215, 235, 0.42);
   box-shadow: 0 6px 22px rgba(0, 0, 0, 0.5);
@@ -164,6 +167,9 @@
 
 /* Let the startup card and the departing loading bar finish behind the pause menu. */
 body:has(.ns-shell[data-mode="paused"]) :is(.ns-keys.ns-ctl, .ns-load.ns-load-out) { visibility: hidden; }
+/* 25 November 2026 (section 211): nor the limb buttons. The pause page's card lets a little of the picture through, and
+   at 800x600 the buttons showed faintly through its foot, under the settings. */
+body:has(.ns-shell[data-mode="paused"]) .ns-limbs { visibility: hidden; }
 body:has(.ns-keys.ns-ctl) .ns-shell-root .ns-shell-toast { opacity: 0; }
 
 /* The tip beside the crosshair (ns-quiet.mjs), in chunks: the NAME; then the CHOICES, each a key cap with its movement

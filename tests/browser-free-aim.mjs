@@ -225,7 +225,54 @@ try {
   assert.ok(!back.tip || !/turned away/.test(back.tip.text), 'the words are gone when the brain is in view');
   assert.match(back.input.front || '', /^(brain|mirror|own):/, 'something is under the middle mark again');
 
-  report.final = { trigger: back.trigger.seq, guide: back.guide, lostLook: lost.look };
+  // 11. (25 November 2026, section 211) The information card names what moved, not what the pointer crosses; and a
+  // pointer parked on a card names nothing in the middle of the picture.
+  for (let i = 0; i < 12 && (await read()).guide; i++) { await page.keyboard.press('Enter'); await page.waitForTimeout(200); } // the tutorial's steps are skipped
+  const cardTitle = () => page.evaluate(() => { const t = document.querySelector('.ns-infopanel-title'); return t && t.getClientRects().length ? t.textContent.trim() : null; });
+  const cardSpots = new Map();
+  for (let y = 100; y <= 400 && cardSpots.size < 10; y += 30) for (let x = 380; x <= 1220; x += 30) {
+    await page.mouse.move(x, y);
+    const s = await frames(3);
+    const m = /^brain:area:(?!.*scan)(.+)$/.exec(s.input.front || '');
+    if (s.input.at === 'pointer' && m && !cardSpots.has(m[1])) cardSpots.set(m[1], [x, y]);
+  }
+  assert.ok(cardSpots.size >= 4, `motor areas are under the pointer again (${cardSpots.size})`);
+  const [[cardId, cardPt], ...crossedAreas] = [...cardSpots];
+  await page.mouse.move(60, height / 2); await rested();
+  await page.mouse.move(cardPt[0], cardPt[1]);
+  const onCard = await rested();
+  assert.equal(onCard.trigger.regionId, cardId, 'the area the pointer rests on moves');
+  const cardName = await cardTitle();
+  assert.ok(cardName, 'the information card shows');
+  assert.equal(onCard.tip.text.split('\n')[0].trim(), cardName, 'the card and the tip name the same area');
+  let at = cardPt;
+  for (const [, pt] of [...crossedAreas, [null, [60, height / 2]]]) { // through every other area found, never resting, and off the brain
+    const n = Math.max(2, Math.round(Math.hypot(pt[0] - at[0], pt[1] - at[1]) / 12));
+    for (let k = 1; k <= n; k++) { await page.mouse.move(at[0] + (pt[0] - at[0]) * k / n, at[1] + (pt[1] - at[1]) * k / n); await page.waitForTimeout(16); }
+    at = pt;
+  }
+  const sweptOver = await rested();
+  assert.equal(sweptOver.trigger.seq, onCard.trigger.seq, 'the sweep started nothing');
+  assert.equal(await cardTitle(), cardName, `the card still names the area that moved, not one the pointer crossed (${crossedAreas.length} crossed)`);
+  // parked on the limb buttons: the mark in the middle has the aim, and says nothing
+  const limbBar = await page.evaluate(() => { const r = document.querySelector('.ns-limbs').getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; });
+  await page.mouse.move(limbBar[0], limbBar[1], { steps: 6 });
+  const parkedNow = await rested();
+  assert.equal(parkedNow.input.at, 'crosshair');
+  assert.equal(parkedNow.tip, null, 'no tip in the middle of the picture while the pointer lies on a card');
+  assert.match(parkedNow.cross, /ns-crosshair-away/, 'the mark stays faint: it is not what the player aims with');
+  assert.equal(parkedNow.trigger.seq, onCard.trigger.seq, 'and it starts nothing');
+  assert.equal(await cardTitle(), cardName);
+  await shot('parked');
+  await page.keyboard.press('ArrowRight'); // an arrow key makes the mark the aim again, with its tip
+  await page.waitForTimeout(700);
+  const afterKey = await frames(4);
+  assert.equal(afterKey.input.at, 'crosshair');
+  assert.doesNotMatch(afterKey.cross, /ns-crosshair-away/);
+  assert.ok(afterKey.tip, 'the mark\'s own tip is back after an arrow key');
+  report.card = { area: cardId, title: cardName, crossed: crossedAreas.length, parkedTip: parkedNow.tip, keyTip: afterKey.tip.text.split('\n')[0] };
+
+  report.final = { trigger: afterKey.trigger.seq, guide: afterKey.guide, lostLook: lost.look };
   assert.deepEqual(errors, []);
   console.log(JSON.stringify(report, null, 2));
 } catch (error) {

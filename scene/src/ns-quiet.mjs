@@ -152,8 +152,13 @@ export function tipSides({ x = 0, y = 0, width = 0, height = 0, side = null, tip
   // 25 November 2026 (section 209, hunt of update 73, finding 9): with the tip's size known, a tip that would run past
   // the right or bottom edge opens to the other side (at 800x600 the tips of the right half's in-between areas, with the
   // pointer at x 544 to 576, ran up to 22 px past the right edge: the 0.72 rule alone knows nothing of the tip's width).
-  const right = x > width * 0.72 || (side === 'left' && x > width * 0.3) || (sized && x + 22 + tipW > width && x - 22 - tipW >= 0);
-  const low = y > height * 0.7 || (sized && y + 18 + tipH > height && y - 18 - tipH >= 0);
+  let right = x > width * 0.72 || (side === 'left' && x > width * 0.3) || (sized && x + 22 + tipW > width && x - 22 - tipW >= 0);
+  let low = y > height * 0.7 || (sized && y + 18 + tipH > height && y - 18 - tipH >= 0);
+  // 25 November 2026 (section 211): the same toward the left and the top. A tip that opens to the left of its point (an
+  // area of the brain's right half, from 0.3 of the width on) ran up to 12 px past the left edge of an 800 px window
+  // with the pointer at x 188 to 244; it opens to the right where it fits there and not to the left.
+  if (sized && right && x - 22 - tipW < 0 && x + 22 + tipW <= width) right = false;
+  if (sized && low && y - 18 - tipH < 0 && y + 18 + tipH <= height) low = false;
   const box = (r, l) => ({ x0: r ? x - 22 - tipW : x + 22, y0: l ? y - 18 - tipH : y + 18, x1: r ? x - 22 : x + 22 + tipW, y1: l ? y - 18 : y + 18 + tipH });
   // 24 November 2026 (FREE_AIM, DESIGN-DECISIONS section 207): `card` is a box drawn OVER the tip (the tutorial's card:
   // with the pointer as the aim the tip can open anywhere, and at 800x600 the tip of an area near the top left corner
@@ -179,7 +184,24 @@ export function tipSides({ x = 0, y = 0, width = 0, height = 0, side = null, tip
     const b = { x0: b0.x0, x1: b0.x1, y0: b0.y0 + dy, y1: b0.y1 + dy };
     if (Math.abs(dy) <= TIP_SLIDE_MAX && inside(b) && !hitsHard(b)) return { right, low, dy: Math.round(dy) };
   }
-  return { right, low };
+  // 25 November 2026 (section 211): no place is clear of every box: the place inside the picture that covers least. A
+  // box may carry a `weight` (default 1): a card drawn over the tip hides it (4, given by the callers), a few words the
+  // tip is drawn over only lose those words. Before, the usual place was kept whatever it lay under: with the words of
+  // the tutorial's marks among the boxes, a tip at the top left of an 800x600 picture went back under the tutorial's
+  // card. Ties keep the earlier candidate, the usual place first.
+  const cost = b => { let c = 0; for (const a of hard) { const ox = Math.min(b.x1, a.x1) - Math.max(b.x0, a.x0), oy = Math.min(b.y1, a.y1) - Math.max(b.y0, a.y0); if (ox > 0 && oy > 0) c += ox * oy * (Number.isFinite(a.weight) && a.weight > 0 ? a.weight : 1); } return c; };
+  let best = { right, low }, least = cost(b0);
+  for (const [r, l] of others) { const b = box(r, l); if (!inside(b)) continue; const c = cost(b); if (c < least) { least = c; best = { right: r, low: l }; } }
+  for (const a of hard) {
+    if (!hits(b0, a)) continue;
+    for (const dy of [a.y1 + TIP_SLIDE_GAP - b0.y0, a.y0 - TIP_SLIDE_GAP - b0.y1]) {
+      const b = { x0: b0.x0, x1: b0.x1, y0: b0.y0 + dy, y1: b0.y1 + dy };
+      if (Math.abs(dy) > TIP_SLIDE_MAX || !inside(b)) continue;
+      const c = cost(b);
+      if (c < least) { least = c; best = { right, low, dy: Math.round(dy) }; }
+    }
+  }
+  return best;
 }
 /** The gap, in CSS px, between a slid tip and the card it was slid off, and the farthest a tip is slid (tipSides). */
 export const TIP_SLIDE_GAP = 6, TIP_SLIDE_MAX = 64;
@@ -221,7 +243,7 @@ export function createQuietUi({ doc, root }) {
     if (k === '' || typeof prompt.getBoundingClientRect !== 'function' || typeof layer.getBoundingClientRect !== 'function') return null;
     try {
       const r = prompt.getBoundingClientRect(), o = layer.getBoundingClientRect();
-      if (r && o && r.width > 0 && r.height > 0) promptRect = { x0: r.left - o.left, y0: r.top - o.top, x1: r.right - o.left, y1: r.bottom - o.top };
+      if (r && o && r.width > 0 && r.height > 0) promptRect = { x0: r.left - o.left, y0: r.top - o.top, x1: r.right - o.left, y1: r.bottom - o.top, weight: 4 }; // (weight: tipSides, a card drawn over the tip)
     } catch { promptRect = null; }
     return promptRect;
   }
