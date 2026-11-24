@@ -1031,6 +1031,21 @@ function isPageControl(el) {
   return Boolean(el?.isContentEditable || el?.closest?.('button, input, select, textarea, summary, a[href]'));
 }
 
+/**
+ * 25 November 2026 (DESIGN-DECISIONS section 217; a tester playing with the keyboard alone: after one Tab, which puts
+ * the focus on the first limb button, every game key was dead until the focus left the buttons again). Whether a key
+ * pressed with the focus on `el` belongs to that control and not to the game. A text field, a selector and everything
+ * in the pause page or another dialog keep every key. A button, a fold or a link of the playing screen (the limb
+ * buttons, a card's "More detail", the foot line's links) keeps only the keys that work it: Enter, Space and Tab.
+ * `code` is the event's code.
+ */
+export function keyStaysWithControl(el, code) {
+  if (!isPageControl(el)) return false;
+  if (el.isContentEditable || el.closest?.('input, select, textarea')) return true;
+  if (el.closest?.('.ns-shell, dialog, [role="dialog"]')) return true;
+  return code === 'Enter' || code === 'NumpadEnter' || code === 'Space' || code === 'Tab';
+}
+
 /** The UI_COMMANDS entry named by the nearest data-ns-ui attribute from `el` up to (and including) `root`, else null. */
 function uiCommandOf(el, root) {
   for (let node = el, depth = 0; node && depth < 16; node = node.parentNode, depth++) {
@@ -1284,7 +1299,7 @@ export function bindDom(target, controls, getState, setState, options = {}) {
       if (typeof controls.escape === 'function') apply(s => controls.escape(s, at));
       return;
     }
-    if (isPageControl(e.target)) return;
+    if (keyStaysWithControl(e.target, code)) return;
     if (code === DETAIL_CODE) {
       // The information key (R). Leave Alt chords to the browser.
       if (e.altKey) return;
@@ -1387,7 +1402,7 @@ export function bindDom(target, controls, getState, setState, options = {}) {
     const upN = moveKeyNumber(code);
     if (upN > 0) { if (typeof controls.moveKeyUp === 'function') apply(s => controls.moveKeyUp(s, upN, eventTime(e))); return; }
     if (!isControlCode(code)) return;
-    if (!isPageControl(e.target)) e.preventDefault();
+    if (!keyStaysWithControl(e.target, code)) e.preventDefault();
     const at = eventTime(e);
     apply(s => controls.keyUp(s, code, at));
   });

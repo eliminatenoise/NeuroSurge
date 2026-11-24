@@ -209,7 +209,7 @@ export function limbCuePoint(path, r) {
 
 /** 25 November 2026 (section 215): the hint in a window taller than wide stands gapPx above the highest card of the
  * picture's lower part (from lowerFrom of the height down); the cards are read at most every everyMs. */
-export const PORTRAIT_HINT = Object.freeze({ on: true, gapPx: 6, lowerFrom: 0.4, everyMs: 200, sidePx: 12 });
+export const PORTRAIT_HINT = Object.freeze({ on: true, gapPx: 6, lowerFrom: 0.4, everyMs: 200, sidePx: 12, lostTipAt: 0.3 });
 /** The hint's spot for the shell's placeToast (pure): `top` = the top edge, in px, of the highest card of the lower
  * part, or not finite when there is none (null: the style sheet's own place). */
 export function portraitHintPlace(top, width, height, o = PORTRAIT_HINT) {
@@ -2495,20 +2495,33 @@ export function areaChain(regions) {
  * the right of the vertical through the crosshair for the right key, the picture's right taken level), else, when no
  * area lies on that side, the nearest of all; null for none. (It took the nearest of all, whichever key: from the start
  * view both keys went to the lower-left end of the strip, so the right arrow turned the view to the left.) */
-export function areaStepStartId(points, ray, keyDir) {
+/** 25 November 2026 (DESIGN-DECISIONS section 217; a tester playing with the keyboard alone): the rule above took each
+ * key to the END of the strip from the start view. The strip is drawn as an n with the look resting under its middle,
+ * so the nearest area on the right is the lowest one at the right end: the right arrow went there, one more press
+ * reached the last area, and every further press did nothing; the same on the left. When the look is farther than
+ * `nearDeg` from every area on the key's side, the key now starts at the area on that side that is nearest the
+ * vertical line through the crosshair, the first one met going that way (from the start view: the toes at the top of
+ * the n), and walks on from there. A look within nearDeg of an area on the key's side starts at that area, as before. */
+export const AREA_START = Object.freeze({ nearDeg: 6 });
+export function areaStepStartId(points, ray, keyDir, o = AREA_START) {
   if (!Array.isArray(points) || !ray || !Array.isArray(ray.origin) || !Array.isArray(ray.dir)) return null;
-  const o = ray.origin, d = ray.dir, hl = Math.hypot(d[0], d[2]);
+  const org = ray.origin, d = ray.dir, hl = Math.hypot(d[0], d[2]);
   const rx = hl > 1e-9 ? -d[2] / hl : 1, rz = hl > 1e-9 ? d[0] / hl : 0; // (the picture's right, level)
-  let best = null, bestDot = -Infinity, any = null, anyDot = -Infinity;
+  let best = null, bestDot = -Infinity, any = null, anyDot = -Infinity, first = null, firstSide = Infinity, firstDot = -Infinity;
   for (const p of points) {
     if (!p || typeof p.id !== 'string' || !Array.isArray(p.w)) continue;
-    const vx = p.w[0] - o[0], vy = p.w[1] - o[1], vz = p.w[2] - o[2], l = Math.hypot(vx, vy, vz);
+    const vx = p.w[0] - org[0], vy = p.w[1] - org[1], vz = p.w[2] - org[2], l = Math.hypot(vx, vy, vz);
     if (!(l > 0)) continue;
     const dot = (vx * d[0] + vy * d[1] + vz * d[2]) / l;
     if (dot > anyDot) { anyDot = dot; any = p.id; }
-    if (keyDir * (vx * rx + vz * rz) > 0 && dot > bestDot) { bestDot = dot; best = p.id; }
+    const side = keyDir * (vx * rx + vz * rz) / l; // (how far to the key's side of the crosshair's vertical line)
+    if (!(side > 0)) continue;
+    if (dot > bestDot) { bestDot = dot; best = p.id; }
+    if (dot > 0 && (side < firstSide - 1e-9 || (Math.abs(side - firstSide) <= 1e-9 && dot > firstDot))) { firstSide = side; firstDot = dot; first = p.id; }
   }
-  return best || any;
+  const nearDeg = o && Number.isFinite(o.nearDeg) ? o.nearDeg : AREA_START.nearDeg;
+  const near = bestDot >= Math.cos(nearDeg * Math.PI / 180);
+  return (near ? best : first || best) || any;
 }
 /** The areas an area key tries from `fromId`, nearest first, walking the chain by `step` (+1 | -1) to its end. Empty
  * for an id the chain does not have, for another step, and at the end of the walk (it does not wrap around). Pure. */
@@ -14158,6 +14171,9 @@ export function start(params = {}) {
             const aimLine = NT.TIP.spaceAim(aimed?.limb || aimed?.target, cs.reach === true, LIMB_KEYS.on && LIMB_KEYS.view.hold === true);
             if (held) tipModel = quietTipModel({ held });
             else if (!onArea && areaFeedback && areaNote?.key === 'areaUnreachable') tipModel = quietTipModel({ pick: { name: areaFeedback, kind: 'area-note' } });
+            // (25 November 2026, section 217: an arrow key at the end of the strip said so only in the full cards; at the
+            // short level press after press did nothing with no sign. The area's own tip gives way to the short note.)
+            else if (areaNote?.key === 'areaEnd' && now < areaNote.untilMs && NT.TIP.areaEnd && !aimNow.pointer) tipModel = quietTipModel({ pick: { name: NT.TIP.areaEnd, kind: 'area-note' } });
             // 24 November 2026 (FREE_AIM, section 206): with the pointer as the aim a motor area keeps its own tip (its name
             // and the movement a rest or a click starts: until now every area under a free pointer read "Space holds the
             // brain"), and a named muscle or bone keeps its name with the Space line under it. The Space line alone is
@@ -14211,7 +14227,9 @@ export function start(params = {}) {
           quietUi.update({ avoid: handBox, cards: tipCards(now), show: quietOn || lostOnly, tip: tipModel, side: tipArea && tipArea.hemisphere === (BRAIN_FRONT_DOWN ? 'right' : 'left') ? 'left' : null, prompt: quietOn ? quietPromptText(guideNow, NT.GUIDE.short) : '',
             count: quietOn ? quietPromptCount(guideNow) : '', skip: quietOn && guideNow && guideNow.visible && !guideNow.finished && guide.tutorial === true ? NT.GUIDE.short.skip : '',
             // (24 November 2026, FREE_AIM: beside the aim; a free pointer that is not the aim has only the Space line there)
-            x: tipAtPointer ? free.x : size.width / 2, y: tipAtPointer ? free.y : size.height / 2,
+            // (25 November 2026, section 217: in a window taller than wide the words of a lost view stand a third of the
+            // way down: in the middle they lay on the hint and on the colour key, which fill the lower half there)
+            x: tipAtPointer ? free.x : size.width / 2, y: tipAtPointer ? free.y : tipCentre && size.width < size.height ? size.height * PORTRAIT_HINT.lostTipAt : size.height / 2,
             width: size.width, height: size.height });
         }
         if (guideCues) {

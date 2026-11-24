@@ -146,6 +146,18 @@ try {
   // 21 November 2026 (browser hunt of update 62, H6; restated): from the start look (on no area) the first arrow key
   // goes to the nearest area on its own side of the crosshair; the throat area at the lower-LEFT end of the strip, which
   // the RIGHT key used to reach (the nearest area of all, whichever key), is now the left key's.
+  // 25 November 2026 (DESIGN-DECISIONS section 217, AREA_START; restated): the first key now goes to the top of the
+  // strip's n and walks outward. The left key is walked down to the tongue area, the one before the throat area, so
+  // the sampled press below lands on the throat area as before.
+  for (let i = 0; i < 32; i++) {
+    const at = await page.evaluate(() => window.__nsQA.inspect().areaStep?.to ?? null);
+    if (at === 'rh_tongue') break;
+    const seq = await page.evaluate(() => window.__nsQA.inspect().areaStep?.seq ?? 0);
+    await page.keyboard.press('ArrowLeft');
+    await page.waitForFunction(s => (window.__nsQA.inspect().areaStep?.seq ?? 0) > s, seq, { polling: 30, timeout: 6000 });
+  }
+  assert.equal(await page.evaluate(() => window.__nsQA.inspect().areaStep?.to ?? null), 'rh_tongue', 'the left key walks down to the tongue area');
+  await waitForPulseEnd();
   await sampleView('eye', 'ArrowLeft');
   await page.keyboard.press('e');
   await page.waitForFunction(() => {

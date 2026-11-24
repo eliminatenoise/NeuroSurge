@@ -83,9 +83,16 @@ test('H6: the first arrow key from a look on no area goes to the nearest area on
   const { areaStepStartId } = app;
   const ray = { origin: [0, 0, 0], dir: [0, 0, -1] }; // looking along -z: the picture's right is +x
   const pts = [{ id: 'left_low', w: [-1, -0.5, -5] }, { id: 'right_low', w: [1.1, -0.5, -5] }, { id: 'right_high', w: [0.2, 2, -5] }];
-  // left_low is nearest of all (the old rule took it for both keys)
-  assert.equal(areaStepStartId(pts, ray, 1), 'right_low');
+  // (25 November 2026, section 217: the look here is 13.5 degrees from the nearest area, far from all of them: the key
+  // starts at the first area met going its way, the one nearest the crosshair's vertical line; it was the nearest by
+  // angle, right_low, which from the game's start view is the END of the strip)
+  assert.equal(areaStepStartId(pts, ray, 1), 'right_high');
   assert.equal(areaStepStartId(pts, ray, -1), 'left_low');
+  // a look close to an area on the key's side (within AREA_START.nearDeg) starts at that area, as before
+  const close = [{ id: 'right_near', w: [0.4, -0.1, -5] }, { id: 'right_inline', w: [0.05, 3, -5] }];
+  assert.equal(areaStepStartId(close, ray, 1), 'right_near');
+  assert.equal(areaStepStartId(close, ray, 1, { nearDeg: 1 }), 'right_inline', 'with a smaller near angle the first one met');
+  assert.ok(app.AREA_START.nearDeg > 2 && app.AREA_START.nearDeg < 12);
   // nothing on the key's side: the nearest of all, so the key still goes somewhere
   assert.equal(areaStepStartId(pts.filter(p => p.id !== 'left_low'), ray, -1), 'right_low');
   // turned round (looking along +z, the picture's right is -x)

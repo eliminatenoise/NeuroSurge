@@ -1866,6 +1866,8 @@ export const TIP = deepFreeze({
   brainAway: { title: 'The brain is out of sight', hint: 'Look round, or press Esc, then Reset brain view.' },
   /** 25 November 2026 (ns-app LOOK_LOST, section 209): the tip in the middle of an empty picture: the player's own drag
    * turned the view away from the brain and both bodies. */
+  // 25 November 2026 (section 217): an arrow key pressed at the end of the strip (the full cards have HUD.areaEnd)
+  areaEnd: 'No more areas this way. Press the other arrow key.',
   viewLost: { title: 'You have turned away from the brain', hint: 'Drag back, or press ← or →. Esc, then Reset brain view, also turns you back.' },
 });
 

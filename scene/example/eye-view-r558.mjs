@@ -18,7 +18,7 @@ import { showControlsCard } from '../src/ns-controls-card.mjs';
 import { createLoadBar } from '../src/ns-load-progress.mjs';
 import { installLoadGuard, ADDRESS_REFUSED } from '../src/ns-load-guard.mjs';
 import { startPackLoader, readAll } from '../src/ns-pack-loader.mjs';
-import { editionPacks, isLiteEdition } from './edition.mjs';
+import { editionPacks, editionOf } from './edition.mjs';
 import { packKeyOfUrl } from '../src/ns-pack.mjs';
 
 // 17 November 2026 (user: "the field of view should be even wider, such that you can see everything from your eyes.
@@ -132,17 +132,19 @@ const FACE_COMPLETENESS_ERROR = 'ns:app_args: configured viewGraph requires the 
 const FRIENDLY_FACE_ERROR = 'The face anatomy could not finish loading. Reload the page to try again.';
 const params = new URLSearchParams(window.location.search);
 const mode = params.get('case') || 'boot';
-const lite = isLiteEdition(params);
+const edition = editionOf(params), lite = edition === 'lite';
 // 25 November 2026 (DESIGN-DECISIONS section 212): a parameter the game does not know is left alone. It was refused,
 // and sites that pass a link on add their own (fbclid, utm_source, gclid ...): a visitor who followed such a link got
 // "Loading did not finish. Check your connection, then try again", and "Try again" loaded the same address. Nothing
 // in the game reads such a parameter, so the rule above stands: no raw coordinate or query overrides. Still refused:
-// a value the game does not know for one of its own two parameters, and the scene's test switches (`qa`, and every
-// name that starts with `ns`: ns-scene-three reads nsQuality and nsBrainK under qa=1, which draws the brain at another
-// distance), which this page has never offered.
-const TEST_SWITCH = /^(?:qa$|ns)/i;
+// a value the game does not know for one of its own two parameters, and the scene's test switches (`qa`, `nsQuality`
+// and `nsBrainK`: ns-scene-three reads the last two under qa=1, which draws the brain at another distance), which
+// this page has never offered.
+// (section 217: only the three names the scene reads, not every name that starts with "ns": "nsukey" is a parameter
+// some apps add to a shared link. "edition=full" and an empty edition are the Full game.)
+const TEST_SWITCH = /^(?:qa|nsquality|nsbraink)$/i;
 if ([...params.keys()].some(k => TEST_SWITCH.test(k)) || !['boot', 'stop-during-body', 'missing-face'].includes(mode)
-    || (params.has('edition') && (!lite || mode !== 'boot'))) {
+    || edition === 'unknown' || (lite && mode !== 'boot')) {
   throw new Error(ADDRESS_REFUSED); // (the load guard then offers the game's usual address, not the same one again)
 }
 const packProfile = editionPacks(params);

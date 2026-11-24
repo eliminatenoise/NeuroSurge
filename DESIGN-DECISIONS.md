@@ -9022,6 +9022,81 @@ steps. 844 unit tests, 24 browser tests.
 - The preview's copy and this one still differ in the preview's own parts; each update here is carried over there by
   its maintainer.
 
+## 217. A third play-through, of update 78: the keys work with the focus on a button, each arrow key walks its half of the strip, and what was left (25 November)
+
+A tester played Body update 78 for what the game says against what it does, with the keyboard alone, with the
+electrical map, in a tall window, under reduced motion and a high pixel ratio, and from odd addresses
+(`hunt78/FINDINGS.md`; scenarios and pictures beside it). All 142 movements of the 48 areas that move something were
+rested on and clicked: for every one the tip, the card and the movement started agree, the named joints change on the
+named side and in the named direction, and the card's muscles belong to the movement. The electrical map sent one
+volley to a muscle of the movement for each of 46 areas and left nothing behind. Ten faults, each reproduced at least
+twice; this section is the ones fixed here, each reproduced by the lead first.
+
+**1. After one Tab every key of the game was dead (finding 1).** Tab puts the focus on the first limb button, and a
+key pressed with the focus on any button, link or fold was left to that control: thirteen presses (3, S, A, an arrow,
+E, R, M, Space, Enter) changed nothing until the focus left the buttons. A button, a fold or a link of the playing
+screen now keeps only the keys that work it, Enter, Space and Tab; every other key is the game's
+(`keyStaysWithControl` in `ns-controls.mjs`). A text field, a selector and everything in the pause page keep every
+key, as before. Seen with the focus on "1 Left arm": 3 chooses the right leg, S draws it in 27 cm, an arrow key aims
+and the area moves, E, R and M work, Space presses the focused button.
+
+**2. Each arrow key went to its end of the strip and then did nothing (finding 3).** With the look on no area a key
+started at the area nearest the crosshair on its side (21 November). The strip is drawn as an n with the start look
+resting under its middle, so the nearest area on the right is the lowest one at the right end: the right arrow went
+there over 25 areas, one more press reached the last one, and 56 more did nothing, with no sign at the short reading
+level. Now, when the look is more than 6 degrees from every area on the key's side, the key starts at the first area
+met going that way, the one nearest the vertical line through the crosshair (`AREA_START`, `areaStepStartId`): from
+the first screen the right arrow starts at the toes at the top of the n and walks its 27 areas outward, the left arrow
+the other 27; the other key then walks back across all of them. A press at the end shows "No more areas this way.
+Press the other arrow key." beside the mark at the short level too (`TIP.areaEnd`).
+
+**3. Addresses (finding 8).** `?nsukey=...`, which some apps add to a link, was refused with every other name that
+begins with "ns": only the three names the scene reads are refused now (`qa`, `nsQuality`, `nsBrainK`).
+`?edition=full`, an empty `?edition=`, `?Edition=lite` and `?edition=lite%20` are read as they are meant: the
+parameter's name and value without regard to capitals and to spaces (`editionOf` in `edition.mjs`); `?Edition=lite`
+had started the Full game without a word.
+
+**4. The light-blue frame round the whole picture (finding 10).** The frame is the keyboard's focus mark on the
+picture; it went away at the first press of a mouse button (22 November). Since the pointer became the aim a mouse
+player can play for minutes without a press. A pointer that really moves, 4 px from where it was first seen, now
+counts as the pointer too; Tab brings the frame back.
+
+**5. In a tall window the words of a lost view lay on the hint and the colour key (part of finding 9).** They stand
+a third of the way down there, not in the middle.
+
+**Tests.** `tests/browser-keyboard-only.mjs` (new): the keys with the focus on a limb button; each arrow key's walk
+of 27 areas from the first screen and the words at its end. `tests/switch-on.test.mjs`: the key's start far from and
+near an area. `tests/load-guard.test.mjs`: the edition an address asks for; the launcher refuses exactly the names the
+scene reads. `tests/look-calm.test.mjs`: a moving pointer and a still one. `tests/browser-shared-link.mjs`:
+`?Edition=lite&nsukey=abc` (Lite) and `?edition=full`. `tests/browser-keyboard-aim.mjs` and `tests/browser-punch-in.mjs`
+reached the strip's lower-left end with the first left key; they now walk there with the left key from the toes (26
+presses), and check each press on the way. 845 unit tests, 25 browser tests.
+
+**Not done, or not right** (the tester's other findings).
+- *"Open left hand" and every "Straighten ... finger" look like bending in the eye view (finding 2).* They extend the
+  fingers 30 degrees back from straight, and seen from behind the hand a finger tilted back is drawn shorter, as a
+  bent one is: the fingertips move 20 to 23 px toward the wrist in the picture for the opening and 29 to 35 px for the
+  closing. Right in the joints, hard to read in this view. For a helper: the opened hand must be drawn taller or
+  fanned, never shorter than at rest.
+- *Five movements first go the other way (finding 5).* A movement that ends at a stop where the part already is
+  strikes the stop and rebounds (177, 189): "Clench the jaw" opens it 12.6 degrees first, "Turn palm up" turns 29 to
+  37 degrees toward palm down, "Lower the throat bone again" raises it 7, "Bring right fingers together" spreads 8.
+  That was chosen so that every area shows a movement; a reader takes the first motion for the movement named. Under
+  reduced motion these draw nothing.
+- *Small movements (finding 5).* 31 of 123 names move their part under 6 px on both bodies at 1600x900, and 48 under
+  12 px, 27 of them beside the face.
+- *Small places (finding 6).* A movement's place inside its area can be very small: "Pull left foot up" about 27
+  square px, and a 7 px grid met no place for 7 of 142 movements.
+- "Swing left arm in across the body" leaves the left leg 2.6 cm off its place until Reset body (finding 7).
+- In a tall window 14 of 122 pointer tips in the tutorial's first step lie on the cue's ring, its words or a label,
+  and 9 of 71 on the aim mark's words; at 1600x900 at the full level "Front (anterior)" stands under the limb buttons
+  (finding 9).
+- With the keyboard alone no key turns the view or puts the mark on the mirror body, so Space never holds it, and the
+  tutorial's drag steps can only be skipped (finding 3).
+- Finding 4 ("Game editions" restarts the Full game) is the working copy's own old root page; on the published site
+  the root page lists both editions (read on the published tree's local server and on the site).
+- `?case=stop-during-body`, a test address, leaves an empty page, as the test it serves needs.
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**

@@ -32,7 +32,7 @@ try {
     panel: (p => (p ? { kind: p.dataset.kind, words: [...p.children].map(c => c.textContent) } : null))(document.querySelector('.ns-load-fail')), search: location.search }));
   const settled = async page => { await page.waitForFunction(() => document.querySelector('#ns-app')?.dataset.nsPhase === 'playing' || document.querySelector('.ns-load-fail'), null, { timeout: 60_000 }); return state(page); };
 
-  for (const [query, edition] of [['?fbclid=IwAR0abc123', 'full'], ['?utm_source=newsletter&utm_medium=email&gclid=x1', 'full'], ['?edition=lite&utm_source=newsletter', 'lite'], ['?edition=Lite', 'lite']]) {
+  for (const [query, edition] of [['?fbclid=IwAR0abc123', 'full'], ['?utm_source=newsletter&utm_medium=email&gclid=x1', 'full'], ['?edition=lite&utm_source=newsletter', 'lite'], ['?edition=Lite', 'lite'], ['?Edition=lite&nsukey=abc', 'lite'], ['?edition=full', 'full']]) {
     const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
     const errors = []; page.on('pageerror', error => errors.push(String(error)));
     await page.goto(game + query, { waitUntil: 'domcontentloaded' });

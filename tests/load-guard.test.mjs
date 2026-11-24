@@ -113,9 +113,25 @@ test('an address the launcher refuses: its own panel, and the button loads the p
   const rule = /const TEST_SWITCH = (\/.+\/i);/.exec(launcher);
   assert.ok(rule, 'the launcher names the parameters it still refuses');
   const refusedName = new RegExp(rule[1].slice(1, -2), 'i');
-  for (const k of ['fbclid', 'utm_source', 'utm_medium', 'gclid', 'ref', 'igshid', 'mc_cid', 'x', 'quality']) assert.equal(refusedName.test(k), false, k);
-  for (const k of ['qa', 'QA', 'nsQuality', 'nsBrainK', 'nsAnything']) assert.equal(refusedName.test(k), true, k);
+  for (const k of ['fbclid', 'utm_source', 'utm_medium', 'gclid', 'ref', 'igshid', 'mc_cid', 'x', 'quality', 'nsukey', 'qaz', 'ns']) assert.equal(refusedName.test(k), false, k);
+  for (const k of ['qa', 'QA', 'nsQuality', 'nsBrainK', 'NSBRAINK']) assert.equal(refusedName.test(k), true, k);
+  // (section 217) exactly the names the scene reads from the address
+  const scene = fs.readFileSync(new URL('../scene/src/ns-scene-three.mjs', import.meta.url), 'utf8');
+  const read = [...scene.matchAll(/urlParams\.get\('([A-Za-z]+)'\)/g)].map(m => m[1]);
+  assert.deepEqual([...new Set(read)].sort(), ['nsBrainK', 'nsQuality', 'qa']);
+  for (const k of read) assert.equal(refusedName.test(k), true, `the launcher refuses ${k}`);
   assert.doesNotMatch(launcher, /k !== 'case' && k !== 'edition'/);
+});
+
+test('the edition an address asks for: capitals and spaces do not matter, "full" and nothing are the Full game (sections 212, 217)', async () => {
+  const { editionOf, isLiteEdition, editionPacks } = await import('../scene/example/edition.mjs');
+  const of = q => editionOf(new URLSearchParams(q));
+  for (const q of ['edition=lite', 'edition=Lite', 'edition=LITE', 'Edition=lite', 'EDITION=Lite', 'edition=lite%20', 'edition=%20lite', 'utm_source=x&edition=lite']) assert.equal(of(q), 'lite', q);
+  for (const q of ['', 'edition=', 'edition=full', 'edition=Full', 'fbclid=abc', 'nsukey=1']) assert.equal(of(q), 'full', q || '(none)');
+  for (const q of ['edition=mini', 'edition=lite2', 'edition=1']) assert.equal(of(q), 'unknown', q);
+  assert.equal(isLiteEdition(new URLSearchParams('Edition=LITE')), true);
+  assert.deepEqual(editionPacks(new URLSearchParams('edition=full')), {});
+  assert.ok(editionPacks(new URLSearchParams('edition=Lite')).indexUrl.endsWith('PACK-INDEX.json'));
 });
 
 test('when the game is ready the guard is gone: no panel, no watching, nothing later', () => {

@@ -139,6 +139,13 @@ test('H19: the canvas focus ring follows the last input: a pointer press hides i
   L.get('keydown')({ type: 'keydown', key: 'ArrowLeft' }); assert.equal(attrs[FOCUS_RING.attr], undefined);
   L.get('pointerdown')({ type: 'pointerdown' }); assert.equal(attrs[FOCUS_RING.attr], 'pointer');
   L.get('keydown')({ type: 'keydown', key: 'Tab' }); assert.equal(attrs[FOCUS_RING.attr], 'keys');
+  // (25 November 2026, section 217) a pointer that really moves counts as the pointer too; a still one does not
+  assert.equal(focusRingInput(null, 'pointermoved'), 'pointer');
+  assert.equal(focusRingInput('keys', 'pointermoved'), 'pointer');
+  L.get('pointermove')({ type: 'pointermove', clientX: 100, clientY: 100 }); assert.equal(attrs[FOCUS_RING.attr], 'keys', 'the first place seen is only noted');
+  L.get('pointermove')({ type: 'pointermove', clientX: 101, clientY: 101 }); assert.equal(attrs[FOCUS_RING.attr], 'keys', 'a jitter under movePx is no move');
+  L.get('pointermove')({ type: 'pointermove', clientX: 100 + FOCUS_RING.movePx, clientY: 100 }); assert.equal(attrs[FOCUS_RING.attr], 'pointer');
+  L.get('keydown')({ type: 'keydown', key: 'Tab' }); assert.equal(attrs[FOCUS_RING.attr], 'keys', 'Tab brings the ring back');
   off(); assert.equal(L.size, 0);
   assert.equal(typeof bindFocusRing(null), 'function');
 });

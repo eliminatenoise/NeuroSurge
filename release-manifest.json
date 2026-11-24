@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-25-body-update-79",
+  "version": "experimental-2026-11-25-body-update-80",
   "experimental": true,
-  "source": "Body update 79. The tutorial has a tenth step that practises the look that raises and lowers the chosen limb, and a finger works on the picture: a tap presses a motor area once, a finger's drag turns the look. Both come from the copy of the game inside the Movement mirror preview. With the pointer free the pointer is the aim. Full and Lite share the game.",
+  "source": "Body update 80. With the keyboard alone: the keys work with the focus on a button, and each arrow key walks its half of the strip from its top. Addresses are read without regard to capitals. The focus frame round the picture goes when the pointer moves. With the pointer free the pointer is the aim. Full and Lite share the game.",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -32,8 +32,8 @@
     },
     {
       "path": "DESIGN-DECISIONS.md",
-      "bytes": 1075442,
-      "sha256": "be504c920d9682074e2f065ef9f45a10da57b415754821de1fec6ec77a5860a4"
+      "bytes": 1082190,
+      "sha256": "cd709e8055552bfcfe6aac5ba7a6d3a12072a838057709fb51f42d392eb378b8"
     },
     {
       "path": "LAUNCHERS.md",
@@ -62,8 +62,8 @@
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 70548,
-      "sha256": "eaa2f5f197a393483a5bf97f3d136d7749292e2e7941f7820cabb8d1408d6a58"
+      "bytes": 71852,
+      "sha256": "7f28de255533862bd978181e873c576a9c15edaaf9a7f3c56dc0355939524683"
     },
     {
       "path": "README.md",
@@ -73,12 +73,12 @@
     {
       "path": "START.html",
       "bytes": 4507,
-      "sha256": "6b665543758480b354bd1de6836e4b6337ebd05e9530b9b61f1242dcda062048"
+      "sha256": "8d36da2758df96f6775e68f7acf6a6343059a17b3d284bb75df1846034f38559"
     },
     {
       "path": "index.html",
       "bytes": 3909,
-      "sha256": "84d0ab7393a3bf362bf37a91659ba2f042f5359354a061fbf0e39838c112330f"
+      "sha256": "9968641b66cb4b4100eabba14b00ec8b02437315ae81f68b541b64b776de0b18"
     },
     {
       "path": "inputs/FULLBODY-MESH-MANIFEST.json",
@@ -3937,13 +3937,13 @@
     },
     {
       "path": "scene/example/edition.mjs",
-      "bytes": 785,
-      "sha256": "bcc497b8a907d7f5f3a2a67289cb5e3b18df4b2b94ec37b2dfb986ff93a66317"
+      "bytes": 1230,
+      "sha256": "96ec93b2ad7481e521cbd5065a54e8e164faeb792fd9a4deb1a37b400a0865c6"
     },
     {
       "path": "scene/example/eye-view-r558.mjs",
-      "bytes": 63837,
-      "sha256": "f886ac02c0437e2024fd167b4ca849f49fdfaa3e5c1b5131d997eb913f541574"
+      "bytes": 64060,
+      "sha256": "f8e259bb9366097e15e59c350bb36211e8588c4ce91c2be8b982314b7b9a2379"
     },
     {
       "path": "scene/example/guide-cues.css",
@@ -3987,8 +3987,8 @@
     },
     {
       "path": "scene/src/ns-app.mjs",
-      "bytes": 1226702,
-      "sha256": "60ce4b06e100309e1b95f3aaed856999f056f447f81eb452aa8b28884424b274"
+      "bytes": 1228869,
+      "sha256": "1c62293818059fb084e199c909d4ce6532a0284a48519448185729f7ee0892d9"
     },
     {
       "path": "scene/src/ns-area-halo.mjs",
@@ -4117,8 +4117,8 @@
     },
     {
       "path": "scene/src/ns-controls.mjs",
-      "bytes": 106307,
-      "sha256": "13424b6f2f45b3fd200f2f241578c222b8c3b9d7dbb1e13477b7b0ad621a11fd"
+      "bytes": 107292,
+      "sha256": "7f102bf4e59f48e1bf58e20a97e7282814c49979befa713e2bb4a8db6bd5236a"
     },
     {
       "path": "scene/src/ns-cue-place.mjs",
@@ -4217,8 +4217,8 @@
     },
     {
       "path": "scene/src/ns-look-calm.mjs",
-      "bytes": 7388,
-      "sha256": "f720c559ef80f62b6e5c07e91af26039662a15bf981d1fb90821e38270437e60"
+      "bytes": 8501,
+      "sha256": "33d8e3be34182c84b8fa75cf20e6d4b4679cf4a04511aa300d644a956edc5e2b"
     },
     {
       "path": "scene/src/ns-math.mjs",
@@ -4332,8 +4332,8 @@
     },
     {
       "path": "scene/src/ns-text.mjs",
-      "bytes": 157278,
-      "sha256": "e595a8714bc37c068b262053a3dc6cc3cbb8848682d2c93be79284cd1c8c8692"
+      "bytes": 157459,
+      "sha256": "f67e4eb21ebd3b367e4fc54a13a4b826969dcef1ee301eb94fd087360c216c1c"
     },
     {
       "path": "scene/src/ns-vessels.mjs",
@@ -4487,8 +4487,13 @@
     },
     {
       "path": "tests/browser-keyboard-aim.mjs",
-      "bytes": 32061,
-      "sha256": "cd5669d3683dac007611076954d37c12fa2a100d3f6ca4b5c908e12e3d23e7f0"
+      "bytes": 33023,
+      "sha256": "a741e5d5916b74186f7e71e1dcf9558a8c5c1ffeec16679632908190071e6045"
+    },
+    {
+      "path": "tests/browser-keyboard-only.mjs",
+      "bytes": 6753,
+      "sha256": "3e45a7ba39169ab81a5b894a5a9c1c88d70f12d717e8d6c0d8b5435546ed95bb"
     },
     {
       "path": "tests/browser-limb-controls.mjs",
@@ -4537,13 +4542,13 @@
     },
     {
       "path": "tests/browser-punch-in.mjs",
-      "bytes": 14542,
-      "sha256": "618979376b71eb403234f13a66bb9fc3f3e975abdef0e72eeef6fff8a5b27aa9"
+      "bytes": 15431,
+      "sha256": "77fa426c5f5745230b65615001ae7320477298a037322ad75f386178b4ac7cac"
     },
     {
       "path": "tests/browser-shared-link.mjs",
-      "bytes": 4643,
-      "sha256": "cbb324f2be7356a60e0cb31e65b65c5169bb5eab9e3422cbf4eacbe96083c720"
+      "bytes": 4708,
+      "sha256": "8021b6fc9194245d745392e994671e32d2f2d8646cf10b862cafc7fb18c985c8"
     },
     {
       "path": "tests/browser-space-aim.mjs",
@@ -4807,8 +4812,8 @@
     },
     {
       "path": "tests/load-guard.test.mjs",
-      "bytes": 8902,
-      "sha256": "dfcdc4cde44beff50d8d577e9bb2a6599d3dafaf4eb84317e2db050f5fc3604e"
+      "bytes": 10348,
+      "sha256": "f7f6b18d381770d530b67680b5a548234d1e69126213417c5a015542e23f9433"
     },
     {
       "path": "tests/load-progress.test.mjs",
@@ -4817,8 +4822,8 @@
     },
     {
       "path": "tests/look-calm.test.mjs",
-      "bytes": 17985,
-      "sha256": "72f0239d30114ac485625e3458a98f9b0ce750f59b5dac8491b7e44b2b5237ec"
+      "bytes": 18823,
+      "sha256": "e4d0c3ba6fd2a3615bb9d345735bd29dd046e79125740173364c2d1111bea84a"
     },
     {
       "path": "tests/look-fixes-r26.test.mjs",
@@ -5002,8 +5007,8 @@
     },
     {
       "path": "tests/switch-on.test.mjs",
-      "bytes": 11558,
-      "sha256": "957b852dd73d8d92f5fa0da14b9128ac25826cb4d9149245443c769d9b5f9bd0"
+      "bytes": 12278,
+      "sha256": "eb3a76fe91394d5f3e3107e855c34f962946ddee3ae3a27b7ca5aa8f6c14be0e"
     },
     {
       "path": "tests/tutorial.test.mjs",

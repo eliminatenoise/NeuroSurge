@@ -206,8 +206,20 @@ try {
     // the nearest area on ITS side of the crosshair. This walk pressed the RIGHT key first and was taken to the throat
     // area at the lower-LEFT end of the strip (the nearest area of all, whichever key), then went one further left to
     // the left end. The same two areas are now reached with the left key twice.
-    const firstRight = await step('ArrowLeft');
-    assert.equal(firstRight.step.from, null, 'the first key starts from no area');
+    // 25 November 2026 (DESIGN-DECISIONS section 217, AREA_START; restated): from the start look, far from every area,
+    // the first key goes to the first area on its side of the middle, the toes at the top of the strip's n, and walks
+    // outward one area a press. The left key walks the brain's right half down to its lower-left end: the throat area
+    // is the 26th area that way and the end the 27th. The rest of this test goes on from those two, as before.
+    const start = await step('ArrowLeft');
+    assert.equal(start.step.from, null, 'the first key starts from no area');
+    assert.equal(start.area, 'rh_toes', 'the first key goes to the top of the n, the first area on its side');
+    let firstRight = start;
+    for (let i = 0; i < 30 && firstRight.area !== 'rh_throat'; i++) {
+      const previous = firstRight.area;
+      firstRight = await step('ArrowLeft');
+      assert.equal(firstRight.step.from, previous, 'each press goes on from the area the last one reached');
+    }
+    assert.equal(firstRight.area, 'rh_throat', 'the left key walks down to the throat area');
     const firstLeft = await step('ArrowLeft');
     assert.equal(firstLeft.step.from, firstRight.area);
     assert.notEqual(firstLeft.area, firstRight.area);
