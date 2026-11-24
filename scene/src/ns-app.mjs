@@ -207,6 +207,16 @@ export function limbCuePoint(path, r) {
   return s >= 0.5 ? mix(path.bend, path.frame, (s - 0.5) / 0.5) : mix(path.root, path.bend, s / 0.5);
 }
 
+/** 25 November 2026 (section 215): the hint in a window taller than wide stands gapPx above the highest card of the
+ * picture's lower part (from lowerFrom of the height down); the cards are read at most every everyMs. */
+export const PORTRAIT_HINT = Object.freeze({ on: true, gapPx: 6, lowerFrom: 0.4, everyMs: 200, sidePx: 12 });
+/** The hint's spot for the shell's placeToast (pure): `top` = the top edge, in px, of the highest card of the lower
+ * part, or not finite when there is none (null: the style sheet's own place). */
+export function portraitHintPlace(top, width, height, o = PORTRAIT_HINT) {
+  if (!Number.isFinite(top) || !(width > 0) || !(height > 0) || !(top > 0) || !(top < height)) return null;
+  return { left: o.sidePx, bottom: Math.round(height - top + o.gapPx), maxWidth: Math.max(120, width - 2 * o.sidePx), align: 'left' };
+}
+
 export const FREE_AIM = Object.freeze({ on: true, restPx: 3, restMs: 100 });
 /** FREE_AIM's step (pure). seen: the last record (null at first); pointer / lookMs / yaw / pitch: the controls' free
  * pointer ({ x, y, timeMs } | null) and look now; free: the game plays with the pointer not captured; width / height:
@@ -6657,8 +6667,9 @@ export function createShell({ doc, root, text = SHELL_TEXT, settings = SETTINGS_
       if (k === toastSpotKey) return;
       toastSpotKey = k;
       const st = toast.style, px = v => `${Math.round(v)}px`;
-      if (!spot) { st.left = ''; st.right = ''; st.bottom = ''; st.maxWidth = ''; st.transform = ''; st.textAlign = ''; st.removeProperty('text-wrap'); }
+      if (!spot) { st.left = ''; st.right = ''; st.top = ''; st.bottom = ''; st.maxWidth = ''; st.transform = ''; st.textAlign = ''; st.removeProperty('text-wrap'); }
       else {
+        st.top = 'auto'; // (section 215: in a tall window the style sheet places the hint by its top edge)
         st.left = spot.centre ? '50%' : Number.isFinite(spot.left) ? px(spot.left) : 'auto';
         st.right = !spot.centre && Number.isFinite(spot.right) ? px(spot.right) : 'auto';
         st.transform = spot.centre ? 'translateX(-50%)' : 'none';
@@ -9221,6 +9232,35 @@ export function start(params = {}) {
           else toastSpot = { centre: true, bottom: H - b.y0 + g, maxWidth: Math.min(640, W - 24), align: 'center' };
         }
         return toastSpot;
+      }
+      /** 25 November 2026 (DESIGN-DECISIONS section 215; the second tester's finding 5): the hint's place in a window
+       * taller than it is wide. The style sheet puts it at the top left of the lower band, where the information card
+       * or, at the full reading level, the colour key now begins: at 700x900 and 720x800 the hint lay 20 px on the
+       * card's title and 40 px on the key's. It stands PORTRAIT_HINT.gapPx above the highest card of the lower part
+       * (the information card and the HUD's panels as drawn, read at most every everyMs), or, with none there, at its
+       * usual place (null). */
+      let hintPortAt = -Infinity, hintPortSpot = null, hintPortFor = '', hintPortFoot = -1;
+      function portraitHintSpot(sz, nowMs) {
+        const W = sz.width, H = sz.height, forKey = `${W}x${H}`;
+        if (!PORTRAIT_HINT.on || !(W < H)) { hintPortSpot = null; hintPortFor = ''; return null; }
+        if (forKey === hintPortFor && nowMs - hintPortAt < PORTRAIT_HINT.everyMs) return hintPortSpot;
+        hintPortFor = forKey; hintPortAt = nowMs;
+        let top = Infinity, upperFoot = 0;
+        try {
+          const o = canvas.getBoundingClientRect();
+          for (const e of doc.querySelectorAll('.ns-infopanel, .ns-hud .ns-panel')) {
+            if (!e || e.hidden || typeof e.getBoundingClientRect !== 'function') continue;
+            const r = e.getBoundingClientRect(), y0 = r.top - o.top;
+            if (!(r.width > 0 && r.height > 0)) continue;
+            if (y0 > H * PORTRAIT_HINT.lowerFrom) { if (y0 < top) top = y0; }
+            else if (r.bottom - o.top > upperFoot) upperFoot = r.bottom - o.top; // (the status panel at the top)
+          }
+          // (the map's card starts under the panel at the top: quiet.css reads --ns-top-panel-foot in a tall window)
+          const rootEl = doc.querySelector('.ns-app'), foot = Math.round(upperFoot);
+          if (rootEl && rootEl.style && foot !== hintPortFoot) { hintPortFoot = foot; if (foot > 0) rootEl.style.setProperty('--ns-top-panel-foot', `${foot}px`); else rootEl.style.removeProperty('--ns-top-panel-foot'); }
+        } catch { top = Infinity; }
+        hintPortSpot = portraitHintPlace(top, W, H);
+        return hintPortSpot;
       }
       /** 25 November 2026 (FIX76; a hunt of update 74, finding 9; ns-rows-place ROWS_OUTSIDE): the strip beside your head
        * and trunk for the two rows while the view is outside (key E) and at rest, or null. Your head's and trunk's box is
@@ -14198,7 +14238,7 @@ export function start(params = {}) {
         // (25 November 2026, FIX76, ns-rows-place ROWS_OUTSIDE: in the outside view the hint and the limb buttons stand beside
         // your head and trunk where a strip is free there; null: their usual places)
         const rowsOut = rowsOutside(size);
-        if (shell && typeof shell.placeToast === 'function') shell.placeToast(rowsOut ? rowsOut.hint : toastSpotFor(size), `${size.width}x${size.height}`, size.width >= size.height); // (FOOT_LINE: above the page's foot line)
+        if (shell && typeof shell.placeToast === 'function') shell.placeToast(rowsOut ? rowsOut.hint : size.width < size.height ? portraitHintSpot(size, now) : toastSpotFor(size), `${size.width}x${size.height}`, size.width >= size.height); // (FOOT_LINE: above the page's foot line)
         // (24 November 2026, HINT_ROW: the limb buttons stand clear of the hint while it shows)
         if (shell && typeof shell.clearHint === 'function' && limbHud && limbHud.box) shell.clearHint(limbHud.box, `${size.width}x${size.height}|${placeLimbBar(limbHud.box, rowsOut)}`);
         // (section 211: nor while the pointer is parked on a card or outside the window, aimStep `away`: the card keeps the

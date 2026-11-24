@@ -377,3 +377,15 @@ test('a drag of the view with the free pointer: the middle mark has the aim and 
   const off = run([{}, { on: false, down: true, lookMs: 50, yaw: 0.1 }]);
   assert.equal(off[1].silent, false);
 });
+
+// 25 November 2026 (section 215): the hint's place in a window taller than wide
+test('in a tall window the hint stands a gap above the highest card of the lower part, or keeps its own place when there is none', async () => {
+  const { PORTRAIT_HINT, portraitHintPlace } = await import('../scene/src/ns-app.mjs');
+  assert.equal(PORTRAIT_HINT.on, true);
+  assert.deepEqual(portraitHintPlace(584, 700, 900), { left: 12, bottom: 900 - 584 + PORTRAIT_HINT.gapPx, maxWidth: 676, align: 'left' });
+  assert.equal(portraitHintPlace(Infinity, 700, 900), null, 'no card in the lower part: the style sheet\'s place');
+  assert.equal(portraitHintPlace(NaN, 700, 900), null);
+  assert.equal(portraitHintPlace(950, 700, 900), null, 'a card below the window is no card');
+  assert.equal(portraitHintPlace(584, 0, 900), null);
+  assert.ok(portraitHintPlace(551.4, 720, 800).bottom === Math.round(800 - 551.4 + PORTRAIT_HINT.gapPx));
+});

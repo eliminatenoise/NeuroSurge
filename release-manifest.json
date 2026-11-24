@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "version": "experimental-2026-11-25-body-update-77",
+  "version": "experimental-2026-11-25-body-update-78",
   "experimental": true,
-  "source": "Body update 77. From a second tester's play-through: after a far drag the first S draws the limb in, the information card ends under the electrical map's card, and in the outside view the limb buttons stand beside your body. The shoulder and hip mark says what it is for in the tutorial. With the pointer free the pointer is the aim. Full and Lite share the game.",
+  "source": "Body update 78. In a window taller than wide the hint stands above the lower cards, the electrical map's card starts under the top panel, and the pause page fits. With the pointer free the pointer is the aim. Full and Lite share the game.",
   "incomplete_acceptance": true,
   "files": [
     {
@@ -32,8 +32,8 @@
     },
     {
       "path": "DESIGN-DECISIONS.md",
-      "bytes": 1068010,
-      "sha256": "98985acc8c55543518f33032c577fcb4022e0aebb019e3ed4c297ce1f4f2ac8f"
+      "bytes": 1070758,
+      "sha256": "c32fcf405efd87d47ac422ca46a8c16aacf9f6e3d409b46b0d60d6ac99ec5d53"
     },
     {
       "path": "LAUNCHERS.md",
@@ -62,8 +62,8 @@
     },
     {
       "path": "PROJECT-CONTEXT.json",
-      "bytes": 69273,
-      "sha256": "c007e80cb3a98dc77942637a7dfbbb6d367127e42135a199f4348abc51383fa0"
+      "bytes": 69831,
+      "sha256": "9422ed294a8d0e4251814a2c2abcf89617998ddca0a806b0d270bc1a7e7cf32a"
     },
     {
       "path": "README.md",
@@ -73,12 +73,12 @@
     {
       "path": "START.html",
       "bytes": 4507,
-      "sha256": "2aebb476fc014b4d6ab96131ce9fb615f5d34ef97b8a7863bb4b909749f78e9f"
+      "sha256": "d25396e3db4bcd158c233cd504f6f29dc92b70fc40198efaec60aa2f85119c80"
     },
     {
       "path": "index.html",
       "bytes": 3909,
-      "sha256": "b983b997fc30b35d90749f41c8dd764758ef3fd05b5a77962e21f1558fe3a53b"
+      "sha256": "71310495748a955cabe4d7a792ec8a6efcb7180b1ca477ca34c9df54baaa6578"
     },
     {
       "path": "inputs/FULLBODY-MESH-MANIFEST.json",
@@ -3977,8 +3977,8 @@
     },
     {
       "path": "scene/example/quiet.css",
-      "bytes": 42263,
-      "sha256": "fdcf8a19f77c307fbb13b4761323d573bb5cc466efa42daa3282211e81d08678"
+      "bytes": 43507,
+      "sha256": "87b86751429da6ba28a88eb469fcf5770a9afeee32d0656232a914346f261a0f"
     },
     {
       "path": "scene/src/ns-actions.mjs",
@@ -3987,8 +3987,8 @@
     },
     {
       "path": "scene/src/ns-app.mjs",
-      "bytes": 1221104,
-      "sha256": "1d8cfe13a36d1fd865a48dc7eceb31df1298c638c81855d68524c17ab74d0214"
+      "bytes": 1224378,
+      "sha256": "3247971d38e275df570b4959fe7ca055e4f265ab10b9db7351cda51a9dad1664"
     },
     {
       "path": "scene/src/ns-area-halo.mjs",
@@ -4561,6 +4561,11 @@
       "sha256": "22ab1fc0f6bb82414e959eca18690e113e9369b0da1152681c4ebb9ba2d2aa83"
     },
     {
+      "path": "tests/browser-tall-window.mjs",
+      "bytes": 7747,
+      "sha256": "ef4f207b9b03ab8913219ff98525bc7602b73af27a86c1728de0ff5ab23d5645"
+    },
+    {
       "path": "tests/bulk.test.mjs",
       "bytes": 10500,
       "sha256": "846cc72911b40c37a649f2283c5debaa7a196622584fa438277682b912afe9a0"
@@ -4687,8 +4692,8 @@
     },
     {
       "path": "tests/free-aim.test.mjs",
-      "bytes": 26530,
-      "sha256": "7fc1550143928da5a906ff8383d7ecffa8e906847cfb19c06e3e34b5ef4c0d09"
+      "bytes": 27454,
+      "sha256": "8ac00ab7a68a71b79043e446a0098534e0a4399f5ff714b8209189e066f77737"
     },
     {
       "path": "tests/guide-order.test.mjs",
@@ -4722,8 +4727,8 @@
     },
     {
       "path": "tests/hud74.test.mjs",
-      "bytes": 26945,
-      "sha256": "ced30ee98961c3a33dd0187cf2317346e17a9330cb640579fff5d00b810237d9"
+      "bytes": 27121,
+      "sha256": "41f5d0e7985b244ea50b1b119da370fced2e5b53ac700a1b03d6c31447765cfa"
     },
     {
       "path": "tests/info-settle.test.mjs",

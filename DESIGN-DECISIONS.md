@@ -8942,6 +8942,42 @@ a second in the four parts of the lead's measure: 60.0 / 60.0 / 60.2 / 59.5 (upd
 - Still open from the tester's list: the layout in a window of 700 by 900 (finding 5), clicks while Space grips or
   Shift is held (finding 8), the browser's own pinch (finding 10).
 
+## 215. A window taller than wide: the hint stands above the lower cards, the map's card under the top panel, and the pause page fits (25 November)
+
+The second tester's finding 5, in a window of 700 by 900. The lead reproduced it there and at 720 by 800, about half
+of a laptop screen with the browser snapped to one side, which is a window people do use.
+
+**1. The hint lay on the cards of the lower part (`PORTRAIT_HINT`).** In a tall window the style sheet puts the hint
+("Drag empty space to look around · ...") at the top left of the lower band. The information card now begins there,
+and at the full reading level the colour key: with Space holding the brain the hint lay 20 px on the card's title
+(344 px wide), at the full level 40 px on the key's. The hint now stands 6 px above the highest card of the picture's
+lower part (the information card and the panels as drawn, read every 0.2 s), and with no card there it keeps its
+place. Seen at both sizes at the short level, with Space holding the brain, at the full level with and without the
+map, with the reading off and in the outside view: the hint shares no pixel with any card.
+
+**2. At the full level the map's card lay on the status panel at the top** (226 by 71 px at 700 by 900) and reached
+half way down the picture. In a tall window at the full level it starts under that panel (the panel's foot is
+measured and written as `--ns-top-panel-foot`) and leaves its More detail out, as it does in a small wide window
+since section 214.
+
+**3. The pause page.** Three settings columns of 172 px set the look speed's "1.00×" against "Picture quality", and
+the full instructions stood in two columns with the keys' meanings 125 px wide. Up to 760 px of width the settings
+stand in two columns (272 px each at 700) and the full instructions one under the other (606 px).
+
+**Tests.** `tests/browser-tall-window.mjs` (new; on update 77 it fails at the hint on the information card): at
+700x900 and 720x800 the hint shares no pixel with a card in four states, the map's card none with a panel or the
+information card, and the pause page has two settings columns, one column of full instructions and no limb buttons
+showing through. `tests/free-aim.test.mjs`: the hint's place from the highest lower card. 844 unit tests, 23 browser
+tests.
+
+**Not done, or not right.**
+- The hint above the cards lies on the picture's lower part, over your own body in the eye view; in a tall window
+  there is no free row for it.
+- The tutorial's card, the tips and the cue words were not measured in a tall window; the first tester's grid was
+  for wide windows.
+- Still open from the second tester's list: clicks while Space grips or Shift is held (finding 8) and the browser's
+  own pinch (finding 10).
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**

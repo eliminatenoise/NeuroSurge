@@ -287,6 +287,14 @@ body:has(.ns-keys.ns-ctl) .ns-shell-root .ns-shell-toast { opacity: 0; }
 .ns-shell[data-mode="paused"] .ns-shell-setting:has(> select) { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; }
 .ns-shell[data-mode="paused"] .ns-shell-detailrow { margin-top: var(--ns-out); }
 @media (max-width: 1100px) { .ns-menu { grid-template-columns: repeat(2, minmax(0, 1fr)); } .ns-menu-pic { height: 84px; } }
+/* 25 November 2026 (DESIGN-DECISIONS section 215; the second tester's finding 5): a window about 700 px wide, half a
+   laptop screen. Three settings columns of 172 px set "1.00×" against "Picture quality", and the full instructions
+   stood in two columns with the keys' meanings 125 px wide. Up to 760 px: two settings columns, and the full
+   instructions one under the other. */
+@media (max-width: 760px) {
+  .ns-shell[data-mode="paused"] .ns-shell-settings { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ns-shell[data-mode="paused"] .ns-shell-grid { grid-template-columns: minmax(0, 1fr); }
+}
 @media (max-width: 640px) { .ns-menu, .ns-shell[data-mode="paused"] .ns-shell-settings { grid-template-columns: minmax(0, 1fr); } }
 @media (max-height: 760px) {
   .ns-shell[data-mode="paused"] .ns-shell-card { padding: 14px 24px 14px; }
@@ -470,6 +478,14 @@ body:has(.ns-keys.ns-ctl) .ns-shell-root .ns-shell-toast { opacity: 0; }
   .ns-app[data-ns-emap="on"]:not([data-ns-unfold="true"]):not([data-ns-read="read"]) .ns-infopanel:not(:has(.ns-infopanel-detail[open])) { max-height: min(var(--ns-info-short-maxvh, 48vh), max(96px, calc(100% - var(--ns-emap-foot, 0px) - 24px))) !important; }
 }
 @media (max-width: 900px) and (min-aspect-ratio: 1/1) {
+  .ns-app[data-ns-read="more"] .ns-emap-more { display: none; }
+}
+/* 25 November 2026 (DESIGN-DECISIONS section 215; the second tester's finding 5): in a window taller than wide, at the
+   full reading level, the map's card lay on the status panel at the top (226 by 71 px at 700 by 900) and reached half
+   way down the picture. There it starts under that panel (its foot is measured: --ns-top-panel-foot, ns-app
+   portraitHintSpot) and leaves its More detail out, as in a small wide window. */
+@media (max-aspect-ratio: 999/1000) {
+  .ns-app[data-ns-read="more"] .ns-emap-card { top: calc(var(--ns-top-panel-foot, 141px) + 8px); }
   .ns-app[data-ns-read="more"] .ns-emap-more { display: none; }
 }
 
