@@ -194,6 +194,27 @@ export function areaKeyDir(code) {
   return code === 'ArrowLeft' ? -1 : code === 'ArrowRight' ? 1 : 0;
 }
 
+/** 25 November 2026 (hunt of update 78, finding 3: with the keyboard alone no key turned the look, so a keyboard player
+ * could not raise or lower the chosen limb, do the tutorial's look step, or bring the mark onto the mirror body). The
+ * look keys: Arrow Up and Arrow Down turn the look up or down by stepDeg a press, as a drag of the view does (the
+ * look's time is the press's own: a look of the player's, which the eye view's chosen limb follows). Never with
+ * invert-Y or the look speed: the key names a direction on the screen and a fixed step. A held key repeats no faster
+ * than repeatMs, the area keys' pace (a step moves the whole picture, as an area key's does; below about 4 steps a
+ * second no pixel flickers).
+ * stepDeg 3, a display choice. The limb: the look that carries the chosen limb in the eye view covers its range from
+ * where it was chosen to either end in 18 degrees (ns-app LIMB_AIM_HALF_SWEEP_RAD), so a press moves it a sixth of
+ * the way (a leg's foot 8 to 29 cm, past the tutorial's 2.5 cm) and six presses take it to the end. The aim: a press
+ * moves the picture 48 px at 1600 by 900 and 32 px at 800 by 600, less than the mirror body's trunk or legs are tall,
+ * so the mark can be put on it (from the start look, four presses up). A smaller step needed more presses than a
+ * newcomer makes for "a little" and turned a held key's look slowly (2 degrees: 7 degrees a second); the area keys
+ * aim at the motor areas themselves. */
+export const LOOK_CODES = Object.freeze(['ArrowUp', 'ArrowDown']);
+export const LOOK_KEY = Object.freeze({ stepDeg: 3, repeatMs: AREA_KEY_REPEAT_MS });
+/** +1 (look up) or -1 (look down) for a look key, else 0. */
+export function lookKeyDir(code) {
+  return code === 'ArrowUp' ? 1 : code === 'ArrowDown' ? -1 : 0;
+}
+
 /** R5-input (D16, D19): targets of the 3D compass arrows: the brain's four and the mirror body's four. */
 export const ARROW_TARGETS = Object.freeze(['brain', 'mirror']);
 /** R5-input: arrow directions (compass: top = forward, bottom = back, left, right); the orbit directions of ns-actions. */
@@ -325,7 +346,7 @@ function checkSensitivity(v) {
  * and invertY (default false); the last two are the initial `state.look` and can be changed with setLookOptions.
  * @returns {{ state, initialState, keyDown, keyUp, blur, releaseAll, pointerMove, click, axes, drainEvents,
  *   escape, lockChange, uiCommand, toggleDetail, toggleEmap, drainUiEvents, setLookOptions, lookOptions,
- *   toggleView, moveKey, areaKey, setLook, setPitchLimits, pitchLimits, pointerAt, pointerLeave, buttonDown, buttonUp, tap, buttonState,
+ *   toggleView, moveKey, areaKey, lookKey, setLook, setPitchLimits, pitchLimits, pointerAt, pointerLeave, buttonDown, buttonUp, tap, buttonState,
  *   sensitivityRadPerPx: number, pitchLimitRad: number, sensitivity: number, invertY: boolean }}
  *   `state` is a fresh initial state (as createActivity exposes its initial state); initialState()
  *   makes another.
@@ -637,6 +658,16 @@ export function createControls({
     return { ...state, yaw, pitch, lookMs: Number.isFinite(timeMs) ? timeMs : state.lookMs === undefined ? null : state.lookMs };
   }
 
+  /** 25 November 2026 (LOOK_KEY): a look key turns the look up (dir +1) or down (-1) by LOOK_KEY.stepDeg, inside the
+   * pitch range, as a look of the player's (lookMs = timeMs). At the end of the range nothing changes (the same state). */
+  function lookKey(state, dir, timeMs) {
+    if (dir !== -1 && dir !== 1) return state;
+    const lim = limitsOf(state);
+    const pitch = clamp(state.pitch + dir * LOOK_KEY.stepDeg * DEG, lim.min, lim.max);
+    if (pitch === state.pitch) return state;
+    return { ...state, pitch, lookMs: Number.isFinite(timeMs) ? timeMs : state.lookMs === undefined ? null : state.lookMs };
+  }
+
   /** R5-input (R22, D18): the E key: queue { type: 'view', seq } (a request to switch first person <-> third person;
    * the camera owner decides and answers with setLook). Releases nothing: W/A/S/D, Space and double-tap Space keep
    * working in both views. */
@@ -813,6 +844,7 @@ export function createControls({
     moveKeyUp,
     areaKey,
     areaKeyUp,
+    lookKey,
     setLook,
     setPitchLimits,
     pitchLimits,
@@ -1046,6 +1078,29 @@ export function keyStaysWithControl(el, code) {
   return code === 'Enter' || code === 'NumpadEnter' || code === 'Space' || code === 'Tab';
 }
 
+/**
+ * 25 November 2026 (a review of LOOK_KEY: with the focus in a long information card, or after a click on it, Arrow Up
+ * and Arrow Down turned the view behind the card, and the card, which they had scrolled until then, stayed where it
+ * was). The box the browser's own arrow-key scroll moves from `el`: the nearest element from `el` up that scrolls on
+ * `axis` ('y' for Up and Down, 'x' for Left and Right: overflow auto or scroll), holds more than it shows (by more than
+ * 1 px) and is drawn. The page itself (body, html) never counts: the game's page does not scroll. null when there is none.
+ */
+export function keyScrollBox(el, axis = 'y') {
+  for (let node = el, depth = 0; node && depth < 40; node = node.parentElement, depth++) {
+    const doc = node.ownerDocument;
+    if (!doc || node === doc.body || node === doc.documentElement) return null;
+    let style = null;
+    try { style = doc.defaultView && typeof doc.defaultView.getComputedStyle === 'function' ? doc.defaultView.getComputedStyle(node) : null; } catch { style = null; }
+    const overflow = style ? (axis === 'x' ? style.overflowX : style.overflowY) : '';
+    if (overflow !== 'auto' && overflow !== 'scroll' && overflow !== 'overlay') continue;
+    const more = axis === 'x' ? node.scrollWidth - node.clientWidth : node.scrollHeight - node.clientHeight;
+    let drawn = false;
+    try { drawn = typeof node.getClientRects === 'function' && node.getClientRects().length > 0; } catch { drawn = false; }
+    if (more > 1 && drawn) return node;
+  }
+  return null;
+}
+
 /** The UI_COMMANDS entry named by the nearest data-ns-ui attribute from `el` up to (and including) `root`, else null. */
 function uiCommandOf(el, root) {
   for (let node = el, depth = 0; node && depth < 16; node = node.parentNode, depth++) {
@@ -1173,7 +1228,7 @@ export function bindDom(target, controls, getState, setState, options = {}) {
   }
 
   const added = [];
-  const on = (obj, type, fn) => { obj.addEventListener(type, fn); added.push([obj, type, fn]); };
+  const on = (obj, type, fn, capture = false) => { obj.addEventListener(type, fn, capture); added.push([obj, type, fn, capture]); };
   const perf = view.performance && typeof view.performance.now === 'function' ? view.performance : null;
   // Monotonic input time: the event's own timeStamp when it lies on the performance timeline (not in the future, not
   // implausibly old), else the handler time. Same clock as the frame loop's performance.now().
@@ -1189,11 +1244,13 @@ export function bindDom(target, controls, getState, setState, options = {}) {
     if (after !== before) setState(after);
   };
   const heldAreaKeys = new Set();
+  const heldLookKeys = new Set(); // (LOOK_KEY) the look keys whose press was taken, so their repeats may step on
   // Every safety release (blur, visibility, Esc, Ctrl / Meta chords, pointer-lock changes) and the app's own epoch
   // cancellation end the binding's private gesture flags too (a drag-to-look, an arrow hold, an item press-drag), so a
   // stale flag can never make the next press a turn or swallow its click.
   const cancelBoundInput = (at, discardQueued = false) => {
     heldAreaKeys.clear();
+    heldLookKeys.clear();
     clearPointerFlags();
     apply(s => controls.blur(discardQueued ? { ...s, events: [], ui: [] } : s, at));
   };
@@ -1284,6 +1341,18 @@ export function bindDom(target, controls, getState, setState, options = {}) {
   };
 
   let lastAreaKeyMs = NaN; // the time of the last accepted area key (AREA_KEY_REPEAT_MS)
+  let lastLookKeyMs = NaN; // the time of the last accepted look key (LOOK_KEY.repeatMs)
+  // (keyScrollBox) where the browser starts its own arrow-key scroll: the focused element, or with none focused (the
+  // body) the element of the last press anywhere on the page (a click on a long card, then Arrow Down, scrolls the card).
+  let pressNode = null;
+  const notePress = e => { pressNode = e && e.target ? e.target : null; };
+  on(doc, 'pointerdown', notePress, true);
+  on(doc, 'mousedown', notePress, true);
+  const scrollStart = e => {
+    const t = e && e.target;
+    if (t && t !== doc && t !== view && t !== doc.body && t !== doc.documentElement) return t;
+    return pressNode && pressNode.isConnected !== false ? pressNode : null;
+  };
   on(view, 'keydown', e => {
     const code = e.code;
     if (e.ctrlKey || e.metaKey || isChordModifier(code)) {
@@ -1368,6 +1437,29 @@ export function bindDom(target, controls, getState, setState, options = {}) {
       setState(after);
       return;
     }
+    const lookDir = lookKeyDir(code);
+    if (lookDir !== 0) {
+      // 25 November 2026 (LOOK_KEY): a look key (up / down arrow) turns the look a step, as the area keys step it: not
+      // in a text field or on a page control, never with Alt, taken from the page only when the game took the step
+      // (while playing), and a held key repeats at LOOK_KEY.repeatMs only within a hold whose press was taken.
+      // A box that scrolls, with the focus in it or last pressed (keyScrollBox: a long information card), keeps the key:
+      // the browser scrolls it, as it did before the key turned the look. A press on the picture gives the key back.
+      if (e.altKey || typeof controls.lookKey !== 'function') return;
+      if (keyScrollBox(scrollStart(e), 'y')) { heldLookKeys.delete(code); return; }
+      const at = eventTime(e);
+      if (e.repeat === true) {
+        if (!heldLookKeys.has(code)) return;
+        if (Number.isFinite(lastLookKeyMs) && Number.isFinite(at) && at - lastLookKeyMs < LOOK_KEY.repeatMs) { e.preventDefault(); return; }
+      }
+      const before = getState();
+      const after = controls.lookKey(before, lookDir, at);
+      if (after === before) return;
+      e.preventDefault();
+      heldLookKeys.add(code);
+      lastLookKeyMs = at;
+      setState(after);
+      return;
+    }
     if (isReachCode(code)) {
       // R558 (Messages 33 and 34): Shift, the reach-behind key. Not prevented (a plain Shift has no page meaning, and a
       // focused page control keeps its own Shift behaviour); it only marks the presses made while it is held.
@@ -1396,6 +1488,7 @@ export function bindDom(target, controls, getState, setState, options = {}) {
       if (typeof controls.areaKeyUp === 'function') apply(s => controls.areaKeyUp(s, eventTime(e)));
       return;
     }
+    if (heldLookKeys.delete(code)) return; // (LOOK_KEY) a look key's release ends nothing: each step is whole
     if (isChordModifier(code)) { releaseAll(e); return; }
     if (isReachCode(code)) { if (typeof controls.setReach === 'function') apply(s => controls.setReach(s, false)); return; }
     // 18 Nov (SMALL, M3): a movement key's release (a held key's movement stops there)
@@ -1640,7 +1733,7 @@ export function bindDom(target, controls, getState, setState, options = {}) {
   }
 
   function unbind() {
-    for (const [obj, type, fn] of added.splice(0)) obj.removeEventListener(type, fn);
+    for (const [obj, type, fn, capture] of added.splice(0)) obj.removeEventListener(type, fn, capture);
     dragging = false;
   }
   // The App owns pause/reset boundaries; only this binding can clear its private gesture flags.

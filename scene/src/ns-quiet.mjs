@@ -80,7 +80,11 @@ export function pairTipRows(rows, actionOf) {
 export function quietTipModel({ area = null, moves = null, actionId = null, pick = null, arrow = '', color = '', hint = '', teach = '', held = null } = {}) {
   if (held?.title) {
     const { title, hint } = held;
-    return { kind: 'hold', title, hint, rows: [], key: `hold|${title}|${hint}` };
+    // (hunt of update 74, finding 8, a second review: `teach` on a hold's tip is what a click at the resting pointer
+    // presses, at a hold's start, ns-app carryPointerTip; drawn with the pointer sign, between the title and the hint)
+    const out = { kind: 'hold', title, hint, rows: [], key: `hold|${title}|${hint}` };
+    if (str(teach)) { out.teach = teach; out.key += `|t|${teach}`; }
+    return out;
   }
   if (area && typeof area === 'object') {
     const title = str(area.plainLabel) || str(area.shortLabel) || str(area.label) || str(area.id);
@@ -177,19 +181,73 @@ export function tipSides({ x = 0, y = 0, width = 0, height = 0, side = null, tip
   if ((!soft && !hard.length) || !sized || (!hits(b0, soft) && !hitsHard(b0))) return { right, low };
   const others = [[right, !low], [!right, low], [!right, !low]];
   for (const [r, l] of others) { const b = box(r, l); if (!hits(b, soft) && !hitsHard(b) && inside(b)) return { right: r, low: l }; }
+  // (a review: the usual place on your own hand and no side clear of everything: a side clear of the hand where only
+  // region labels lie, which give way to the tip (TIP_KEEP_OFF, weight 1); the hand does not. With the labels among the
+  // boxes, W raised the hand onto the tip and it stayed there at 8 of 38 pointer places at 700x900 where update 80, with
+  // no labels among them, put it above the pointer.)
+  if (hits(b0, soft)) {
+    const firm = hard.filter(a => !(Number.isFinite(a.weight) && a.weight <= 1));
+    for (const [r, l] of others) { const b = box(r, l); if (!hits(b, soft) && !firm.some(a => hits(b, a)) && inside(b)) return { right: r, low: l }; }
+  }
   if (!hitsHard(b0)) return { right, low }; // only the hand is in the way and no side is clear of it: the usual one
   for (const [r, l] of others) { const b = box(r, l); if (!hitsHard(b) && inside(b)) return { right: r, low: l }; }
   const on = hard.find(a => hits(b0, a));
+  // (a review: a slide that lands on your own hand is kept only where no clear place off the hand is found, below: the
+  // hand's box never slides the tip, but when the tip is slid for the other boxes it goes where the hand is not)
+  let firstSlide = null;
   for (const dy of [on.y1 + TIP_SLIDE_GAP - b0.y0, on.y0 - TIP_SLIDE_GAP - b0.y1]) {
     const b = { x0: b0.x0, x1: b0.x1, y0: b0.y0 + dy, y1: b0.y1 + dy };
-    if (Math.abs(dy) <= TIP_SLIDE_MAX && inside(b) && !hitsHard(b)) return { right, low, dy: Math.round(dy) };
+    if (Math.abs(dy) <= TIP_SLIDE_MAX && inside(b) && !hitsHard(b)) {
+      if (!hits(b, soft)) return { right, low, dy: Math.round(dy) };
+      if (!firstSlide) firstSlide = { right, low, dy: Math.round(dy) };
+    }
   }
+  // 25 November 2026 (hunt of update 78, finding 9): with the tutorial's rings, the aim mark and the region labels among
+  // the boxes (TIP_KEEP_OFF), the middle of a narrow picture often has no clear corner and no clear slide off the first
+  // box: on grids over the strip at 700x900, 720x800 and 800x600, 101, 95 and 75 of 379, 355 and 326 tips had no clear
+  // corner, and 4, 15 and 10 of them no clear corner slid up or down past a box. Each corner, the usual one first, is
+  // now also slid up or down and to the left or right to TIP_SLIDE_GAP past any box near it or off the window's edge, by
+  // at most TIP_SLIDE_MAX each way and never onto the pointer's arrow, and the clear place moved least is taken; where
+  // none is clear, the same with TIP_NEAR_GAP (on those grids every tip found a place but 1 at 720x800). Where none is
+  // clear either, those places are also among the ones the least covering place is chosen from (below).
   // 25 November 2026 (section 211): no place is clear of every box: the place inside the picture that covers least. A
   // box may carry a `weight` (default 1): a card drawn over the tip hides it (4, given by the callers), a few words the
   // tip is drawn over only lose those words. Before, the usual place was kept whatever it lay under: with the words of
   // the tutorial's marks among the boxes, a tip at the top left of an 800x600 picture went back under the tutorial's
   // card. Ties keep the earlier candidate, the usual place first.
   const cost = b => { let c = 0; for (const a of hard) { const ox = Math.min(b.x1, a.x1) - Math.max(b.x0, a.x0), oy = Math.min(b.y1, a.y1) - Math.max(b.y0, a.y0); if (ox > 0 && oy > 0) c += ox * oy * (Number.isFinite(a.weight) && a.weight > 0 ? a.weight : 1); } return c; };
+  const ptr = { x0: x - 4, y0: y - 4, x1: x + 16, y1: y + 24 };
+  const reach = (c, a) => a.x0 < c.x1 + TIP_SLIDE_MAX && a.x1 > c.x0 - TIP_SLIDE_MAX && a.y0 < c.y1 + TIP_SLIDE_MAX && a.y1 > c.y0 - TIP_SLIDE_MAX;
+  const place = (r, l, dx, dy) => { const o = { right: r, low: l }; if (Math.round(dy)) o.dy = Math.round(dy); if (Math.round(dx)) o.dx = Math.round(dx); return o; };
+  // (A review: the hand's box never slides the tip, but a slide made for the other boxes kept off it only by chance: 2 of
+  // 23 tips at 700x900 lay on the hand's box right after a pointer move. A clear place off the hand is taken first, at
+  // either gap; one on the hand only where no clear place is off it: the slide above, `firstSlide`, else `onHand`, the
+  // first gap's.)
+  let moved = null, leastMove = Infinity, cheap = null, cheapCost = Infinity, cheapMove = Infinity, onHand = null;
+  for (const gap of [TIP_SLIDE_GAP, TIP_NEAR_GAP]) {
+    let onHandHere = null, leastOnHand = Infinity;
+    for (const [r, l] of [[right, low], ...others]) {
+      const c = box(r, l), dxs = [0, gap - c.x0, width - gap - c.x1], dys = [0, gap - c.y0, height - gap - c.y1]; // (and off the window's edges)
+      for (const a of hard) if (reach(c, a)) { dxs.push(a.x1 + gap - c.x0, a.x0 - gap - c.x1); dys.push(a.y1 + gap - c.y0, a.y0 - gap - c.y1); }
+      for (const dy of dys) for (const dx of dxs) {
+        const m = Math.abs(dx) + Math.abs(dy);
+        if (m === 0 || Math.abs(dx) > TIP_SLIDE_MAX || Math.abs(dy) > TIP_SLIDE_MAX || m >= leastMove) continue;
+        const b = { x0: c.x0 + dx, x1: c.x1 + dx, y0: c.y0 + dy, y1: c.y1 + dy };
+        if (!inside(b) || hits(b, ptr)) continue;
+        if (!hitsHard(b)) {
+          if (!hits(b, soft)) { leastMove = m; moved = place(r, l, dx, dy); } else if (m < leastOnHand) { leastOnHand = m; onHandHere = place(r, l, dx, dy); }
+          continue;
+        }
+        if (moved || onHandHere || onHand) continue;
+        const k = cost(b);
+        if (k < cheapCost || (k === cheapCost && m < cheapMove)) { cheapCost = k; cheapMove = m; cheap = place(r, l, dx, dy); }
+      }
+    }
+    if (moved) return moved;
+    if (!onHand) onHand = onHandHere;
+  }
+  if (firstSlide) return firstSlide;
+  if (onHand) return onHand;
   let best = { right, low }, least = cost(b0);
   for (const [r, l] of others) { const b = box(r, l); if (!inside(b)) continue; const c = cost(b); if (c < least) { least = c; best = { right: r, low: l }; } }
   for (const a of hard) {
@@ -201,10 +259,72 @@ export function tipSides({ x = 0, y = 0, width = 0, height = 0, side = null, tip
       if (c < least) { least = c; best = { right, low, dy: Math.round(dy) }; }
     }
   }
+  if (cheap && cheapCost < least) return cheap;
   return best;
 }
 /** The gap, in CSS px, between a slid tip and the card it was slid off, and the farthest a tip is slid (tipSides). */
 export const TIP_SLIDE_GAP = 6, TIP_SLIDE_MAX = 64;
+/**
+ * 25 November 2026 (hunt of update 78, finding 9): whether a tip placed at `place` (tipSides' answer) for the point (x,
+ * y) is still inside the picture and clear of every `card` box. The tip keeps such a place while its point, its words
+ * and its size stay as they are (createQuietUi): the region labels give way to the tip, and a tip that went back toward
+ * its usual place each time a label moved off followed the label, 3 moves in 0.4 s at 700x900. Pure.
+ * (A review: and clear of `avoid`, your own left hand's box, when it is given. The caller gives it for a place that was
+ * clear of the hand when chosen, so the tip moves off the hand when the hand comes onto it with the pointer still, as
+ * before places were kept; with the arrow keys turning the look the hand moves under a still pointer more often.)
+ */
+export function tipStays({ x = 0, y = 0, width = 0, height = 0, tipW = 0, tipH = 0, card = null, place = null, avoid = null } = {}) {
+  if (!place || !(tipW > 0 && tipH > 0)) return false;
+  const x0 = (place.right ? x - 22 - tipW : x + 22) + (place.dx || 0), y0 = (place.low ? y - 18 - tipH : y + 18) + (place.dy || 0);
+  const x1 = x0 + tipW, y1 = y0 + tipH;
+  if (x0 < 0 || y0 < 0 || x1 > width || y1 > height) return false;
+  for (const a of [...(Array.isArray(card) ? card : [card]), avoid]) {
+    if (a && [a.x0, a.y0, a.x1, a.y1].every(Number.isFinite) && x0 < a.x1 && x1 > a.x0 && y0 < a.y1 && y1 > a.y0) return false;
+  }
+  return true;
+}
+/** The gap, in CSS px, between a tip slid past a box near it and that box where TIP_SLIDE_GAP leaves no room (tipSides;
+ * hunt of update 78, finding 9: with 6 px the 55 px between "Right arm" and "Hip aim" at 700x900 held no 44 px tip). */
+export const TIP_NEAR_GAP = 2;
+
+/**
+ * 25 November 2026 (hunt of update 78, finding 9): what the pointer's tip keeps off besides the tutorial's card, with
+ * how much covering each costs where no place is clear (tipSides `weight`, per px2). `cards` are drawn over the tip (4:
+ * the information card, the limb buttons, the map's card; the first of each). `marks` are drawn under it and stay where
+ * they are (2: the tutorial's rings on an area, a limb or the brain, the aim mark of "Shoulder aim" / "Hip aim", and
+ * their words). `labels` are drawn under it and give way to it where they can (1: the region labels, "Left arm", "Face and
+ * neck", which ns-scene-three keeps off the tip's box).
+ * Section 211 had only the marks' words: in tutorial step 1, 11 of 122 tips at 700x900 lay on the area's ring, at the
+ * look step 11 of 122 on the aim mark, and at 720x800 with the map on 8 of 63 on "Left arm" and "Right arm", which stay,
+ * faded, under the tip where the map's card leaves them no other room. The same happened in wide windows (800x600,
+ * step 1: 21 of 102), where no check had looked at rings or labels.
+ */
+export const TIP_KEEP_OFF = Object.freeze({
+  cards: Object.freeze(['.ns-infopanel', '.ns-limbs', '.ns-emap-card']),
+  marks: '.ns-guide-cues .ns-guide-mark, .ns-guide-cues .ns-guide-mark-name',
+  labels: '.ns-region-label',
+  weight: Object.freeze({ card: 4, mark: 2, label: 1 })
+});
+
+/** The boxes of TIP_KEEP_OFF as drawn, in CSS px from `origin` (the canvas's client box): { x0, y0, x1, y1, weight }.
+ * A hidden element, or one drawn at no size (a hidden cue or label), is left out. */
+export function tipKeepOffBoxes(doc, origin) {
+  const out = [];
+  if (!doc || !origin) return out;
+  const ox = Number(origin.left) || 0, oy = Number(origin.top) || 0;
+  const add = (e, weight) => {
+    if (!e || e.hidden || typeof e.getBoundingClientRect !== 'function') return;
+    const r = e.getBoundingClientRect();
+    if (r && r.width > 0 && r.height > 0) out.push({ x0: r.left - ox, y0: r.top - oy, x1: r.right - ox, y1: r.bottom - oy, weight });
+  };
+  const W = TIP_KEEP_OFF.weight;
+  if (typeof doc.querySelector === 'function') for (const sel of TIP_KEEP_OFF.cards) add(doc.querySelector(sel), W.card);
+  if (typeof doc.querySelectorAll === 'function') {
+    for (const e of doc.querySelectorAll(TIP_KEEP_OFF.marks)) add(e, W.mark);
+    for (const e of doc.querySelectorAll(TIP_KEEP_OFF.labels)) add(e, W.label);
+  }
+  return out;
+}
 
 export function createQuietUi({ doc, root }) {
   const el = (tag, cls, parent) => { const e = doc.createElement(tag); e.className = cls; parent.appendChild(e); return e; };
@@ -230,6 +350,7 @@ export function createQuietUi({ doc, root }) {
   promptSkip.setAttribute('aria-hidden', 'true');
   promptSkip.hidden = true;
   let tipKey = null, promptText = '', countText = '', skipText = '', placeKey = '', shown = true;
+  let kept = null, covering = false; // (hunt of update 78, finding 9: the tip's place and what it was chosen for, tipStays; and whether it lies on a box)
   // 22 November 2026 (LOOK2 second pass; a check's profile: reading the tip's offsetWidth / offsetHeight on every frame
   // while it avoids your hand forced a style and layout pass each frame, about 0.8 ms): the tip's size is measured once
   // per content (tipKey) and per window size, and kept
@@ -303,11 +424,21 @@ export function createQuietUi({ doc, root }) {
         tipW = tipSize.w; tipH = tipSize.h;
       }
       const hard = [card, ...(Array.isArray(cards) ? cards : [])].filter(Boolean);
-      const { right, low, dy = 0 } = tipSides({ x, y, width, height, side, tipW, tipH, avoid, card: hard });
-      const pk = `${Math.round(x)}|${Math.round(y)}|${right ? 1 : 0}${low ? 1 : 0}|${dy}`; // (dy follows the card's box: a card that grows moves the tip)
+      const kx = Math.round(x), ky = Math.round(y);
+      // (a review: and off your own hand's box, `avoid`, when the place was clear of it as chosen; a place chosen on it, where
+      // no side was clear, stays there)
+      const stays = Boolean(kept) && kept.x === kx && kept.y === ky && kept.key === tipKey && kept.w === tipW && kept.h === tipH && kept.width === width && kept.height === height &&
+        tipStays({ x, y, width, height, tipW, tipH, card: hard, place: kept.place, avoid: kept.handClear ? avoid : null });
+      if (!stays) {
+        const place = tipSides({ x, y, width, height, side, tipW, tipH, avoid, card: hard });
+        kept = { x: kx, y: ky, key: tipKey, w: tipW, h: tipH, width, height, place, handClear: tipStays({ x, y, width, height, tipW, tipH, place, avoid }) };
+        covering = !tipStays({ x, y, width, height, tipW, tipH, card: hard, place: kept.place });
+      } else covering = false;
+      const { right, low, dy = 0, dx = 0 } = kept.place;
+      const pk = `${Math.round(x)}|${Math.round(y)}|${right ? 1 : 0}${low ? 1 : 0}|${dy}|${dx}`; // (dy follows the card's box: a card that grows moves the tip)
       if (pk !== placeKey) {
         placeKey = pk;
-        tip.style.left = `${Math.round(x)}px`;
+        tip.style.left = `${Math.round(x + dx)}px`;
         tip.style.top = `${Math.round(y + dy)}px`;
         tip.style.transform = `translate(${right ? 'calc(-100% - 22px)' : '22px'}, ${low ? 'calc(-100% - 18px)' : '18px'})`;
       }
@@ -320,6 +451,9 @@ export function createQuietUi({ doc, root }) {
   }
   /** The tip goes away until the next update (the game was left for the Esc page: no frame, so no update, comes while
    * it shows, and the tip of the moment stayed drawn under the page). */
-  function hideTip() { tipKey = null; placeKey = ''; tipSize = null; tip.hidden = true; }
-  return { update, hideTip, dispose() { try { layer.remove(); } catch { /* gone */ } } };
+  function hideTip() { tipKey = null; placeKey = ''; tipSize = null; kept = null; covering = false; tip.hidden = true; }
+  /** (hunt of update 78, finding 9) Whether the tip as last placed lies on one of the boxes it keeps off: no place was
+   * clear of them, or they were read before they moved (the caller then reads them again sooner). */
+  const tipCovers = () => Boolean(kept) && covering && !tip.hidden;
+  return { update, hideTip, tipCovers, dispose() { try { layer.remove(); } catch { /* gone */ } } };
 }

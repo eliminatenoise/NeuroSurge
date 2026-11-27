@@ -48,7 +48,9 @@ test('H15: the full instructions are cut hard, and each control is said once', (
   const steps = words(SHELL.instructions.join(' ')), controls = words(SHELL.controls.map(r => r.join(' ')).join(' '));
   // (update 64: steps 1,495 words, controls 815 (888 with the M row), limits 610)
   assert.ok(steps <= 600, `steps ${steps} words`);
-  assert.ok(controls <= 520, `controls ${controls} words`);
+  // (25 November 2026: 520 -> 540. The list stood at 520; a new control, the up and down arrow keys that turn the look
+  // (ns-controls LOOK_KEY), adds its row of 20 words. Still a third shorter than the 815 of update 64.)
+  assert.ok(controls <= 540, `controls ${controls} words`);
   const keys = SHELL.controls.map(r => r[0]);
   assert.equal(new Set(keys).size, keys.length, 'one row per control');
   for (const gone of ['Look', 'Double-tap and hold']) assert.ok(!keys.includes(gone), `${gone} is merged into another row`);

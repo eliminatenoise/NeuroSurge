@@ -157,7 +157,9 @@ try {
   const starter = page.locator('.ns-ctl');
   if (await starter.count()) assert.equal(await starter.evaluate(el => getComputedStyle(el).visibility), 'hidden');
   const menu = shell.locator('.ns-menu');
-  assert.match(await menu.locator('.ns-menu-look').innerText(), /← →\s+aim at the next motor area/);
+  // Restated 25 November 2026 (ns-controls LOOK_KEY: the up and down arrow keys turn the look; a group keeps five rows,
+  // so the four arrow keys share one row). Was /← →\s+aim at the next motor area/.
+  assert.match(await menu.locator('.ns-menu-look').innerText(), /← → \/ ↑ ↓\s+next area \/ look up or down/);
   // Restated 20 November 2026 (the owner: "now right-click shouldn't lead to any grasping function. Let's just make
   // spacebar grasping for all of the limbs at once"): the Space row says that the hands and the feet grip. Was
   // /Space\s+hold to grasp, tap to toggle/.

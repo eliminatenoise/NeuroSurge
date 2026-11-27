@@ -10,7 +10,7 @@ const ARM = new Set(['leftArm', 'rightArm']);
 const LEG = new Set(['leftLeg', 'rightLeg']);
 const KEYS = {
   chooseLimb: /\b[1-4]\b/g,
-  aimJoint: /\bE\b/g,
+  aimJoint: /\bE\b|[↑↓]/g, // (25 November 2026: the up and down arrow keys turn the look, ns-controls LOOK_KEY)
   moveHand: /\b[WASD]\b/g,
   dragBrain: /\bSpace\b/g,
   thirdPerson: /\bE\b/g,
@@ -52,7 +52,7 @@ function decorateKeys(prompt, step) {
   for (const match of matches) {
     fragment.append(doc.createTextNode(text.slice(end, match.index)));
     const key = doc.createElement('kbd');
-    key.className = 'ns-guide-key';
+    key.className = /^[←→↑↓]$/.test(match[0]) ? 'ns-guide-key ns-guide-key-arrow' : 'ns-guide-key';
     key.textContent = match[0];
     fragment.append(key);
     end = match.index + match[0].length;
@@ -110,6 +110,10 @@ function wordsSize(doc, text, viewWidth) {
 // weigh for another mark's words (ns-cue-place keep-outs: a label weighs 1, an arrow 2, a card 8).
 export const CUE_RINGS = Object.freeze({ motor: Object.freeze([15, 15]), limb: Object.freeze([7.5, 7.5]), brain: Object.freeze([13, 13]), joint: Object.freeze([14, 4]) });
 export const CUE_APART = Object.freeze({ on: true, ringWeight: 4, wordsWeight: 8 });
+/** 25 November 2026 (hunt of update 78, finding 9): how far, in CSS px, a mark's ring must go in one placement, or its
+ * words from their place beside it, to count as moved (createGuideCues moves(): the pointer's tip then reads the marks'
+ * boxes again at once; a ring that follows a turning view goes a few px a frame and is left to the tip's usual reading). */
+export const CUE_MOVED_PX = 8;
 
 function marker(layer, name) {
   const node = element(layer, 'span', 'ns-guide-mark ns-guide-mark-' + name);
@@ -125,8 +129,9 @@ function marker(layer, name) {
   let prevX = NaN, prevY = NaN; // (the ring's place one update ago: how far the frame-behind keep-outs lag, ns-cue-place lagDx)
   // (pass 3) the side the words have, the side they last left and until which placement it is avoided
   let side = '', leftSide = '', avoidUntil = 0, placements = 0;
+  let movedX = NaN, movedY = NaN, moves = 0; // (CUE_MOVED_PX: the words' place from the ring when last counted as moved)
   const keep = { dx: NaN, dy: NaN }, placed = {};
-  function forget() { kx = NaN; keepDx = NaN; keepDy = NaN; prevX = NaN; prevY = NaN; side = ''; leftSide = ''; avoidUntil = 0; }
+  function forget() { kx = NaN; keepDx = NaN; keepDy = NaN; prevX = NaN; prevY = NaN; side = ''; leftSide = ''; avoidUntil = 0; movedX = NaN; movedY = NaN; }
   function unplace() {
     forget();
     if (!node.dataset.place) return;
@@ -172,6 +177,7 @@ function marker(layer, name) {
       avoid: leftSide && placements <= avoidUntil ? leftSide : null });
     if (!b) { unplace(); return; }
     wordsBox.x0 = b.x0; wordsBox.y0 = b.y0; wordsBox.x1 = b.x1; wordsBox.y1 = b.y1; wordsBox.on = true;
+    if (!(Math.abs(b.x0 - x - movedX) <= CUE_MOVED_PX && Math.abs(b.y0 - y - movedY) <= CUE_MOVED_PX) || Math.abs(lagDx) > CUE_MOVED_PX || Math.abs(lagDy) > CUE_MOVED_PX) { movedX = b.x0 - x; movedY = b.y0 - y; moves++; }
     keepDx = b.dx; keepDy = b.dy; // (the place is remembered, clear or not: ns-cue-place keepBonus, keepBadFrac)
     if (side && b.side !== side) { leftSide = side; avoidUntil = placements + (CUE_WORDS.backFrames || 0); }
     side = b.side;
@@ -187,6 +193,8 @@ function marker(layer, name) {
   }
   return {
     ringBox, wordsBox,
+    /** How many times this mark's words came up, went to another place beside the ring, or went with a ring that jumped (CUE_MOVED_PX). */
+    moves: () => moves,
     /** (HUD74) Where this mark's ring will be for `point` in a host `width` x `height`: fills ringBox (on false: no mark). */
     ring(point, width, height) {
       const half = CUE_RINGS[name];
@@ -295,6 +303,21 @@ export function createGuideCues(host, { prompt: givenPrompt = null } = {}) {
     const g = input?.guide;
     const active = input?.tutorial === true && g?.visible === true && !g.finished && !!g.goalId;
     const step = active ? g.goalId : null;
+    // (25 November 2026: input.keysOnly, the reading level that hides the cards. No ring, no words, no hand picture, but
+    // the step's keys on the tutorial's card are still drawn as keys: the arrow signs ↑ ↓ were thin and small there as
+    // plain text, where a letter reads well.)
+    if (input?.keysOnly === true) {
+      if (!layer.hidden) { layer.hidden = true; description.textContent = ''; setGesture(''); descriptionLink(prompt, description.id, false); }
+      if (!prompt || !prompt.isConnected) prompt = givenPrompt?.isConnected ? givenPrompt : scope.querySelector('.ns-prompt-words');
+      if (!step) { if (lastStep !== null) clearPrompt(); return; }
+      if (prompt && (lastStep !== step || lastChild !== prompt.firstChild)) {
+        if (prompt.querySelector('.ns-guide-key')) prompt.textContent = prompt.textContent;
+        decorateKeys(prompt, step);
+        lastChild = prompt.firstChild;
+      }
+      lastStep = step;
+      return;
+    }
     // (25 November 2026, section 214: in the tutorial's two limb-key steps the mark's words say what it is for)
     const teach = step === 'chooseLimb' || step === 'aimJoint' || step === 'moveHand';
     const joint = input?.showJointAim === true ?
@@ -353,7 +376,10 @@ export function createGuideCues(host, { prompt: givenPrompt = null } = {}) {
     layer.remove();
     description.remove();
   }
-  return { update, dispose };
+  /** (hunt of update 78, finding 9) A count that changes when a mark's words come up or go to another place, or its ring
+   * jumps: the pointer's tip keeps off them (ns-quiet TIP_KEEP_OFF) and reads their boxes again when it changes. */
+  const moves = () => motorMark.moves() + limbMark.moves() + jointMark.moves() + brainMark.moves();
+  return { update, dispose, moves };
 }
 
 /** User-initiated actions. The embedding shell supplies the existing show and

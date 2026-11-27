@@ -931,9 +931,10 @@ html[data-ns-glow="on"] .ns-scene-overlay[data-ns-brain-in-view="false"] .ns-inf
   border-color: #7fd6f2; background: rgba(110, 205, 240, 0.17); color: #ffffff; line-height: 1; }
 .ns-kbd-name { font-size: calc(var(--k) * 0.4); font-weight: 800; letter-spacing: 0.02em; }
 .ns-kbd-word { font-size: max(10px, calc(var(--k) * 0.26)); font-weight: 600; color: #cfe9f5; white-space: nowrap; }
-.ns-kbd-key.ns-kbd-key-space { flex-basis: calc(var(--k) * 7.6); }
-/* R558 (Messages 55 and 56): the two arrow keys right of the space bar, a little apart from it as on a keyboard. The
-   row stays inside the Q row's width (3.1 + 7.6 + 0.4 + 2 keys and gaps = 14.26 key heights against 14.76). */
+.ns-kbd-key.ns-kbd-key-space { flex-basis: calc(var(--k) * 4.6); }
+/* R558 (Messages 55 and 56): the arrow keys right of the space bar, a little apart from it as on a keyboard. 25 November
+   2026: four of them (left, up, down, right; the up and down keys turn the look) and a shorter space bar, so the row
+   stays inside the Q row's width (3.1 + 4.6 + 0.4 + 4 keys and gaps = 14.42 key heights against 14.76). */
 .ns-kbd-key.ns-kbd-key-arrowleft { margin-left: calc(var(--k) * 0.4); }
 .ns-kbd-key.ns-kbd-key-escape { flex-basis: calc(var(--k) * 1.6); }
 .ns-kbd-key.ns-kbd-key-shiftleft { flex-basis: calc(var(--k) * 2.6); }

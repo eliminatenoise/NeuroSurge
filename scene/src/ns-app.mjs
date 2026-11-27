@@ -60,7 +60,7 @@
  */
 import { DEG, clamp, transformPoint, transformDirection, rotationTranspose } from './ns-math.mjs';
 import * as WholeArmDisplay from './ns-whole-arm-display.mjs';
-import { createControls, bindDom, CONTROL_CODES, MOVE_CODES, moveKeyNumber, AREA_CODES, areaKeyDir } from './ns-controls.mjs';
+import { createControls, bindDom, CONTROL_CODES, MOVE_CODES, moveKeyNumber, AREA_CODES, areaKeyDir, LOOK_CODES } from './ns-controls.mjs';
 import { walkQuietStep, walkUiEvent, AREA_WALK_QUIET, bindFocusRing } from './ns-look-calm.mjs'; // 22 November 2026 (LOOK2)
 import {
   loadAssets, validateManifest, boneInputs, compartmentDirections, SEGMENT_OF, MUSCLE_OF, BRAIN, ATTRIBUTION,
@@ -91,7 +91,7 @@ import { createAmbientEmap } from './ns-emap-ambient.mjs';
 // Round 3 (R3-integrator): every visible string comes from ns-text (R3-text, the single source of plain UI text; R17/D3).
 import * as NT from './ns-text.mjs';
 import * as NG from './ns-guide.mjs';
-import { createQuietUi, quietTipModel, quietPromptText, quietPromptCount, tipTeachNow } from './ns-quiet.mjs';
+import { createQuietUi, quietTipModel, quietPromptText, quietPromptCount, tipTeachNow, tipKeepOffBoxes } from './ns-quiet.mjs';
 // 18 November (MAP): the links between an area and its body part (looked at; named from a muscle).
 import { hoverLink, reverseLink } from './ns-links.mjs';
 import * as NM from './ns-mirror.mjs';
@@ -220,17 +220,22 @@ export function portraitHintPlace(top, width, height, o = PORTRAIT_HINT) {
 export const FREE_AIM = Object.freeze({ on: true, restPx: 3, restMs: 100 });
 /** FREE_AIM's step (pure). seen: the last record (null at first); pointer / lookMs / yaw / pitch: the controls' free
  * pointer ({ x, y, timeMs } | null) and look now; free: the game plays with the pointer not captured; width / height:
- * the picture (CSS px); busy: Space is down, keeps a hold, or something is carried or dragged by the look; down: a
+ * the picture (CSS px); busy: Space holds or carries something (spaceKeepsAim), or something is carried or dragged by
+ * the look; down: a
  * mouse button is down; nowMs: the frame's time; gazeArea: the area the activity has as looked at as the frame begins
  * (a string or null); clicked: a click reaches the activity this frame; pressSeq: the count of presses made with the
  * free pointer (the controls' button seq while its `via` is 'pointer'; null otherwise). A new press is the pointer's
  * own act at its place, so it takes the aim like a move does (24 November 2026, section 208: after an arrow key had
  * put the aim at the crosshair, a click made without moving the mouse pressed the area the KEY had aimed at, wherever
  * the pointer was, while a click on a muscle acted at the pointer).
+ * (Hunt of update 74, finding 8: and while busy too, for the frame its click comes in, `pressOnly`. While Space carried
+ * something the click pressed the area under the mark in the middle, wherever the pointer was: with the mirror body
+ * carried in front of a motor area, that area behind it.)
  * Returns { seen (the next record), pointer (the pointer is the aim), x, y (the aim's place), silent (record what is
  * under the aim without switching it on), travelling (the aiming pointer has not come to rest), arrivedFrom (undefined, or the area to tell this frame's gaze event: the
  * pointer has just come to rest), ms (when the player last moved the aim: the look's own time, or the time of the
- * pointer's last move as the aim; null before either) }. */
+ * pointer's last move as the aim; null before either), pressOnly (the pointer is the aim only for a click made while
+ * busy: the mark keeps the tip and its own look) }. */
 export function aimStep(seen, { pointer = null, lookMs = null, yaw = 0, pitch = 0, free = false, width = 0, height = 0, busy = false, down = false, nowMs = 0, gazeArea = null, clicked = false, pressSeq = null, on = FREE_AIM.on, restPx = FREE_AIM.restPx, restMs = FREE_AIM.restMs } = {}) {
   const s = seen && typeof seen === 'object' ? { ...seen } : { pointer: null, lookMs: null, yaw: null, pitch: null, pSeq: 0, lSeq: 0, seq: 0, ms: null, was: false, anchor: null, moving: false, from: null, left: false, press: undefined };
   const pMoved = pointer !== s.pointer;
@@ -242,8 +247,15 @@ export function aimStep(seen, { pointer = null, lookMs = null, yaw = 0, pitch = 
   const pressed = Number.isSafeInteger(pressSeq) && s.press !== undefined && pressSeq !== s.press;
   s.press = Number.isSafeInteger(pressSeq) ? pressSeq : s.press === undefined ? null : s.press;
   if (pressed && pointer) s.pSeq = ++s.seq;
+  // (hunt of update 74, finding 8: a press made while busy aims for the frame of its click: at the press for a click
+  // made at once, at the release for a press on the carried thing that did not become a drag of it; a look moved since
+  // the press, or the end of busy, ends it)
+  if (lMoved || busy !== true || !pointer) s.pressBusy = false;
+  if (pressed && pointer && busy === true) s.pressBusy = true;
+  const pressAims = s.pressBusy === true && clicked === true;
+  if (s.pressBusy === true && down !== true) s.pressBusy = false;
   const inside = Boolean(pointer) && Number.isFinite(pointer.x) && Number.isFinite(pointer.y) && pointer.x >= 0 && pointer.y >= 0 && pointer.x <= width && pointer.y <= height;
-  const aims = on === true && free === true && inside && s.pSeq > s.lSeq && busy !== true;
+  const aims = on === true && free === true && inside && s.pSeq > s.lSeq && (busy !== true || pressAims);
   if (aims && pMoved && Number.isFinite(pointer.timeMs)) s.ms = pointer.timeMs;
   // the rest rule: travelling records silently; the first rested frame is an arrival
   let travelling = false, arrivedFrom;
@@ -274,7 +286,81 @@ export function aimStep(seen, { pointer = null, lookMs = null, yaw = 0, pitch = 
   // or out of the window). The mark in the middle has the aim back, silently, but the player is not aiming with it: the
   // app shows no tip there until an arrow key or a drag of the view makes the mark the aim again.
   const away = on === true && free === true && !aims && busy !== true && s.pSeq > s.lSeq;
-  return { seen: s, pointer: aims, x: aims ? pointer.x : width / 2, y: aims ? pointer.y : height / 2, silent, travelling: aims && travelling, arrivedFrom, ms, away };
+  return { seen: s, pointer: aims, x: aims ? pointer.x : width / 2, y: aims ? pointer.y : height / 2, silent, travelling: aims && travelling, arrivedFrom, ms, away, pressOnly: aims && busy === true };
+}
+/** Hunt of update 74, finding 8 (pure): whether Space keeps the aim at the mark in the middle (aimStep's `busy`). Only
+ * while something is carried or held: the pointer turns the look then, and the look carries it. Anything else Space
+ * does leaves the pointer the aim, because the pointer does not turn the look then: a grip that holds nothing (Space
+ * down, or kept by a tap, on nothing; or Space on one of your limbs, which only chooses it) and a limb turn (a double
+ * tap). Until now both took the aim: a click on a motor area pressed nothing (3 of 3 tries at 1600x900, the mark on
+ * the brain's outline), or the area under the mark (2 of 2), and no tip showed by the pointer. (A review: during a
+ * limb turn the first version of this rule kept the aim at the mark, a click pressed the pointer's area all the same,
+ * and no tip named it.) */
+export function spaceKeepsAim(space, carried = false) {
+  if (carried === true) return true;
+  return Boolean(space && typeof space === 'object' && space.holding === true);
+}
+/** Hunt of update 74, finding 8 (a third review; pure): whether the Space grip refuses this movement. While the grip
+ * holds the left hand closed (the activity's graspHold), a movement that needs the same fingers does not start
+ * (ns-actions SPACE_COMPETING, startPulse): a rest, a click or a muscle tap that would start it moves nothing and lights
+ * nothing. The tips and the "Looking at" line then say that the hand grips, not the movement: with the pointer the aim
+ * during a grip, and at the pointer during a carry, they named "Straighten left little finger" while the click did nothing.
+ * actionId: the movement a rest or a click there starts (tipActionId, or a muscle's route); activity: the sim's. */
+export function gripRefuses(actionId, activity) {
+  return Boolean(activity && activity.graspHold === true && typeof actionId === 'string' && SPACE_COMPETING.includes(actionId));
+}
+/** Hunt of update 74, finding 8 (pure): a click made while something is carried never reaches through it. T: the pick
+ * where the click lands (targetsAt: front and behind entries, each with item and distance; arrow); carried: what is
+ * carried ('brain' | 'mirror' | 'own' | null). True when the carried mirror body or limb lies on the line of sight in
+ * front of what a plain click would take there (the mirror body carried in front of a motor area): the click then
+ * takes the carried thing, as Shift's click does, and never what is behind it. Never for the carried brain: its glass
+ * is clear, so what is seen through it is what a click takes, as at any other time. (A review: with the carried brain
+ * pulled in front of the mirror body, a click on the mirror body seen through the glass pressed nothing; update 80
+ * tapped its muscle.) */
+export function clickBehindCarried(T, carried) {
+  if (!T || (carried !== 'mirror' && carried !== 'own') || T.arrow || !T.front || !T.behind) return false;
+  const near = Number(T.behind.distance), far = Number(T.front.distance);
+  return T.behind.item === carried && T.front.item !== carried && Number.isFinite(near) && Number.isFinite(far) && near < far;
+}
+/** Hunt of update 74, finding 8 (pure): Shift held where nothing lies behind what is seen (T: the pick there) reaches
+ * nothing, so every control acts as without Shift: a click presses what is seen (it pressed nothing while the tip named
+ * the area's movement), a press-and-drag turns what a plain drag turns (the click waits for the release, so a drag
+ * presses nothing), and Space holds what plain Space holds. An arrow tip in front, or nothing seen at all, keeps
+ * Shift's meaning (the press reaches nothing). (A review: with the first version, which changed the click only, a
+ * Shift press with nothing behind clicked at once and its drag then turned the look, so a drag pressed the area at its
+ * start; update 80 pressed nothing.) */
+export function nothingBehind(T) {
+  return Boolean(T && T.front && !T.arrow && !T.behind);
+}
+/** Hunt of update 74, finding 8 (a review): while something is carried, the tip beside the resting free pointer names
+ * what a click there presses (ns-app carryPointerTip). afterMs: for this long after a hold begins at a pointer that has
+ * not moved since, the hold's own tip ("Holding the brain", "Let go of Space.") shows instead: Space was pressed where the
+ * pointer rests, on the thing now held, whose name the tip gave just before. A second review: a click in that time
+ * pressed the area at the pointer with nothing naming it, also after the pointer had moved onto another area (687 and
+ * 911 ms into a hold, the left ankle, with "Holding the brain" by the mark). So the time ends as soon as the pointer moves:
+ * at each rest after that the tip names the click's target. The full cards' "Looking at" line does not wait at all (the
+ * card says what is held on a line of its own). everyMs: the pick is asked again at most this often. */
+export const CARRY_TIP = Object.freeze({ afterMs: 1200, everyMs: 60 });
+/** CARRY_TIP (pure): the free pointer's rest during a hold. seen: the last record ({ since, x, y, movedAt, moved }; null
+ * when a hold begins); pointer: the free pointer ({ x, y, timeMs }) on the picture, or null; down: a mouse button is down.
+ * A move of more than restPx starts a new rest. When the hold begins, or the pointer comes back onto the picture, the
+ * rest counts from the pointer's own last move (timeMs, the frame's clock), so a pointer that rested there already is
+ * at rest at once (no flash of the hold's words for restMs). Returns { seen, rested (at rest: what a click there takes
+ * can be named, the card's line), ready (and the tip may name it: past afterMs, or the pointer moved since the hold
+ * began), moved (this call) }. */
+export function carryTipRest(seen, { pointer = null, nowMs = 0, down = false, afterMs = CARRY_TIP.afterMs, restPx = FREE_AIM.restPx, restMs = FREE_AIM.restMs } = {}) {
+  const fresh = !(seen && Number.isFinite(seen.since));
+  const s = fresh ? { since: nowMs, x: NaN, y: NaN, movedAt: -Infinity, moved: false } : { ...seen };
+  if (!pointer || !Number.isFinite(pointer.x) || !Number.isFinite(pointer.y)) return { seen: { ...s, x: NaN, y: NaN }, rested: false, ready: false, moved: !fresh };
+  let moved = false;
+  if (!(Math.hypot(pointer.x - s.x, pointer.y - s.y) <= restPx)) {
+    const back = !Number.isFinite(s.x); // (the hold's first call, or the pointer back on the picture)
+    s.x = pointer.x; s.y = pointer.y;
+    s.movedAt = back && Number.isFinite(pointer.timeMs) && pointer.timeMs <= nowMs ? pointer.timeMs : nowMs;
+    if (!fresh) { moved = true; s.moved = true; }
+  }
+  const rested = !(nowMs - s.movedAt < restMs || down === true);
+  return { seen: s, rested, ready: rested && (s.moved === true || nowMs - s.since >= afterMs), moved };
 }
 /** 19 November 2026 (the owner: "You can now switch between which of the four limbs you want to control ... your left
  * arm using 1, your left leg using 2, your right leg using 3, your right arm using 4 ... double clicking will shift you
@@ -1953,6 +2039,15 @@ export const HINT_ROW = Object.freeze({ on: true, gapPx: 6 });
  * the view back to the start look (a command of the player's about the view; the camera still never moves by itself).
  *  - probeMs: the grid is asked at most this often; grid: its points, as shares of the picture's width and height. */
 export const LOOK_LOST = Object.freeze({ on: true, probeMs: 400, grid: Object.freeze([0.2, 0.5, 0.8]) });
+/** 25 November 2026 (a review of ns-controls LOOK_KEY: held up to the top of the range, the up arrow turned the view away,
+ * and its words offered ← or → but not ↓). Which way the look `look` ({ yaw, pitch }, radians) has turned from the start
+ * look `home`: 'up' or 'down' when more up or down than to a side, else 'side' (also without both looks). Pure. The
+ * lost view's words name ↓ after 'up' and ↑ after 'down' (ns-text TIP.viewLostUp, viewLostDown) beside ← and →. */
+export function lostViewTurn(look, home) {
+  if (!look || !home || ![look.yaw, look.pitch, home.yaw, home.pitch].every(Number.isFinite)) return 'side';
+  const d = look.yaw - home.yaw, side = Math.abs(Math.atan2(Math.sin(d), Math.cos(d))), up = look.pitch - home.pitch;
+  return Math.abs(up) > side ? (up > 0 ? 'up' : 'down') : 'side';
+}
 /** HINT_ROW's rule (pure): how far the limb bar is raised, in CSS px, for the hint's box and the bar's box at its own
  * place ({ left, right, top, bottom } each; null or an empty box: 0). 0 when they are not in the same column or the hint
  * is not under the bar's bottom edge plus the gap. */
@@ -5084,8 +5179,17 @@ export function createSimulation({ rig, boxes, strip, binding, armOptions = {}, 
     if (Number.isFinite(deltaDeg) && deltaDeg !== 0) brainRollDeg = ((brainRollDeg + deltaDeg) % 360 + 540) % 360 - 180;
     return brainRollDeg;
   }
+  /** Hunt of update 74, finding 8 (a review): what the look's classifier names along a world ray (the free pointer's,
+   * the scene's rayAt) on the brain drawn with `transform` (stepFrame's out.brainTransform), with no memory of an earlier
+   * answer: the gaze record (normalizeGaze) or null. While something is carried, a click acts at the pointer (aimStep
+   * pressOnly) and presses what this names there; the tip beside the resting pointer says what that is. */
+  function classifyAt(transform, ray) {
+    if (!regionMode || !transform || !ray || !Array.isArray(ray.origin) || !Array.isArray(ray.dir)) return null;
+    const r = NC.brainSourceRay({ origin: ray.origin, dir: ray.dir }, transform);
+    return normalizeGaze(NsBrain.classifyRegionGaze(r.origin, r.dir, segmentation, { markers: strip.markers }), map);
+  }
   return Object.freeze({ activity, initialState, stepFrame, resetBody, resetBrainView, rollBrain, brainRoll: () => brainRollDeg, setPaused, regionTargets, guideMotorTarget, retreatReach, setReachStartX, blendBrainStep, ...(referenceGraph ? { referenceFrameForLook, initialBrainOrigin } : {}), ...(wholeArmOption ? { planWholeArmDisplay, bindHandRayCamera } : {}), fovYDeg, fovFor, frame, handYNdc,
-    bodyMap: map, regionMode, anatomy, armEnvelope, areaStep, areaIds });
+    bodyMap: map, regionMode, anatomy, armEnvelope, areaStep, areaIds, classifyAt });
 }
 
 /* ------------------------------------------------------------------ HUD text (pure) */
@@ -5345,10 +5449,14 @@ export function hudFrame({ binding, state, out, brainHit = false, mirrorHit = fa
     hover = plainActionLabel(binding, bodyMap, g.actionId, g.regionId);
     // R558 (Messages 55 and 56): the line names the area, then the movement ("Left elbow · Bend left elbow").
     const stripArea = typeof g.regionId === 'string' ? regionById(bodyMapOf(bodyMap), g.regionId) : null;
-    gazeText = NT.gazeLine('strip', hover, stripArea ? NT.plainTitle(stripArea) : '');
+    // (hunt of update 74, finding 8, a third review: while Space grips, a left-hand finger or thumb movement does not
+    // start, gripRefuses: the line says the hand grips, not the movement)
+    const gripped = gripRefuses(g.actionId, a);
+    gazeText = NT.gazeLine('strip', gripped ? NT.TIP.gripHolds(spaceGrasp === 'kept') : hover, stripArea ? NT.plainTitle(stripArea) : '');
+    if (gripped) caption = HUD_TEXT.gripCaption;
     // R4-integrator (R4-player 1.1): "Relax left grip" on an open hand shows nothing; the caption says so.
     // R558: Space no longer makes a fist; the hand grips only through a latched hand action (ns-guide handLatched).
-    if (g.actionId === 'relax_release' && !NG.handLatched(a)) caption = HUD_TEXT.relaxNothing;
+    else if (g.actionId === 'relax_release' && !NG.handLatched(a)) caption = HUD_TEXT.relaxNothing;
   } else if (onOther) {
     // R558: on a body area, the crosshair names the sub-band's own movement (each area now holds up to five).
     hover = other ? (!onLeftArmRegion && typeof g.regionActionId === 'string' ? plainActionLabel(binding, bodyMap, g.regionActionId, g.regionId) : NT.plainTitle(other)) : g.regionId;
@@ -5361,11 +5469,11 @@ export function hudFrame({ binding, state, out, brainHit = false, mirrorHit = fa
   } else if (typeof arrowTip === 'string' && arrowTip) gazeText = NT.gazeLine('arrow', arrowTip); // R558 (hunt 2): what a click on it does
   else if (pick && pick.source === 'own') {
     // R558 (hunt 2): a click here taps this muscle of your own body (ns-app muscleTap); Space chooses the limb it belongs to.
-    gazeText = NT.gazeMuscleLine({ where: 'own', name: pick.name, kind: pick.kind, holdable: pick.holdable === true });
+    gazeText = NT.gazeMuscleLine({ where: 'own', name: pick.name, kind: pick.kind, holdable: pick.holdable === true, gripped: pick.gripped === true });
     hover = pick.name;
   } else if (pick && pick.source === 'mirror') {
     // R558 (hunt 2; Message 18): the mirror body's muscle by name (a click taps it), and which of your parts it mirrors.
-    gazeText = NT.gazeMuscleLine({ where: 'mirror', name: pick.name, kind: pick.kind, part: NT.MIRROR_PART_NAMES[pick.bodyPart] || NT.MIRROR_PART_NAMES.other });
+    gazeText = NT.gazeMuscleLine({ where: 'mirror', name: pick.name, kind: pick.kind, part: NT.MIRROR_PART_NAMES[pick.bodyPart] || NT.MIRROR_PART_NAMES.other, gripped: pick.gripped === true });
     hover = pick.name;
   } else if (mirrorHit) gazeText = NT.gazeLine('mirror'); // R558: the literal reflection stands in front of the brain
   else if (g.target === 'glass') gazeText = HUD_TEXT.gazeGlass;
@@ -5544,7 +5652,7 @@ export const EMAP_BUILD = Object.freeze({ onPress: true, afterFrames: 150, idleM
  * 'Escape') is a key the game uses: it is drawn lit, with its name and a short word. A single lower-case letter is a
  * neighbouring key drawn faint and blank, only so the lit keys sit where they do on a real keyboard (W above S, E right
  * of W, R right of E, Shift at the left end of the row below A). Every lit key is handled by ns-controls
- * (CONTROL_CODES, VIEW_CODE, DETAIL_CODE, EMAP_CODE, UI_CODES, REACH_CODES, MOVE_CODES, AREA_CODES); no key is shown that the game does not
+ * (CONTROL_CODES, VIEW_CODE, DETAIL_CODE, EMAP_CODE, UI_CODES, REACH_CODES, MOVE_CODES, AREA_CODES, LOOK_CODES); no key is shown that the game does not
  * use. A row's `note` names a text (SHELL.keyboard) written once at the end of the row instead of a word on each key. */
 export const KEYBOARD_PICTURE_ROWS = Object.freeze([
   // The words of the number row are written beside Esc, in the free space right above that row (at the end of the
@@ -5559,8 +5667,9 @@ export const KEYBOARD_PICTURE_ROWS = Object.freeze([
   // (21 November 2026, EMAP: M, the electrical map, sits right of N in this row; ns-controls EMAP_CODE)
   Object.freeze({ row: 'z', keys: Object.freeze(['ShiftLeft', 'z', 'x', 'c', 'v', 'b', 'n', 'KeyM']) }),
   // R558 (Messages 55 and 56): the left and right arrow keys step the look along the motor strip (AREA_CODES). They
-  // sit right of the space bar, as the arrow keys do on a keyboard.
-  Object.freeze({ row: 'space', keys: Object.freeze(['Space', ...AREA_CODES]) })
+  // sit right of the space bar, as the arrow keys do on a keyboard. (25 November 2026: with the up and down arrow keys
+  // between them, which turn the look, ns-controls LOOK_CODES)
+  Object.freeze({ row: 'space', keys: Object.freeze(['Space', AREA_CODES[0], ...LOOK_CODES, AREA_CODES[1]]) })
 ]);
 /** Build the keyboard picture into `parent` (DOM only: createElement and textContent, so the page's content security
  * policy needs nothing new). The key drawing is hidden from screen readers; the two plain lines under it and the
@@ -5597,6 +5706,12 @@ export function buildKeyboardPicture(doc, parent, text) {
   return root;
 }
 
+/** 25 November 2026 (a review of ns-controls LOOK_KEY: the arrow signs of the Esc page's rows were thin and small beside
+ * the letters). The class of a key cell whose words are arrow signs only ('← → / ↑ ↓', '↑ / ↓'): 'ns-keys-arrows', which
+ * draws them larger (quiet.css, loading-r302.css); '' for any other. */
+export function arrowKeysClass(words) {
+  return /^[\s/←→↑↓]*[←→↑↓][\s/←→↑↓]*$/.test(String(words)) ? 'ns-keys-arrows' : '';
+}
 /** 19 November 2026 (EASE; the owner: "Things should be chunked together and those chunks should be spaced away from
  * each other"): the Esc page's control groups, built into `parent` from the text's `menu` table (ns-text SHELL.menu):
  * one framed chunk per group with its title, ONE picture of its keys (pad: the trackpad; wasd: W over A S D; space;
@@ -5618,7 +5733,7 @@ export function buildShellMenu(doc, parent, groups) {
     else if (g.picture === 'space') make('kbd', 'ns-menu-key ns-menu-key-space', pic, 'Space');
     else if (g.picture === 'keys') { const r = make('div', 'ns-menu-keyrow', pic); for (const k of Array.isArray(g.keys) ? g.keys : []) make('kbd', k.length > 1 ? 'ns-menu-key ns-menu-key-wide' : 'ns-menu-key', r, k); }
     const rows = make('dl', 'ns-menu-rows', box);
-    for (const row of Array.isArray(g.rows) ? g.rows : []) { if (!Array.isArray(row)) continue; make('dt', '', rows, String(row[0])); make('dd', '', rows, String(row[1])); }
+    for (const row of Array.isArray(g.rows) ? g.rows : []) { if (!Array.isArray(row)) continue; make('dt', arrowKeysClass(row[0]), rows, String(row[0])); make('dd', '', rows, String(row[1])); }
     if (typeof g.note === 'string' && g.note) make('p', 'ns-menu-note', box, g.note);
   }
   return root;
@@ -6413,7 +6528,7 @@ export function createShell({ doc, root, text = SHELL_TEXT, settings = SETTINGS_
   el('h3', 'ns-shell-section-title', help, text.controlsTitle);
   const keys = el('dl', 'ns-shell-keys', help);
   const keyTexts = [];
-  for (const [k, v] of text.controls) { el('dt', '', keys, k); keyTexts.push(el('dd', '', keys, v)); }
+  for (const [k, v] of text.controls) { el('dt', arrowKeysClass(k), keys, k); keyTexts.push(el('dd', '', keys, v)); }
   const stepWords = short => {
     const st = short && Array.isArray(text.introInstructions) ? text.introInstructions : text.instructions;
     const kt = short && Array.isArray(text.introControls) ? text.introControls : text.controls;
@@ -8799,7 +8914,10 @@ export function start(params = {}) {
           if (event.type !== 'grasp' || event.down !== true) return next;
           // Resolve a new grasp against the picture the player actually pressed on. The next frame can
           // change the camera, and pointer capture can discard the free pointer before it reads the queue.
-          const aim = event.aim || pressPoint();
+          // (25 November 2026: at the AIM, pressPoint, section 206. The free pointer the press carries, event.aim, won
+          // also after an arrow key had made the mark the aim: with the mouse left resting on the picture, Space took
+          // nothing while the mark and its tip were on the mirror body. pressPoint gives that same pointer while it aims.)
+          const aim = pressPoint();
           const picked = itemAt(aim.x, aim.y, event.behind === true);
           const brainAnchor = picked?.target === 'brain' ? brainPointLocal(picked.pick.pointWorldM) : null;
           return { ...next, events: [...next.events.slice(0, -1), { ...event, graspPick: { picked, brainAnchor } }] };
@@ -8821,6 +8939,8 @@ export function start(params = {}) {
         moveKeyUp: (s, n, t) => (typeof base.moveKeyUp === 'function' ? base.moveKeyUp(s, n, t) : s),
         // R558 (Messages 55 and 56): the area keys step the look only while playing (elsewhere the arrows scroll the page).
         areaKey: (s, d, t, o) => (shellIsPlaying(shellState) && typeof base.areaKey === 'function' ? base.areaKey(s, d, t, o) : s),
+        // 25 November 2026 (ns-controls LOOK_KEY): the up and down arrows turn the look only while playing.
+        lookKey: (s, d, t) => (shellIsPlaying(shellState) && typeof base.lookKey === 'function' ? base.lookKey(s, d, t) : s),
         pointerMove: (s, dx, dy, t) => {
           if (!shellIsPlaying(shellState)) return s;
           if (lookNative) return base.pointerMove(s, dx, dy, t);
@@ -8843,7 +8963,10 @@ export function start(params = {}) {
         // R558 (Messages 33 and 34): behind (Shift held at the press) turns the item behind the one seen there.
         dragTargetAt: (x, y, behind = false) => {
           if (!shellIsPlaying(shellState) || !appliedSize || !sceneFn('controlLayersAt')) return null;
-          const spaceHolds = cs && cs.space && (cs.space.grasp === 'held' || cs.space.grasp === 'kept');
+          // (hunt of update 74, finding 8, a review: a grip that holds nothing is no hold. A press then drags what a press
+          // at any other time drags, so its click waits for the release and a drag presses nothing. The press clicked at
+          // once and its drag turned the look, so a drag from a motor area pressed that area at its start.)
+          const spaceHolds = cs && cs.space && cs.space.holding === true && (cs.space.grasp === 'held' || cs.space.grasp === 'kept');
           // 19 November 2026 (the owner: "if we click whilst ... grasping, then we can do orbital shift at the same time"):
           // a press while Space holds the brain or the mirror body turns that thing about itself for as long as the
           // button is down; W / A / S / D go on carrying it meanwhile. (Before, a press during a hold did nothing.)
@@ -9379,33 +9502,32 @@ export function start(params = {}) {
       /** 25 November 2026 (section 209, hunt of update 73, finding 5): the boxes of the cards the pointer's tip keeps off
        * besides the tutorial's own: the information card, the limb buttons and the map's card, in the canvas's CSS px,
        * read at most every 120 ms. */
-      let tipCardsAt = -Infinity, tipCardsNow = [];
-      function tipCards(nowMs) {
-        if (nowMs - tipCardsAt < 120) return tipCardsNow; // (section 211: 120 ms, it was 250: the marks' words move with their ring)
-        tipCardsAt = nowMs; tipCardsNow = [];
-        try {
-          const o = canvas.getBoundingClientRect();
-          for (const sel of ['.ns-infopanel', '.ns-limbs', '.ns-emap-card']) {
-            const e = doc.querySelector(sel);
-            if (!e || e.hidden || typeof e.getBoundingClientRect !== 'function') continue;
-            const r = e.getBoundingClientRect();
-            if (r.width > 0 && r.height > 0) tipCardsNow.push({ x0: r.left - o.left, y0: r.top - o.top, x1: r.right - o.left, y1: r.bottom - o.top, weight: 4 }); // (weight: ns-quiet tipSides, a card drawn over the tip)
-          }
-          // (25 November 2026, section 211: and the words of the tutorial's marks, "Hip aim", "Your left leg", "Brain":
-          // in the 800x600 tutorial 38 of 214 pointer tips lay on "Hip aim". The words do not give way to the tip, which
-          // moves with the pointer; the tip gives way to them.)
-          if (typeof doc.querySelectorAll === 'function') for (const e of doc.querySelectorAll('.ns-guide-cues .ns-guide-mark-name')) {
-            if (!e || e.hidden || typeof e.getBoundingClientRect !== 'function') continue;
-            const r = e.getBoundingClientRect();
-            if (r.width > 0 && r.height > 0) tipCardsNow.push({ x0: r.left - o.left, y0: r.top - o.top, x1: r.right - o.left, y1: r.bottom - o.top });
-          }
-        } catch { tipCardsNow = []; }
+      // (hunt of update 78, finding 9: and at once when the tip shows something else or a tutorial mark's words come up
+      // or go to another place, ns-guide-cues moves(): at a step's end the step's words moved onto a tip just placed,
+      // and stayed under it until the next reading, up to 120 ms. Every 30 ms while the tip lies on a box, `soon`: the
+      // region labels give way to the tip, and a tip placed from where they stood before lay on the aim mark for 130 ms.
+      // And for 0.4 s after the tutorial's step changes, `step`: the labels move then, 50 ms after the step's words.)
+      let tipCardsAt = -Infinity, tipCardsNow = [], tipCardsTip = null, tipCardsCue = 0, tipCardsStep = null, tipCardsStepAt = -Infinity;
+      function tipCards(nowMs, tipKey = null, soon = false, step = null) {
+        const cue = guideCues && typeof guideCues.moves === 'function' ? guideCues.moves() : 0;
+        if (step !== tipCardsStep) { tipCardsStep = step; tipCardsStepAt = nowMs; }
+        const every = soon || nowMs - tipCardsStepAt < 400 ? 30 : 120;
+        if (tipKey === tipCardsTip && cue === tipCardsCue && nowMs - tipCardsAt < every) return tipCardsNow; // (section 211: 120 ms, it was 250: the marks' words move with their ring)
+        tipCardsAt = nowMs; tipCardsTip = tipKey; tipCardsCue = cue;
+        // (25 November 2026, section 211: and the words of the tutorial's marks, "Hip aim", "Your left leg", "Brain":
+        // in the 800x600 tutorial 38 of 214 pointer tips lay on "Hip aim". The words do not give way to the tip, which
+        // moves with the pointer; the tip gives way to them. Hunt of update 78, finding 9: and the marks' rings, the aim
+        // mark and the region labels, ns-quiet TIP_KEEP_OFF.)
+        try { tipCardsNow = tipKeepOffBoxes(doc, canvas.getBoundingClientRect()); } catch { tipCardsNow = []; }
         return tipCardsNow;
       }
       const pressXY = () => {
         const locked = lockedNow() || !cs.pointer;
         return locked ? { x: appliedSize.width / 2, y: appliedSize.height / 2 } : { x: cs.pointer.x, y: cs.pointer.y };
       };
+      /** What Space carries now: 'own' (one of your limbs), 'brain' | 'mirror', or null. */
+      const carriedItemNow = () => (carriedLimb() ? 'own' : simState && simState.objectCarry && simState.objectCarry.held && simState.objectCarry.target ? simState.objectCarry.target
+        : simState && simState.activity && simState.activity.brainGrab && simState.activity.brainGrab.active ? 'brain' : null);
       /** A click that lands on a body muscle: { event, text } (event null for a bone: only the line is shown), or
        * { reachArea } for a reach-behind click on a motor area (the frame loop lets the look see that area for this
        * click), or null when the click is not on a body part (the ordinary brain click then applies). behind: the click
@@ -9430,6 +9552,73 @@ export function start(params = {}) {
         return { event: { type: 'muscle', regionId: route.regionId, actionId: route.regionOnly ? null : route.actionId, regionOnly: route.regionOnly === true },
           text: NT.muscleTapLine({ muscle: pick.name, where, area: r ? r.label : route.regionId, hemisphere: r ? r.hemisphere : null, movement: a ? a.label : null }),
           pick: { id: pick.id, name: pick.name, source: pick.source, kind: pick.kind }, route };
+      }
+      // Hunt of update 74, finding 8 (a review): while something is carried, a click acts at the free pointer (aimStep
+      // pressOnly), but the only tip was "Holding the brain" by the mark in the middle. carryPointerTip names what a click
+      // at the resting pointer presses: the motor area the look's classifier names there (sim.classifyAt), with the
+      // movement the click starts, or the muscle or bone it taps (the carried mirror body's where that lies in front of an
+      // area, clickBehindCarried): { model (the tip), area, line (the full cards' "Looking at" line), click (the words for
+      // the hold's own tip at a hold's start: "Click: bend left knee"; '' for a bone, whose tap presses nothing) }, or null where a
+      // click takes nothing, while the pointer moves (that carries the held thing with the look), is off the picture or a
+      // button is down (CARRY_TIP, carryTipRest). Asked again when the pointer or the picture changes, at most every
+      // CARRY_TIP.everyMs. A second review: the full cards' line named the brain glass under the mark, "(nothing switches
+      // on)", while the click switched on the area at the pointer, and, the mirror body carried, the muscle under the mark
+      // ("click: its brain area switches on") while the click at the pointer took nothing. carryTipSeen.line: the line for
+      // the pointer's place (also where a click takes nothing), at each rest and, a third review, while it moves; null off
+      // the picture. carryTipSeen.ready: the tip may show it (carryTipRest).
+      const carryTipSeen = { since: NaN, x: NaN, y: NaN, movedAt: -Infinity, moved: false, ready: false, key: '', askedAt: -Infinity, tip: null, line: null };
+      const carryTipReset = () => Object.assign(carryTipSeen, { since: NaN, x: NaN, moved: false, ready: false, tip: null, key: '', line: null });
+      function carryPointerTip(nowMs, { brainTransform = null, pictureKey = '', armState = null, rotationState = null, kept = false } = {}) {
+        const s = carryTipSeen, p = !lockedNow() && cs && cs.pointer && Number.isFinite(cs.pointer.x) && Number.isFinite(cs.pointer.y) ? cs.pointer : null;
+        const onPicture = Boolean(p) && Boolean(appliedSize) && p.x >= 0 && p.y >= 0 && p.x <= appliedSize.width && p.y <= appliedSize.height;
+        const r = carryTipRest(Number.isFinite(s.since) ? s : null, { pointer: onPicture ? p : null, nowMs, down: Boolean(cs.button && cs.button.down) });
+        s.since = r.seen.since; s.x = r.seen.x; s.y = r.seen.y; s.movedAt = r.seen.movedAt; s.moved = r.seen.moved; s.ready = r.ready;
+        // (a third review: kept while the pointer moved, the full card named the last rest's area and its click, "Left
+        // knee · Click: bend left knee", while a click made at the end of the move acted at the pointer's new place. While
+        // the pointer moves, the line now follows it, as the card follows a free pointer at any other time; the tip still
+        // waits for a rest, and the hold's own tip shows meanwhile. A button down keeps both: a press that moves is a drag.)
+        if (r.moved || !onPicture) { s.tip = null; s.key = ''; }
+        if (!onPicture) s.line = null;
+        if (!onPicture || (!r.rested && cs.button && cs.button.down)) return null;
+        const key = `${s.x},${s.y}|${pictureKey}`;
+        if (key === s.key || nowMs - s.askedAt < CARRY_TIP.everyMs) return r.rested ? s.tip : null;
+        s.key = key; s.askedAt = nowMs; s.tip = null;
+        const T = targetsAt(s.x, s.y);
+        const e = !T || T.arrow ? null : clickBehindCarried(T, carriedItemNow()) ? T.behind : T.front;
+        // (where a click takes nothing, the card says so; on an arrow tip, what a click on it does, as for the look's arrow
+        // tip: a click there turns the brain while the mirror body is carried; with no pick it keeps the look's own line)
+        const arrowWords = T && T.arrow && NT.ARROWS[T.arrow.target] && NT.ARROWS[T.arrow.target].tip ? NT.ARROWS[T.arrow.target].tip[T.arrow.dir] : '';
+        s.line = !T ? null : T.arrow ? (typeof arrowWords === 'string' && arrowWords ? NT.gazeLine('arrow', arrowWords) : null) : !e ? HUD_TEXT.gazeEmpty : e.item === 'brain' ? HUD_TEXT.gazeGlass : null;
+        if (e && e.item === 'brain' && e.kind === 'area' && typeof sim.classifyAt === 'function') {
+          let g = null;
+          try { const ray = sceneFn('rayAt') ? callScene('rayAt', s.x, s.y) : null; g = ray ? sim.classifyAt(brainTransform, ray) : null; } catch { g = null; }
+          const area = g && g.target === 'region' && typeof g.regionId === 'string' ? regionById(bodyMap, g.regionId) : null;
+          if (area) {
+            const id = tipActionId(g, area.id, null);
+            const moves = infoMoves(area, { leftArm: g.isLeftArm === true, armState, rotationState });
+            const m = moves.find(q => q && q.id === id) || moves.find(q => q && q.current) || null;
+            const color = mods.colors && typeof mods.colors.areaColorCss === 'function' ? mods.colors.areaColorCss(area.id) || '' : '';
+            // (a third review: the grip refuses a left-hand finger or thumb movement, gripRefuses: the tip and the line say
+            // the hand grips, and the hold's own tip names no click; they named the movement while the click did nothing)
+            const gripped = gripRefuses(id, simState && simState.activity);
+            const hint = gripped ? NT.TIP.gripHolds(kept) : NT.TIP.carryClick(m ? m.label : '');
+            s.tip = { model: quietTipModel({ area, actionId: id, moves: [], color, hint }), area, line: NT.gazeLine('other', hint, NT.plainTitle(area)), click: gripped ? '' : hint };
+          }
+        } else if (e && e.item !== 'brain' && e.rec && typeof e.rec.name === 'string' && (e.rec.kind === 'muscle' || e.rec.kind === 'bone')) {
+          const mirror = e.rec.source === 'mirror', muscle = e.rec.kind === 'muscle';
+          // (a third review: the hold's tip read "Click: left temporoparietalis", with no verb; the muscle's own tip now
+          // says what its click does too. A muscle whose movement the grip refuses, gripRefuses, says the hand grips.)
+          let route = null;
+          if (muscle) { try { route = muscleRoute({ ...e.rec }); } catch { route = null; } }
+          const gripped = Boolean(route && gripRefuses(route.actionId, simState && simState.activity));
+          const model = quietTipModel({ pick: { name: e.rec.name, kind: e.rec.kind } });
+          const hint = !muscle || !model ? '' : gripped ? NT.TIP.gripHolds(kept) : NT.TIP.carryMuscleClick();
+          s.tip = { model: hint ? { ...model, hint, key: `${model.key}|${hint}` } : model, area: null,
+            line: NT.gazeMuscleLine({ where: mirror ? 'mirror' : 'own', name: e.rec.name, kind: e.rec.kind, part: mirror ? NT.MIRROR_PART_NAMES[e.rec.bodyPart] || NT.MIRROR_PART_NAMES.other : '', gripped }),
+            click: muscle && !gripped ? NT.TIP.carryMuscleClick(e.rec.name) : '' }; // (a bone's tap presses nothing)
+        }
+        if (s.tip) s.line = s.tip.line;
+        return r.rested ? s.tip : null;
       }
 
       // ---- R558 (user Messages 2 and 12): holding with Space, turning by drag, and keeping the three items apart ---------
@@ -9466,7 +9655,10 @@ export function start(params = {}) {
        * at the press): the other item on the line of sight (the body part in front of that area, the item behind what
        * is seen, or what is behind an arrow tip). A press on your trunk, neck or head holds nothing. */
       function itemAt(x, y, behind = false) {
-        return itemFromTargets(targetsAt(x, y), behind);
+        // (hunt of update 74, finding 8, a review: Shift with nothing behind reaches nothing, so Space and a drag take what
+        // they take without it, nothingBehind)
+        const T = targetsAt(x, y);
+        return itemFromTargets(T, behind === true && !nothingBehind(T));
       }
       function itemFromTargets(T, behind = false) {
         const { entry } = pressEntry(T, behind);
@@ -9525,8 +9717,11 @@ export function start(params = {}) {
       // (24 November 2026, FREE_AIM, section 206: a press made with a KEY, Space, acts at the aim: the pointer while it is the
       // aim, else the crosshair. Until now a free pointer always took it, also after an arrow key had put the look on an
       // area and the pointer lay where the mouse was last left.)
+      // (25 November 2026: and a look of the player's since the last frame, an up or down arrow key's step, makes the mark
+      // the aim at once, unless the pointer moved after it)
       const pressPoint = () => {
-        const locked = lockedNow() || !cs || !cs.pointer || (FREE_AIM.on && Number.isFinite(aimNow.x) && aimNow.pointer !== true);
+        const lookSince = FREE_AIM.on && Boolean(aimSeen && cs) && Number.isFinite(cs.lookMs) && cs.lookMs !== aimSeen.lookMs && !(cs.pointer && cs.pointer.timeMs > cs.lookMs);
+        const locked = lockedNow() || !cs || !cs.pointer || lookSince || (FREE_AIM.on && Number.isFinite(aimNow.x) && aimNow.pointer !== true);
         return locked ? { x: appliedSize.width / 2, y: appliedSize.height / 2 } : { x: cs.pointer.x, y: cs.pointer.y };
       };
       /** Joint limits of the drawn body (the posture's caps inside BODY_JOINT_LIMITS, the activity's own limits). */
@@ -12389,10 +12584,10 @@ export function start(params = {}) {
         // and the player leaves the look alone, the look stays on the area and spot that started it (see CARRIED_LOOK).
         // 24 November 2026 (FREE_AIM): this frame's aim, and when the player last moved it (the look, or the pointer as aim)
         {
-          const sp = cs.space, spBusy = Boolean(sp && (sp.role || sp.grasp === 'held' || sp.grasp === 'kept' || sp.holding === true || sp.turning === true));
+          // (hunt of update 74, finding 8: a grip that holds nothing leaves the pointer the aim, spaceKeepsAim)
           const carried = Boolean(carriedLimb() || (simState && simState.objectCarry && simState.objectCarry.held) || (simState && simState.activity && simState.activity.brainGrab && simState.activity.brainGrab.active));
           const a = aimStep(aimSeen, { pointer: cs.pointer || null, lookMs: cs.lookMs === undefined ? null : cs.lookMs, yaw: cs.yaw, pitch: cs.pitch, free: live && !lockedNow(),
-            width: size ? size.width : 0, height: size ? size.height : 0, busy: spBusy || carried, down: Boolean(cs.button && cs.button.down), nowMs: now,
+            width: size ? size.width : 0, height: size ? size.height : 0, busy: spaceKeepsAim(cs.space, carried), down: Boolean(cs.button && cs.button.down), nowMs: now,
             gazeArea: simState && simState.activity && typeof simState.activity.gazeArea === 'string' ? simState.activity.gazeArea : null,
             clicked: timing.events.some(e => e && e.type === 'click'),
             pressSeq: cs.button && cs.button.via === 'pointer' && Number.isSafeInteger(cs.button.seq) ? cs.button.seq : null });
@@ -12424,9 +12619,18 @@ export function start(params = {}) {
         let holdingLook = Boolean(live && carriedHold && !carriedHold.off);
         let reachPick = null, dropClicks = false;
         if (live && timing.events.some(e => e && e.type === 'click')) {
-          const first = timing.events.find(e => e && e.type === 'click');
+          let first = timing.events.find(e => e && e.type === 'click');
+          // (hunt of update 74, finding 8: Shift held and nothing behind what is seen there, nothingBehind: a plain click)
+          if (first && first.behind === true && appliedSize && nothingBehind(targetsAt(pressXY().x, pressXY().y))) {
+            const plain = { ...first }; delete plain.behind;
+            timing = { ...timing, events: timing.events.map(e => (e === first ? plain : e)) }; first = plain;
+          }
+          // (and a click while the mirror body is carried never reaches through it, clickBehindCarried: its muscle is
+          // tapped, as by Shift's click, and never the motor area it hides; the carried brain's glass is clear)
+          const carriedItem = carriedItemNow();
+          const throughCarried = Boolean(first && first.behind !== true && carriedItem && appliedSize) && clickBehindCarried(targetsAt(pressXY().x, pressXY().y), carriedItem);
           // (CARRIED_LOOK: the click repeats the movement under way; it taps no muscle the moving view brought under the crosshair)
-          tapped = holdingLook && first && first.behind !== true ? null : muscleTap(Boolean(first && first.behind === true));
+          tapped = holdingLook && first && first.behind !== true ? null : throughCarried ? muscleTap(true) || { event: null, text: '' } : muscleTap(Boolean(first && first.behind === true));
           // 19 November 2026 (the owner: "If we click on a limb, we now control that limb until we change the camera
           // view"): a plain click on one of your own limbs takes control of it, or lets go of it when it was the
           // controlled one; a click on nothing lets go (limbLatch; ns-grasp LIMB_CLICK). The click still names the
@@ -12650,8 +12854,10 @@ export function start(params = {}) {
             // carried the crosshair off it; sim.areaStep's own start rule covers a look the player has moved.
             let lookNow = { yaw: cs.yaw, pitch: cs.pitch }, startId = areaWalk ? areaWalk.id : null, reached = null, ended = false;
             const record = { seq: (areaStepLast?.seq || 0) + 1, from: null, to: null, end: false, passed: [], tests: 0, rays: 0, ms: null };
+            let walkDir = 0; // (the key of the last request tried: the words after it name the other key)
             for (const q of reqs) {
               let res = null;
+              walkDir = q.dir;
               try { res = sim.areaStep(simState, { dir: q.dir, fromId, startId, look: lookNow, rayForLook: rayForCtl, clampLook: limitLook }); } catch { res = null; }
               if (!res) break;
               if (record.from === null) record.from = res.from || null;
@@ -12671,7 +12877,7 @@ export function start(params = {}) {
               if (carriedHold && !carriedHold.off) { carriedHold = { off: true, gaze: null, lookMs: carriedHold.lookMs, moveSeq: carriedHold.moveSeq }; holdingLook = false; } // (CARRIED_LOOK: a key's step is the player's look)
               areaFreshPending = true;
               areaNote = null;
-            } else areaNote = { key: ended ? 'areaEnd' : 'areaUnreachable', untilMs: now + VIEW_HELD_NOTE_MS };
+            } else areaNote = { key: ended ? 'areaEnd' : 'areaUnreachable', untilMs: now + VIEW_HELD_NOTE_MS, dir: walkDir };
             record.to = reached; record.end = ended;
             record.ms = perf ? Math.round((perf.now() - stepT0) * 100) / 100 : null;
             areaStepLast = record;
@@ -13278,6 +13484,9 @@ export function start(params = {}) {
         areaWalkQuiet = attempted.walkKeep || null; areaWalkHeldStep = false; areaWalkReleased = false; // (LOOK2, AREA_WALK_QUIET: the same)
         simState = step.state;
         const out = step.out;
+        // (hunt of update 74, finding 8: a click made while Space carries something took the aim at the pointer for this
+        // frame only, aimStep pressOnly: the tip, the mark and the line stay with the mark in the middle)
+        if (aimNow.pressOnly && size) { aimNow = { ...aimNow, pointer: false, x: size.width / 2, y: size.height / 2, pressOnly: false }; ctlFrame = live ? targetsAt(aimNow.x, aimNow.y) : null; }
         // R558 (performance): the scene rests the arrows of an item while it is held (ns-scene-three setHeldItem)
         if (sceneFn('setHeldItem')) {
           const oc = simState.objectCarry, act = simState.activity;
@@ -13961,6 +14170,9 @@ export function start(params = {}) {
         // 18 November (MAP): the area that moves the muscle under the crosshair (the muscle tap's own rule), asked once per muscle
         { const rk = crossPick && seen.kind === 'muscle' ? `${seen.source}|${seen.id}|${seen.name}` : '';
           if (rk !== crossRouteKey) { crossRouteKey = rk; crossSeen = rk ? seen : null; try { crossRoute = rk ? muscleRoute(seen) : null; } catch { crossRoute = null; } } }
+        // (hunt of update 74, finding 8, a third review: a muscle whose tap starts a movement the Space grip refuses,
+        // gripRefuses: the line says the hand grips, not that its area switches on)
+        if (crossPick && crossRoute && gripRefuses(crossRoute.actionId, simState.activity)) crossPick = { ...crossPick, gripped: true };
         // Lead decision (refines Messages 33 and 34): on a motor area the look reaches through a body part, that part is
         // named ("..., behind your right forearm"): the body part SEEN there, nearer than the brain entry on the ray.
         const brainOnRay = ctlFrame ? [ctlFrame.front, ctlFrame.behind].find(e => e && e.item === 'brain') : null;
@@ -13990,7 +14202,9 @@ export function start(params = {}) {
         // R558: a change of view that could not be drawn was undone; say so and what to do.
         if (now < viewKeptUntilMs && NT.HUD.viewKept) model.note = [NT.HUD.viewKept, model.note].filter(Boolean).join(' \u00b7 ');
         if (now < viewHeldUntilMs && NT.HUD.viewWhileHolding) model.note = [NT.HUD.viewWhileHolding, model.note].filter(Boolean).join(' \u00b7 ');
-        const areaFeedback = areaNote && now < areaNote.untilMs ? NT.HUD[areaNote.key] : '';
+        // (a review: the words after a walk's end name the other area key, from the direction pressed)
+        const areaWords = areaNote ? NT.HUD[areaNote.key] : '';
+        const areaFeedback = areaNote && now < areaNote.untilMs ? (typeof areaWords === 'function' ? areaWords(areaNote.dir) : areaWords) : '';
         if (areaFeedback) model.note = [areaFeedback, model.note].filter(Boolean).join(' \u00b7 ');
         // R558 (Messages 55 and 56): a number key that moved nothing, or only brought the part back, says so (unless the
         // "Try this" line is saying the same thing just now).
@@ -14018,6 +14232,24 @@ export function start(params = {}) {
         // R558 (Messages 33 and 34): first under "Looking at": what F and a drag take here, and how to reach the item behind
         // (hold Shift as you press); while Shift is held, what the press will reach. Not while something is held.
         const holdingNow = Boolean(carriedLimb() || (simState.objectCarry && simState.objectCarry.held) || (simState.activity && simState.activity.brainGrab && simState.activity.brainGrab.active));
+        // (hunt of update 74, finding 8, a second review: what a click at the resting free pointer presses while something
+        // is carried, carryPointerTip, asked here at every reading level: the tip beside the pointer at the short levels,
+        // and at the full level the "Looking at" line, which named the brain glass under the mark, "nothing switches on",
+        // while the click switched on the area at the pointer)
+        const heldNow = NT.TIP.holding(spaceLimb || (simState.objectCarry && simState.objectCarry.held ? simState.objectCarry.target : null), spaceGrasp === 'kept');
+        let carryTipNow = null;
+        const carryingFree = Boolean(live && heldNow && holdingNow && FREE_AIM.on);
+        if (carryingFree) {
+          const actC = simState.activity || null;
+          // (the picture's key: the look, the brain's place and, a second review, the carried mirror body's place: S, W, A and
+          // D move it under a still pointer, and the tip and the card named what had been there before)
+          const mc = simState.objectCarry && simState.objectCarry.mirror && Array.isArray(simState.objectCarry.mirror.centreWorldM) ? simState.objectCarry.mirror.centreWorldM.map(v => (Number.isFinite(v) ? v.toFixed(4) : '')).join(',') : '';
+          // (a third review: and the grip, whose refusal of a left-hand finger movement the tip says, gripRefuses)
+          const gripKey = `${actC && actC.graspHold === true ? 'g' : ''}${spaceGrasp === 'kept' ? 'k' : ''}`;
+          carryTipNow = carryPointerTip(now, { brainTransform: out.brainTransform || null, pictureKey: `${simState.gaze ? simState.gaze.viewKey : ''}|${cs.yaw}|${cs.pitch}|${appliedSize ? `${appliedSize.width}x${appliedSize.height}` : ''}|${mc}|${gripKey}`,
+            armState: actC ? { elbowRad: simState.elbowRad, armJerk: actC.armJerk || null } : null, rotationState: typeof out.rotationState === 'string' ? out.rotationState : null, kept: spaceGrasp === 'kept' });
+        } else carryTipReset();
+        if (carryingFree && carryTipSeen.line) model.gaze = carryTipSeen.line;
         // With a free mouse the presses act under the pointer, so the line describes what is under the pointer.
         // (24 November 2026, FREE_AIM, section 206: the line describes the AIM, the pointer only while it is the aim: after an
         // arrow key or a look the crosshair is the aim although the pointer is free, and Space acts there, pressPoint)
@@ -14113,13 +14345,14 @@ export function start(params = {}) {
         const armAvoid = out.fit ? armAvoidShapes(out.fit, {
           aspect, fovYDeg: out.fovYDeg, ...(out.fit.solution && Array.isArray(out.fit.solution.shoulderCam) ? { shoulderCam: out.fit.solution.shoulderCam } : {})
         }) : null;
+        let quietArgs = null; // (hunt of update 78, finding 9: what the tip was placed with, for a second placement below)
         if (quietUi) {
           if (!quietRoot) quietRoot = infoRoot();
           // 19 November 2026 (EASE; the owner: "reader should be on by default"): the game starts at the SHORT reading
           // level ('read': one small card for the area looked at), and the tip and the prompt stay with it; only the
           // full cards ('more': the "Looking at" card, the long guide line, the colour key) take their place.
           const quietOn = shellIsPlaying(shellState) && Boolean(quietRoot) && quietRoot.getAttribute('data-ns-read') !== 'more';
-          let tipModel = null, tipCentre = false, tipLost = false;
+          let tipModel = null, tipCentre = false, tipLost = false, carryTip = null, holdClick = null;
           // 25 November 2026 (LOOK_LOST): is the picture empty? (the brain's sample points all out of it, then a coarse grid
           // of the game's own picks, asked at most every probeMs)
           if (LOOK_LOST.on && live && brainSeen === 0 && !holdingNow) {
@@ -14130,6 +14363,8 @@ export function start(params = {}) {
               lostView = empty;
             }
           } else { lostView = false; lostProbeAt = -Infinity; }
+          // (25 November 2026, lostViewTurn: the words name the arrow key that turns back the way the look went)
+          const lostWords = lostView && NT.TIP.viewLost ? NT.TIP[{ up: 'viewLostUp', down: 'viewLostDown' }[lostViewTurn(cs, referenceGraph && referenceGraph.initialLook)]] || NT.TIP.viewLost : null;
           if (quietOn && live) {
             const areaId = onArea && typeof out.gaze.regionId === 'string' ? out.gaze.regionId : null;
             const area = areaId ? regionById(bodyMap, areaId) : null;
@@ -14153,7 +14388,11 @@ export function start(params = {}) {
               // numbered list); number keys still do the area's other movements for whoever knows them.
               const tipAction = tipActionId(out.gaze, area.id, act ? act.gazeArea : null);
               const tipNow = Array.isArray(areaMoves) ? areaMoves.find(m => m && m.id === tipAction) || areaMoves.find(m => m && m.current) || null : null;
-              const hint = overlap ? 'Click follows the arrow. Shift-click presses this area.' : NUMBER_LISTS ? '' : tipNow && typeof tipNow.label === 'string' ? tipNow.label : '';
+              // (hunt of update 74, finding 8, a third review: while Space grips, a left-hand finger or thumb movement does not
+              // start, gripRefuses; with the pointer the aim during a grip on nothing the tip named it while a rest and a
+              // click there did nothing)
+              const gripped = !overlap && gripRefuses(tipAction, act);
+              const hint = overlap ? 'Click follows the arrow. Shift-click presses this area.' : gripped ? NT.TIP.gripHolds(spaceGrasp === 'kept') : NUMBER_LISTS ? '' : tipNow && typeof tipNow.label === 'string' ? tipNow.label : '';
               tipModel = quietTipModel({ area, actionId: tipAction, moves: NUMBER_LISTS ? areaMoves : [], color: areaCss || '', hint, teach: NUMBER_LISTS && !hint && tipTeachNow(tipPresses) ? NT.TIP.teach : '' });
               if (quietRest.settled || area.id === stepInputs?.keyboardAimId) quietLast = { regionId: area.id, moves: areaMoves };
             // 18 Nov (SMALL, S10): an arrow's words come only from its own caption by the arrow (layoutArrowTips), not twice
@@ -14165,15 +14404,27 @@ export function start(params = {}) {
             if (reachBody && !arrowTip) tipModel = quietTipModel({ pick: reachBody.rec });
             const carried = simState.objectCarry;
             const held = NT.TIP.holding(spaceLimb || (carried?.held ? carried.target : null), spaceGrasp === 'kept');
-            const aimed = freePointer && !holdingNow ? itemFromTargets(hudT, cs.reach === true) : null;
+            // (hunt of update 74, finding 8, a review: Shift with nothing behind reaches nothing, so Space takes what it takes
+            // without it, nothingBehind, and the line says plain Space)
+            const reachHere = cs.reach === true && !nothingBehind(hudT);
+            const aimed = freePointer && !holdingNow ? itemFromTargets(hudT, reachHere) : null;
             // (21 November 2026, evening, FIX63, review of update 63, U4: Space on one of your limbs chooses it, LIMB_KEYS.view.hold;
             // the line said "Space holds your right hand")
-            const aimLine = NT.TIP.spaceAim(aimed?.limb || aimed?.target, cs.reach === true, LIMB_KEYS.on && LIMB_KEYS.view.hold === true);
-            if (held) tipModel = quietTipModel({ held });
+            const aimLine = NT.TIP.spaceAim(aimed?.limb || aimed?.target, reachHere, LIMB_KEYS.on && LIMB_KEYS.view.hold === true);
+            // (hunt of update 74, finding 8, a review: while something is carried, the tip beside the resting pointer names
+            // what a click there presses, carryPointerTip; the hold's own tip shows while the pointer moves, which carries
+            // the held thing, and where a click takes nothing)
+            // (asked before the cards were drawn, carryTipNow. At a hold's start with the pointer not yet moved, carryTipSeen
+            // not ready, the hold's own tip, with a line naming what a click there presses, beside the pointer: a second
+            // review, a click then pressed the area at the pointer while the tip by the mark said only "Holding the brain")
+            const carryHere = held && holdingNow && FREE_AIM.on && carryTipNow && carryTipNow.model ? carryTipNow : null;
+            if (carryHere && carryTipSeen.ready) carryTip = carryHere;
+            holdClick = carryHere && !carryTipSeen.ready && carryHere.click ? carryHere : null;
+            if (held) tipModel = carryTip ? carryTip.model : quietTipModel({ held, teach: holdClick ? holdClick.click : '' });
             else if (!onArea && areaFeedback && areaNote?.key === 'areaUnreachable') tipModel = quietTipModel({ pick: { name: areaFeedback, kind: 'area-note' } });
             // (25 November 2026, section 217: an arrow key at the end of the strip said so only in the full cards; at the
             // short level press after press did nothing with no sign. The area's own tip gives way to the short note.)
-            else if (areaNote?.key === 'areaEnd' && now < areaNote.untilMs && NT.TIP.areaEnd && !aimNow.pointer) tipModel = quietTipModel({ pick: { name: NT.TIP.areaEnd, kind: 'area-note' } });
+            else if (areaNote?.key === 'areaEnd' && now < areaNote.untilMs && NT.TIP.areaEnd && !aimNow.pointer) tipModel = quietTipModel({ pick: { name: NT.TIP.areaEnd(areaNote.dir), kind: 'area-note' } });
             // 24 November 2026 (FREE_AIM, section 206): with the pointer as the aim a motor area keeps its own tip (its name
             // and the movement a rest or a click starts: until now every area under a free pointer read "Space holds the
             // brain"), and a named muscle or bone keeps its name with the Space line under it. The Space line alone is
@@ -14202,7 +14453,7 @@ export function start(params = {}) {
               const lost = ReferenceGraph.brainLostWords({ behind: out.brainBehind === true, away: model.brainAway === true, seenShare: brainSeen });
               if (lost) tipModel = quietTipModel({ held: lost === 'behind' ? NT.TIP.brainBehind : NT.TIP.brainAway });
               // (25 November 2026, LOOK_LOST: the view itself turned away from everything: said in the middle of the picture)
-              else if (lostView && NT.TIP.viewLost) { tipModel = quietTipModel({ held: NT.TIP.viewLost }); tipCentre = true; }
+              else if (lostWords) { tipModel = quietTipModel({ held: lostWords }); tipCentre = true; }
               if (tipModel) tipLost = true;
             }
             // (25 November 2026, section 211: the pointer was moved last and now lies on a card or outside the window. The
@@ -14215,16 +14466,19 @@ export function start(params = {}) {
           // empty picture had only the status card's "Looking at: empty space". The lost view's words show in the middle
           // at every level; nothing else of the layer does.)
           let lostOnly = false;
-          if (!quietOn && live && lostView && NT.TIP.viewLost && shellIsPlaying(shellState)) { tipModel = quietTipModel({ held: NT.TIP.viewLost }); tipCentre = true; lostOnly = true; }
+          if (!quietOn && live && lostWords && shellIsPlaying(shellState)) { tipModel = quietTipModel({ held: lostWords }); tipCentre = true; lostOnly = true; }
           if (sceneFn('setKeyboardAreaTip')) callScene('setKeyboardAreaTip', tipModel?.kind === 'area' && Boolean(tipModel.hint));
           const free = cs && cs.pointer && !lockedNow() ? cs.pointer : null;
-          const tipAtPointer = Boolean(!tipCentre && free && Number.isFinite(free.x) && Number.isFinite(free.y) && (aimNow.pointer || !FREE_AIM.on || (tipModel && tipModel.kind === 'aim')));
-          const tipArea = tipModel && tipModel.kind === 'area' && onArea && typeof out.gaze.regionId === 'string' ? regionById(bodyMap, out.gaze.regionId) : null;
+          // (hunt of update 74, finding 8, a review: and the carried thing's pointer tip, carryPointerTip)
+          const carryShown = Boolean(carryTip && tipModel === carryTip.model);
+          const holdClickShown = Boolean(holdClick && tipModel && tipModel.kind === 'hold' && tipModel.teach === holdClick.click);
+          const tipAtPointer = Boolean(!tipCentre && free && Number.isFinite(free.x) && Number.isFinite(free.y) && (aimNow.pointer || !FREE_AIM.on || (tipModel && tipModel.kind === 'aim') || carryShown || holdClickShown));
+          const tipArea = carryShown ? carryTip.area : holdClickShown ? holdClick.area : tipModel && tipModel.kind === 'area' && onArea && typeof out.gaze.regionId === 'string' ? regionById(bodyMap, out.gaze.regionId) : null;
           // 22 November 2026 (SEEMOVE, section 189): the tip keeps off your own left hand's box on the screen (the same box
           // the region labels keep off, armAvoidShapes), so it no longer covers the palm and thumb at the hand's areas
           const handR = armAvoid ? armAvoid.rects[0] : null;
           const handBox = handR ? { x0: handR.x0 * size.width, y0: handR.y0 * size.height, x1: handR.x1 * size.width, y1: handR.y1 * size.height } : null;
-          quietUi.update({ avoid: handBox, cards: tipCards(now), show: quietOn || lostOnly, tip: tipModel, side: tipArea && tipArea.hemisphere === (BRAIN_FRONT_DOWN ? 'right' : 'left') ? 'left' : null, prompt: quietOn ? quietPromptText(guideNow, NT.GUIDE.short) : '',
+          quietUi.update(quietArgs = { avoid: handBox, cards: tipModel ? tipCards(now, tipModel.key, typeof quietUi.tipCovers === 'function' && quietUi.tipCovers(), guideNow && guideNow.visible && !guideNow.finished ? guideNow.goalId : null) : null, show: quietOn || lostOnly, tip: tipModel, side: tipArea && tipArea.hemisphere === (BRAIN_FRONT_DOWN ? 'right' : 'left') ? 'left' : null, prompt: quietOn ? quietPromptText(guideNow, NT.GUIDE.short) : '',
             count: quietOn ? quietPromptCount(guideNow) : '', skip: quietOn && guideNow && guideNow.visible && !guideNow.finished && guide.tutorial === true ? NT.GUIDE.short.skip : '',
             // (24 November 2026, FREE_AIM: beside the aim; a free pointer that is not the aim has only the Space line there)
             // (25 November 2026, section 217: in a window taller than wide the words of a lost view stand a third of the
@@ -14233,7 +14487,9 @@ export function start(params = {}) {
             width: size.width, height: size.height });
         }
         if (guideCues) {
-          if (!live || infoReadState() === 'off') guideCues.update(null);
+          if (!live) guideCues.update(null);
+          // (25 November 2026: with the cards hidden the card's keys are still drawn as keys, ns-guide-cues keysOnly)
+          else if (infoReadState() === 'off') guideCues.update({ guide: guideNow, tutorial: guide.tutorial, keysOnly: true });
           else {
             const step = guideNow?.visible && !guideNow.finished ? guideNow.goalId : null;
             const selectedLimb = chosenLimb();
@@ -14293,6 +14549,11 @@ export function start(params = {}) {
               keepOut: cueKeep, width: size.width, height: size.height,
               showJointAim,
               jointAimY: (1 - LIMB_AIM_Y_NDC) / 2 });
+            // (hunt of update 78, finding 9: a mark's words that came up or moved in this update are kept off by the tip in
+            // this frame: a step's words that moved onto the tip at the step's end lay under it for a frame)
+            // (a review: with the tutorial's step, as in the placement above: without it tipCards took the step for null, and
+            // the next frame's real step for a step change, so each move of a mark's words restarted the 0.4 s of 30 ms reads)
+            if (quietArgs && quietArgs.tip && quietArgs.show && guideCues.moves() !== tipCardsCue) { quietArgs.cards = tipCards(now, quietArgs.tip.key, true, step); quietUi.update(quietArgs); }
           }
         }
         // (25 November 2026, FIX76, ns-rows-place ROWS_OUTSIDE: in the outside view the hint and the limb buttons stand beside
@@ -14341,7 +14602,8 @@ export function start(params = {}) {
         } catch { bodyRects = []; }
         const orientAvoid = (obstacles && obstacles.arrows.length) || bodyRects.length ? { rects: [...avoid.rects, ...(obstacles ? obstacles.arrows : []), ...bodyRects], ellipses: avoid.ellipses } : avoid;
         // R4-polish: the shown toast is an obstacle for the orientation labels only (not for the card placement).
-        const labelRects = obstacles && Array.isArray(obstacles.toasts) ? obstacles.toasts : [];
+        // (25 November 2026, hunt of update 78, finding 9: and the limb buttons, wherever they stand; also in legacy mode)
+        const labelRects = obstacles ? [...(Array.isArray(obstacles.toasts) ? obstacles.toasts : []), ...(Array.isArray(obstacles.limbs) ? obstacles.limbs : [])] : [];
         const ra = sim.regionMode && sceneFn('brainOrientationAnchors') ? callScene('brainOrientationAnchors') : null;
         let orientBoxes = null;
         const handRects = avoid.rects; // the hand only (orientAvoid adds the orbit-arrow boxes)
@@ -14352,7 +14614,7 @@ export function start(params = {}) {
           const brainCovers = sceneFn('brainCoversRect') ? r => { try { return callScene('brainCoversRect', { x0: r.x0 * size.width, y0: r.y0 * size.height, x1: r.x1 * size.width, y1: r.y1 * size.height }) === true; } catch { return false; } } : null;
           orientBoxes = hud.placeOrientation(scene.projectWorld(orientationCandidates(ra)), size, orientAvoid, { arrows: obstacles ? obstacles.arrows : [], handRects, labelRects, brainCovers, legendTopPx: obstacles && Number.isFinite(obstacles.infoBottom) ? obstacles.infoBottom + 12 : null });
         }
-        else if (anchors) orientBoxes = hud.placeOrientation(scene.projectWorld(anchors), size, orientAvoid, { handRects });
+        else if (anchors) orientBoxes = hud.placeOrientation(scene.projectWorld(anchors), size, orientAvoid, { handRects, labelRects });
         // R3-polish: region labels avoid the orientation labels placed in this same frame (labels never overlap).
         if (sceneFn('setOrientationRects')) callScene('setOrientationRects', Array.isArray(orientBoxes) ? orientBoxes : null);
         guideOrientPx = Array.isArray(orientBoxes) ? orientBoxes.filter(b => b && b.key !== 'hover') : null; // R4-fix (RP8)

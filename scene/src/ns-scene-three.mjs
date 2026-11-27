@@ -12287,8 +12287,11 @@ export function createScene({
     for (const r of hudRectCache || []) if (r.info) infoBottom = r.y1;
     // R4-polish (labels never overlap): the shown capture / drag-to-look toast (viewport fractions), so the HUD's
     // orientation labels keep clear of it too (at 390x844 "Back (posterior)" sat under the full-width toast).
-    const toasts = [];
-    if (cssW > 0 && cssH > 0) for (const r of hudRectCache || []) if (r.toast) toasts.push({ x0: r.x0 / cssW, y0: r.y0 / cssH, x1: r.x1 / cssW, y1: r.y1 / cssH });
+    // (25 November 2026; the hunt of update 78, finding 9: from outside, at 1600 by 900 at the full reading level, "Front
+    // (anterior)" and "Brain's right half" lay under the limb buttons, which only the region labels kept off) the limb
+    // buttons' bar as drawn (viewport fractions), for the orientation labels as well.
+    const toasts = [], limbs = [];
+    if (cssW > 0 && cssH > 0) for (const r of hudRectCache || []) if (r.toast || r.limbs) (r.toast ? toasts : limbs).push({ x0: r.x0 / cssW, y0: r.y0 / cssH, x1: r.x1 / cssW, y1: r.y1 / cssH });
     // R4-fix (review RP8): the region labels drawn this frame (CSS px), so the guide chip keeps clear of them.
     const labelsPx = [];
     for (let i = 0; i < labelEls.length; i++) { const L = labelEls[i], b = labelBoxes[i]; if (L.shownNow && b && !b.skip) labelsPx.push({ x0: b.x - b.w / 2, y0: b.y - b.h / 2, x1: b.x + b.w / 2, y1: b.y + b.h / 2 }); }
@@ -12296,7 +12299,7 @@ export function createScene({
     // view; look-independent), so the guide chip can sit centred just below it.
     const bp = arrowSets.brain.plan && arrowSets.brain.plan.spots && arrowSets.brain.plan.spots.forward;
     const brainTopPlanPx = arrowSets.brain.shown && bp && bp.box ? { ...bp.box } : null;
-    return { brainInView: brainInViewAttr === 'true', brainSeenShare, brainBoundsMeet, arrows: arrowsOut, infoBottom, toasts, labelsPx, brainTopPlanPx };
+    return { brainInView: brainInViewAttr === 'true', brainSeenShare, brainBoundsMeet, arrows: arrowsOut, infoBottom, toasts, limbs, labelsPx, brainTopPlanPx };
   }
   /** R558 (issue hunt 2: the "Try this" chip covered your shin, forearm; "Front (anterior)" was printed across the mirror
    * body's belly): the on-screen boxes (CSS px, clipped to the view) of your own body and of the mirror body, for the
@@ -17493,10 +17496,12 @@ export function essentialNoticeRect({ width, height } = {}, text = HUD_LIMITS_SH
 /** Orientation label alignment: the fraction of the label box left of / above its anchor (CSS translate). Each label
  * extends away from the band: R to the right, L to the left, anterior upward, posterior downward. */
 /** Polish: orientation-label edge clearances (px): below the top limits line, above the bottom hint toast, and the
- * centre-ward nudge used when no projected anchor is clear. */
+ * centre-ward nudge used when no projected anchor is clear. 25 November 2026 (hunt of update 78, finding 9): rowGapPx,
+ * the room a label keeps from the rows under the picture it is handed (opts.labelRects: the hint and the limb buttons,
+ * wherever they stand), so it never sits flush against them either. */
 /** R4-polish: an orientation label moves to a better clear place after this many placeOrientation calls in a row. */
 export const ORIENT_UPGRADE_FRAMES = 12;
-export const ORIENTATION_EDGE = Object.freeze({ topGapPx: 6, bottomPx: 46, nudgePx: 24, nudgeSteps: 20, axisNudgeSteps: 4 });
+export const ORIENTATION_EDGE = Object.freeze({ topGapPx: 6, bottomPx: 46, nudgePx: 24, nudgeSteps: 20, axisNudgeSteps: 4, rowGapPx: 4 });
 /* 19 November 2026 (ns-brain BRAIN_VIEW.spinDeg 180: the brain's right half is on the left of the picture and its front
  * at the bottom): each label still extends AWAY from the brain, so with the turn the right-half label extends to the
  * left, the left-half label to the right, the front label downward and the back label upward. */
@@ -18230,7 +18235,10 @@ export function createHud(hudRoot) {
         return { x, y, box: { x0: x - a[0] * fw, y0: y - a[1] * fh, x1: x + (1 - a[0]) * fw, y1: y + (1 - a[1]) * fh } };
       };
       const band = { x0: 0, y0: 0, x1: 1, y1: H > 0 ? Math.max(ESSENTIAL_BAND, essentialHeight / H) : ESSENTIAL_BAND }; // measured HUD text only
-      const labelRects = opts && Array.isArray(opts.labelRects) ? opts.labelRects : []; // R4-polish: e.g. the shown toast
+      // R4-polish: e.g. the shown toast; (25 November 2026) and the limb buttons, each grown by ORIENTATION_EDGE.rowGapPx
+      const gx = W > 0 ? ORIENTATION_EDGE.rowGapPx / W : 0, gy = H > 0 ? ORIENTATION_EDGE.rowGapPx / H : 0;
+      const labelRects = (opts && Array.isArray(opts.labelRects) ? opts.labelRects : []).filter(r => r && [r.x0, r.y0, r.x1, r.y1].every(Number.isFinite))
+        .map(r => ({ x0: r.x0 - gx, y0: r.y0 - gy, x1: r.x1 + gx, y1: r.y1 + gy }));
       // R4-fix (reviews SL4-2, RP11): a side label ("← Your left" / "Your right →", short "← Left" / "Right →") is a
       // claim about a side: its whole box stays on its own side of the brain's projected midline (the anterior ->
       // posterior anchor line), and it never sits on the brain's drawn outline (opts.brainCovers, viewport-fraction

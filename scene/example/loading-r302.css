@@ -230,6 +230,8 @@
   color: #f2f6fa;
 }
 .ns-shell-keys dd { margin: 0; color: #d6dee8; }
+/* 25 November 2026: a key of arrow signs only (ns-app arrowKeysClass) is drawn larger, as on the Esc page's rows */
+.ns-shell-keys dt.ns-keys-arrows { font-size: 17px; font-weight: 400; line-height: 1.05; }
 .ns-shell-settings { min-width: 0; margin: 14px 0 0; padding: 10px 0 0; border: 0; border-top: 1px solid rgba(232, 238, 245, 0.12); }
 .ns-shell-settings > legend { float: left; width: 100%; padding: 0; }
 .ns-shell-settings > legend + * { clear: left; }

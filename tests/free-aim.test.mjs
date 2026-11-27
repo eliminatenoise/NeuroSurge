@@ -241,15 +241,25 @@ test('the tip keeps off the tutorial card: another side where one is clear, else
   assert.deepEqual(tipSides({ ...P, x: 260, y: 90, side: 'left' }), { right: true, low: false });
   // right of the card with room: the other side is taken before any slide
   assert.deepEqual(tipSides({ ...P, x: 300, y: 40, side: 'left' }), { right: false, low: false });
-  // a card so tall that a slide would carry the tip far from its point: the usual place, no slide
+  // a card so tall that a slide past it would carry the tip far from its point: no slide past it. (Hunt of update 78,
+  // finding 9: this said "the usual place". Where no place within TIP_SLIDE_MAX is clear, the tip now takes the place
+  // within that reach that covers least, slid off the window's edge as well: here the place above the pointer, 28 px
+  // down to 2 px from the top edge, which lies under 4816 px2 of the card where the usual place lay under 5848.)
   const tall = { x0: 16, y0: 14, x1: 308, y1: 400 };
-  assert.deepEqual(tipSides({ ...P, card: tall, x: 200, y: 60 }), { right: false, low: false });
+  assert.deepEqual(tipSides({ ...P, card: tall, x: 200, y: 60 }), { right: false, low: true, dy: 28 });
   assert.ok(400 + TIP_SLIDE_GAP - (60 + 18) > TIP_SLIDE_MAX);
   // the hand's box alone never slides the tip (it can be large): as before, the usual side when no side is clear
   const hand = { x0: 0, y0: 0, x1: 800, y1: 600 };
   assert.deepEqual(tipSides({ ...P, card: null, avoid: hand, x: 260, y: 70, side: 'left' }), { right: true, low: false });
-  // both in the way: clear of the card first (the card is drawn over the tip; the hand is under it)
-  assert.deepEqual(tipSides({ ...P, avoid: { x0: 60, y0: 96, x1: 400, y1: 300 }, x: 260, y: 70, side: 'left' }), { right: true, low: false, dy: 12 });
+  // both in the way: clear of the card first (the card is drawn over the tip; the hand is under it). (A review: and off
+  // the hand where a slide finds such a place: this was the slide under the card, { right: true, low: false, dy: 12 },
+  // which lies on the hand; now the place above right of the pointer, slid past the card's right edge, clear of both.)
+  const both = tipSides({ ...P, avoid: { x0: 60, y0: 96, x1: 400, y1: 300 }, x: 260, y: 70, side: 'left' });
+  assert.deepEqual(both, { right: false, low: true, dx: 32, dy: 22 });
+  assert.equal(260 + 22 + both.dx, card.x1 + TIP_SLIDE_GAP, 'just past the card');
+  assert.ok(70 - 18 - 68 + both.dy + 68 <= 96, 'above the hand');
+  // with no place off the hand, the slide under the card, as before
+  assert.deepEqual(tipSides({ ...P, avoid: { x0: 0, y0: 0, x1: 800, y1: 600 }, x: 260, y: 70, side: 'left' }), { right: true, low: false, dy: 12 });
   // without the tip's size nothing can be judged
   assert.deepEqual(tipSides({ ...P, tipW: 0, tipH: 0, x: 260, y: 70, side: 'left' }), { right: true, low: false });
 });

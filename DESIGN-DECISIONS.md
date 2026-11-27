@@ -9097,6 +9097,80 @@ presses), and check each press on the way. 845 unit tests, 25 browser tests.
   the root page lists both editions (read on the published tree's local server and on the site).
 - `?case=stop-during-body`, a test address, leaves an empty page, as the test it serves needs.
 
+## 218. With the keyboard alone the look turns, the pointer's tip keeps off the tutorial's words in a tall window, the orientation labels keep off the limb buttons, and a click on an area is never lost (27 November)
+
+The faults of the third play-through (217) that were left: its findings 3 and 9, and finding 8 of the second
+play-through (213). Each was reproduced on update 80 first, fixed, and then checked by a separate reviewer who tried
+to show it was not fixed or that something else got worse (two to three rounds for each fault).
+
+**1. Arrow Up and Arrow Down turn the look (finding 3).** With the keyboard alone no key turned the view: the
+tutorial's look step could only be skipped, the chosen limb could not be raised or lowered, and the mark never
+reached the mirror body, so Space never held it. A press of ↑ or ↓ now turns the look 3 degrees, as a drag of the view
+does (`LOOK_KEY`, `lookKey` in `ns-controls.mjs`): the camera still never moves by itself, these are the player's keys.
+Three degrees move the picture 48 px at 1600x900 and 37 px at 700x900, less than the mirror body's trunk, so the mark
+can land on it; a sixth of the look that carries the chosen limb, so its foot moves 8 to 29 cm a press and six
+presses reach the end of its range. From the first screen four presses of ↑ put the mark on the mirror body and Space
+holds it. A held key repeats at the area keys' pace (270 ms, about 10 degrees a second). Invert-Y and the look speed
+do not apply to a key: it names a screen direction and a fixed step. The keys are the game's only while it plays: on
+the start and pause pages they scroll, and a card that scrolls keeps them while the focus is in it or it was pressed
+last, as the browser's own rule does (`keyScrollBox`); a press on the picture gives them back. Space acts at the aim, so
+a key pressed and then Space within one frame grips at the mark. The lost view's tip names ↓ or ↑ when the look went
+mostly up or down. The keys are named in the controls list, the pause page's menu, the look step ("Look a little up
+or down (↑ ↓) to move the limb", with key caps on the card, also at the "off" reading level) and both player guides.
+With four arrow keys in use the words at the end of an area walk name the key that walks back ("No more areas this
+way. Press ← to go back.", `otherAreaKey`).
+
+**2. In a tall window the pointer's tip lay on the tutorial's words (finding 9).** Since 211 the tip kept off the
+cards; it did not know the tutorial's rings, the aim mark, their words or the region labels. It now keeps off all of
+them (`TIP_KEEP_OFF`, `tipKeepOffBoxes` in `ns-quiet.mjs`), with weights used only when no place is clear (cards 4,
+marks and their words 2, labels 1, because labels move out of the tip's way where they can). When no corner is clear
+each corner slides up, down or sideways to just past the nearest box, at most 64 px each way, 6 px from a box, or 2 px
+where 6 leaves no room. A clear place is kept while the pointer, the words and the size stay the same, so labels that
+move away no longer pull the tip after them; the tip again moves off your own hand when the hand comes onto it (189).
+The testers' grid at 700x900: tips on something 11 of 122 in the tutorial's first step, 9 of 71 with a leg chosen and
+6 of 64 with the map on, all 0 now; at 720x800, 10 of 115 and 8 of 63, now 0.
+
+**3. "Front (anterior)" stood under the limb buttons (finding 9).** The orientation labels kept off the hint and a
+fixed strip at the foot of the window, never off the limb buttons' bar. The scene now hands the bar's box as drawn to
+the labels' placement, with 4 px of room (`overlayObstacles` returns `limbs`; `ORIENTATION_EDGE.rowGapPx`). From
+outside at the full level, looks with a label on the bar: 4 of 65 at 1600x900, 3 at 1280x720 and 1366x768, 4 at
+1920x1080, 3 at 1024x600, now 0; in the eye view with the brain moved aside, 10 of 25, now 0. A label with no free
+place is not drawn, as before: at 1024x600 "Front" is hidden in three looks where it used to lie on the bar.
+
+**4. A click on a motor area that pressed nothing (finding 8 of 213).** (a) While Space gripped with nothing held, a
+click pressed the area under the middle mark, or nothing. Now the pointer stays the aim while the hands grip nothing
+(`spaceKeepsAim`): its rest, tip and click act where it is, as at any other time. (b) With Shift held and nothing
+behind, a click pressed nothing while the tip still named the area. It is now a plain click on what is seen
+(`shiftClickPlain`), and the full card says "Shift held: nothing behind, so click, Space and drag work as usual";
+Shift's own use, a body part behind an area or an area behind a body part, is unchanged. While something is carried
+the pointer turns the view and carries it, and a click acts at the pointer for its own frame: a click on an area of
+the carried brain presses that area; a click that would land behind the carried mirror body or limb taps the carried
+part instead, so nothing hidden is pressed by surprise; through the brain's clear glass what is seen is taken, as
+the glass is see-through (`clickBehindCarried`). A drag never presses (a Shift drag or a grip drag only turns or
+moves). While something is carried the tip and the full card name what a click at the pointer will press, at every
+reading level (`carryPointerTip`; the tip waits 1.2 s after the grip, ended at once by a pointer move), and during a
+limb turn the tip names the area under the pointer.
+
+**Tests.** New unit tests `look-keys`, `tip-keep-off`, `orient-rows` and `space-click`; new browser tests
+`browser-tall-tips` (fails on update 80 with 10 tips on the ring at 700x900), `browser-orient-rows` (fails on update 80
+with the 4 labels on the bar; it also covers the testers' eye view with the brain carried aside) and
+`browser-space-click`; `browser-keyboard-only` adds ↑ and ↓ (the limb moves in the eye view, the look step completes,
+four presses reach the mirror body). 880 unit tests, 27 browser tests. Frame times as update 80's.
+
+**Not done, or not right.**
+- In the eye view a leg's foot rises in the picture with ↓: the picture turns more than the hip lowers the leg. In the
+  world the limb does go down, and a drag does exactly the same; changing it means changing the look's limb rule
+  (216).
+- A key's step is not eased, and one press can move a leg 29 cm, coarse next to a drag.
+- At about 6 in 100 points on a coloured motor area, mostly on the lines between areas, the pointer's pick says area
+  but the look's finder says glass: the tip says "Space holds the brain" and a click presses nothing. Update 80 is the
+  same; which area such a point belongs to is a choice for 176.
+- During a carry the grip card stays "Hands and feet: grip" after a click has pressed an area; the area shows by its
+  glow.
+- In a 700x900 window during the tutorial the tip can lie on the bottom hint line (also on update 80).
+- `browser-touch` fails now and then (a scan point on the line between two areas), as on update 80; `browser-limb-ring`
+  depends on timing when the machine is busy.
+
 ## What is left, and whose it is
 
 **For the project's independent review and release, not for the author of these changes.**
@@ -9117,8 +9191,7 @@ presses), and check each press on the way. 845 unit tests, 25 browser tests.
   crosshair still switches areas on at once, also during a drag across the strip; pointing was not tried on a touch screen.
 - From the two play-throughs of updates 73 and 74 and the work that followed (209 to 215): at 800x600 the tutorial's card
   lies on the upper end of the left arm's strip while the tutorial runs, and at the full reading level the limb buttons
-  still lie on your body in the outside view; while Space grips, a click acts at the middle mark or presses nothing, and
-  with Shift held and nothing behind, a click presses nothing; after a far drag and S, A and D can move the left hand
+  still lie on your body in the outside view (a click while Space grips or with Shift held is right since 218); after a far drag and S, A and D can move the left hand
   almost nothing, and S stops where the right hand meets the body; in a window taller than wide the hint stands over
   the picture's lower part; a pinch zooms the page (the browser's own zoom is left to the player); nothing on the
   playing screen shows the arrow keys, E after the tutorial, Shift, two taps of Space or the double click (the pause
